@@ -85,7 +85,7 @@
   .ticker-suggestion:hover { background:var(--panel-2); }
   .pill-btn { cursor:pointer; font-size:11px; padding:6px 12px; border-radius:16px; }
   .pill-select { cursor:pointer; font-size:11px; padding:6px 28px 6px 12px; border-radius:16px; appearance:none; -webkit-appearance:none; background-repeat:no-repeat; background-position:right 10px center; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239B9FA6'/%3E%3C/svg%3E"); }
-  .theme-toggle { cursor:pointer; width:30px; height:30px; border-radius:50%; border:1px solid var(--border); background:var(--panel-2); color:var(--text-dim); display:flex; align-items:center; justify-content:center; font-size:14px; line-height:1; }
+  .theme-toggle { cursor:pointer; width:36px; height:36px; border-radius:50%; border:1px solid var(--border); background:var(--panel-2); color:var(--text-dim); display:flex; align-items:center; justify-content:center; font-size:15px; line-height:1; }
   .login-screen { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; box-sizing:border-box; padding:20px; background:radial-gradient(ellipse 70% 55% at 50% 35%, var(--accent-soft), transparent), var(--bg); }
   .login-screen .field label { font-size:13.5px; margin-bottom:6px; }
   .login-screen .field input { font-size:16px; padding:12px 14px; border-radius:8px; }
@@ -993,25 +993,28 @@ function renderAddPositionModal(){
 function menuBlock(){
   return `<div style="position:relative;">
     <button id="menu-btn" class="theme-toggle" title="Menú">☰</button>
-    ${menuOpen ? `<div id="nav-menu" style="position:absolute;top:38px;left:0;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,0.25);min-width:210px;z-index:60;overflow:hidden;">
-      <button class="nav-item" data-view="carteras" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Mis carteras</button>
-      <button class="nav-item" data-view="explorar" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Explorar en Walletbook</button>
-      <button class="nav-item" data-view="reglas" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Mis reglas</button>
-      <button class="nav-item" data-view="cuenta" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Mi cuenta</button>
-      <button id="menu-logout-btn" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;color:var(--red);padding:11px 14px;font-size:12.5px;">Cerrar sesión</button>
+    ${menuOpen ? `<div id="nav-menu" style="position:absolute;top:46px;right:0;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);min-width:230px;z-index:60;overflow:hidden;">
+      <button class="nav-item" data-view="carteras" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mis carteras</button>
+      <button class="nav-item" data-view="explorar" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Explorar en Walletbook</button>
+      <button class="nav-item" data-view="reglas" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mis reglas</button>
+      <button class="nav-item" data-view="cuenta" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mi cuenta</button>
+      <button id="menu-logout-btn" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;color:var(--red);padding:13px 18px;font-size:13.5px;">Cerrar sesión</button>
     </div>` : ''}
   </div>`;
 }
 
-function topLeftNav(){
-  return `<div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0;">
-    <button id="logo-home-btn" title="Ir a Mis carteras" class="theme-toggle" style="border-radius:9px;background:var(--accent-soft-strong);border-color:var(--accent-border);">
-      <svg viewBox="0 0 100 100" style="width:16px;height:16px;">
-        <circle cx="35" cy="52" r="15" fill="#5B8DEF"/>
-        <circle cx="65" cy="52" r="15" fill="#5B8DEF"/>
-        <circle cx="38" cy="49" r="4.5" fill="#FFFFFF"/>
-        <circle cx="68" cy="49" r="4.5" fill="#FFFFFF"/>
-      </svg>
+function topNavBar(){
+  return `<div style="height:64px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 4px;margin-bottom:20px;border-bottom:1px solid var(--border);">
+    <button id="logo-home-btn" title="Ir a Mis carteras" style="cursor:pointer;background:none;border:none;display:flex;align-items:center;gap:12px;padding:6px 4px;">
+      <div style="width:36px;height:36px;border-radius:10px;background:var(--accent-soft-strong);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg viewBox="0 0 100 100" style="width:22px;height:22px;">
+          <circle cx="35" cy="52" r="15" fill="#5B8DEF"/>
+          <circle cx="65" cy="52" r="15" fill="#5B8DEF"/>
+          <circle cx="38" cy="49" r="4.5" fill="#FFFFFF"/>
+          <circle cx="68" cy="49" r="4.5" fill="#FFFFFF"/>
+        </svg>
+      </div>
+      <span style="font-family:'Calibri','Carlito',sans-serif;font-weight:700;font-size:17px;color:var(--text);letter-spacing:.01em;">Walletbook</span>
     </button>
     ${menuBlock()}
   </div>`;
@@ -1050,15 +1053,12 @@ function wireMenu(app){
 
 function renderHomeScreen(){
   const app = document.getElementById('app');
-  app.innerHTML = `<div style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:28px 24px;">
-    <div style="max-width:960px;margin:0 auto;">
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px;">
-        ${topLeftNav()}
-        <div>
-          <div style="font-family:'Calibri','Carlito',sans-serif;font-size:11px;letter-spacing:.12em;color:var(--accent);text-transform:uppercase;">Walletbook</div>
-          <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:24px;margin:4px 0 0;">Mis carteras</h1>
-          ${statusMessage ? `<div style="font-size:11.5px;color:var(--text-faint);margin-top:4px;">${statusMessage}</div>` : ''}
-        </div>
+  app.innerHTML = `<div style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:16px 32px 32px;">
+    <div style="max-width:1040px;margin:0 auto;">
+      ${topNavBar()}
+      <div style="margin-bottom:26px;">
+        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:26px;margin:0;">Mis carteras</h1>
+        ${statusMessage ? `<div style="font-size:11.5px;color:var(--text-faint);margin-top:6px;">${statusMessage}</div>` : ''}
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;">
         ${portfolios.map(p => `
@@ -1187,23 +1187,21 @@ function render(scenario){
   const conc = computeConcentration(totals);
   let html = '';
 
+  html += topNavBar();
+
   html += `<div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;margin-bottom:12px;gap:16px;">
-    <div style="display:flex;gap:14px;align-items:center;min-width:0;">
-      ${topLeftNav()}
-      <div style="display:flex;gap:16px;flex-wrap:nowrap;align-items:flex-end;min-width:0;">
-        <div style="flex-shrink:0;white-space:nowrap;">
-          <div style="font-family:'Calibri','Carlito',sans-serif;font-size:11px;letter-spacing:.12em;color:var(--accent);text-transform:uppercase;white-space:nowrap;">Walletbook</div>
-          <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:500;font-size:19px;margin:2px 0 0;white-space:nowrap;">${activePortfolioName}</h1>
-        </div>
-        ${kpiBlock('Invertido', fmtEUR(totals.invested))}
-        ${kpiBlock('Valor actual', fmtEUR(totals.value))}
-        ${kpiBlock('Ganancia', (totals.gain>=0?'+':'')+fmtEUR(totals.gain), totals.gain>=0?'var(--green)':'var(--red)')}
-        ${kpiBlock('Ganancia %', (totals.gainPct>=0?'+':'')+fmtPct(totals.gainPct), totals.gainPct>=0?'var(--green)':'var(--red)')}
-        ${kpiBlock('Posiciones', totals.withData+' / '+totals.total)}
-        ${kpiBlock('Comisiones broker', fmtEUR(totals.commission))}
-        ${kpiBlock('Rentab. anual.', cagr.value===null?'—':(cagr.value>=0?'+':'')+fmtPct(cagr.value), cagr.value===null?'var(--text-dim)':(cagr.value>=0?'var(--green)':'var(--red)'), cagr.value===null ? `Necesita al menos 30 días de historial desde la primera compra (llevas ${cagr.days}).` : `CAGR desde la primera compra, hace ${cagr.days} días.`)}
-        ${kpiBlock('Concentración', conc.name?Math.round(conc.pct)+'%':'—', null, conc.name ? `Tu posición mayor es ${conc.name}, con el ${Math.round(conc.pct)}% del valor actual de la cartera.` : '')}
+    <div style="display:flex;gap:16px;flex-wrap:nowrap;align-items:flex-end;min-width:0;">
+      <div style="flex-shrink:0;white-space:nowrap;">
+        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:20px;margin:0;white-space:nowrap;">${activePortfolioName}</h1>
       </div>
+      ${kpiBlock('Invertido', fmtEUR(totals.invested))}
+      ${kpiBlock('Valor actual', fmtEUR(totals.value))}
+      ${kpiBlock('Ganancia', (totals.gain>=0?'+':'')+fmtEUR(totals.gain), totals.gain>=0?'var(--green)':'var(--red)')}
+      ${kpiBlock('Ganancia %', (totals.gainPct>=0?'+':'')+fmtPct(totals.gainPct), totals.gainPct>=0?'var(--green)':'var(--red)')}
+      ${kpiBlock('Posiciones', totals.withData+' / '+totals.total)}
+      ${kpiBlock('Comisiones broker', fmtEUR(totals.commission))}
+      ${kpiBlock('Rentab. anual.', cagr.value===null?'—':(cagr.value>=0?'+':'')+fmtPct(cagr.value), cagr.value===null?'var(--text-dim)':(cagr.value>=0?'var(--green)':'var(--red)'), cagr.value===null ? `Necesita al menos 30 días de historial desde la primera compra (llevas ${cagr.days}).` : `CAGR desde la primera compra, hace ${cagr.days} días.`)}
+      ${kpiBlock('Concentración', conc.name?Math.round(conc.pct)+'%':'—', null, conc.name ? `Tu posición mayor es ${conc.name}, con el ${Math.round(conc.pct)}% del valor actual de la cartera.` : '')}
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
       <div style="display:flex; gap:8px;">
