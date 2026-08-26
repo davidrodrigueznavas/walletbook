@@ -115,6 +115,7 @@
 
     .modal-two-col { grid-template-columns: 1fr !important; gap: 16px !important; }
     .modal-fields-grid { grid-template-columns: 1fr 1fr !important; }
+    .account-fields-grid { grid-template-columns: 1fr !important; }
     .modal-card { padding: 18px 16px !important; max-height: 94vh !important; }
 
     .home-portfolio-card { min-height: auto !important; }
@@ -841,7 +842,7 @@ function renderViewOverlay(){
         <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Email</div>
         <div style="font-size:13px;color:var(--text);">${session ? session.user.email : ''}</div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="account-fields-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="field"><label>Nombre</label><input data-profile-field="first_name" value="${(pr.first_name||'').replace(/"/g,'&quot;')}" placeholder="Tu nombre"/></div>
         <div class="field"><label>Apellidos</label><input data-profile-field="last_name" value="${(pr.last_name||'').replace(/"/g,'&quot;')}" placeholder="Tus apellidos"/></div>
         <div class="field"><label>Fecha de nacimiento</label><input type="date" data-profile-field="birth_date" value="${pr.birth_date||''}"/></div>
