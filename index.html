@@ -181,6 +181,7 @@ let portfolio = {positions:[]}, history = [], currentScenario = null, selectedId
 let session = null, portfolioId = null, loginError = null, loginBusy = false;
 let activePortfolioName = 'Mi cartera', portfolios = [], menuOpen = false, activeView = null;
 let currentScreen = null; // null (cargando) | 'home' | 'portfolio'
+let openCardMenu = null; // id de la cartera cuyo menú de tres puntos está abierto
 let theme = localStorage.getItem('ps_theme') || 'dark';
 let statusMessage = '', statusMessageTimer = null;
 function showStatus(msg, ms=4000){
@@ -598,8 +599,9 @@ function renderPositionsTable(scenario){
 
 let dialogState = null; // {type:'prompt'|'confirm', title, message, placeholder, defaultValue, danger, confirmLabel, error, onConfirm}
 
-function askPrompt(title, placeholder, onConfirm, defaultValue){
-  dialogState = { type:'prompt', title, placeholder, defaultValue, onConfirm, error:null };
+function askPrompt(title, placeholder, onConfirm, defaultValue, opts){
+  opts = opts || {};
+  dialogState = { type:'prompt', title, placeholder, defaultValue, onConfirm, error:null, maxLength:opts.maxLength, allowEmpty:opts.allowEmpty, confirmLabel:opts.confirmLabel };
   render(currentScenario);
 }
 function askConfirm(title, message, onConfirm, opts){
@@ -615,7 +617,9 @@ function renderDialog(){
     <div class="modal-card" style="max-width:380px;padding:22px;">
       <h3 style="font-family:'Calibri','Carlito',sans-serif;font-size:15px;font-weight:600;margin:0 0 10px;">${dialogState.title}</h3>
       ${dialogState.message ? `<div style="font-size:12.5px;color:var(--text-dim);margin-bottom:14px;line-height:1.5;">${dialogState.message}</div>` : ''}
-      ${isPrompt ? `<input id="dialog-input" type="text" placeholder="${dialogState.placeholder||''}" value="${dialogState.defaultValue||''}" style="width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:9px 11px;box-sizing:border-box;margin-bottom:14px;" autofocus/>` : '<div style="margin-bottom:6px;"></div>'}
+      ${isPrompt ? `<input id="dialog-input" type="text" placeholder="${dialogState.placeholder||''}" value="${(dialogState.defaultValue||'').replace(/"/g,'&quot;')}" ${dialogState.maxLength?`maxlength="${dialogState.maxLength}"`:''} style="width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:9px 11px;box-sizing:border-box;" autofocus/>
+      ${dialogState.maxLength ? `<div id="dialog-counter" style="font-size:10px;color:var(--text-faint);text-align:right;margin-top:4px;">${(dialogState.defaultValue||'').length}/${dialogState.maxLength}</div>` : ''}
+      <div style="margin-bottom:${dialogState.maxLength?'6px':'14px'};"></div>` : '<div style="margin-bottom:6px;"></div>'}
       ${dialogState.error ? `<div style="color:var(--red);font-size:11.5px;margin-bottom:12px;">${dialogState.error}</div>` : ''}
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button id="dialog-cancel" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);padding:8px 16px;font-size:12.5px;">Cancelar</button>
@@ -627,14 +631,18 @@ function renderDialog(){
 
 function wireDialog(app){
   const input = document.getElementById('dialog-input');
-  if(input) input.addEventListener('keydown', (e) => { if(e.key==='Enter'){ e.preventDefault(); document.getElementById('dialog-confirm').click(); } });
+  if(input){
+    input.addEventListener('keydown', (e) => { if(e.key==='Enter'){ e.preventDefault(); document.getElementById('dialog-confirm').click(); } });
+    const counter = document.getElementById('dialog-counter');
+    if(counter) input.addEventListener('input', () => { counter.textContent = `${input.value.length}/${dialogState.maxLength}`; });
+  }
   const cancelBtn = document.getElementById('dialog-cancel');
   if(cancelBtn) cancelBtn.addEventListener('click', () => { dialogState = null; render(currentScenario); });
   const confirmBtn = document.getElementById('dialog-confirm');
   if(confirmBtn) confirmBtn.addEventListener('click', async () => {
     if(dialogState.type === 'prompt'){
       const value = document.getElementById('dialog-input').value.trim();
-      if(!value){ dialogState.error = 'Escribe un nombre.'; render(currentScenario); return; }
+      if(!value && !dialogState.allowEmpty){ dialogState.error = 'Escribe un valor.'; render(currentScenario); return; }
       const cb = dialogState.onConfirm;
       dialogState = null;
       await cb(value);
@@ -802,15 +810,15 @@ function renderHomeScreen(){
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;">
         ${portfolios.map(p => `
           <div class="home-portfolio-card" data-id="${p.id}" style="position:relative;cursor:pointer;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;">
-            <button class="home-portfolio-delete" data-id="${p.id}" data-name="${p.name}" title="Eliminar cartera" style="position:absolute;top:14px;right:14px;cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;line-height:1;padding:4px;">✕</button>
-            <div style="width:40px;height:40px;border-radius:10px;background:var(--accent-soft-strong);display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
-              <svg viewBox="0 0 100 100" style="width:24px;height:24px;">
-                <circle cx="35" cy="52" r="15" fill="#5B8DEF"/><circle cx="65" cy="52" r="15" fill="#5B8DEF"/>
-                <circle cx="38" cy="49" r="4.5" fill="#FFFFFF"/><circle cx="68" cy="49" r="4.5" fill="#FFFFFF"/>
-              </svg>
-            </div>
-            <div style="font-size:15px;font-weight:600;padding-right:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name}</div>
-            <div style="font-size:11.5px;color:var(--text-faint);margin-top:4px;">Abrir cartera →</div>
+            <button class="home-portfolio-menu-btn" data-id="${p.id}" title="Opciones" style="position:absolute;top:12px;right:10px;cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;line-height:1;padding:6px;border-radius:6px;">⋮</button>
+            ${openCardMenu===p.id ? `<div class="home-portfolio-menu" style="position:absolute;top:38px;right:10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,0.25);min-width:160px;z-index:40;overflow:hidden;">
+              <button class="home-portfolio-rename" data-id="${p.id}" data-name="${p.name}" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:9px 12px;font-size:12px;">Editar nombre</button>
+              <button class="home-portfolio-describe" data-id="${p.id}" data-description="${(p.description||'').replace(/"/g,'&quot;')}" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:9px 12px;font-size:12px;">Editar descripción</button>
+              <button class="home-portfolio-delete" data-id="${p.id}" data-name="${p.name}" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;color:var(--red);padding:9px 12px;font-size:12px;">Eliminar</button>
+            </div>` : ''}
+            <div style="font-size:15px;font-weight:600;padding-right:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:8px;">${p.name}</div>
+            <div style="font-size:12px;color:var(--text-faint);line-height:1.4;min-height:32px;">${p.description ? p.description : '<span style="opacity:.5;">Sin descripción</span>'}</div>
+            <div style="font-size:11.5px;color:var(--text-faint);margin-top:10px;">Abrir cartera →</div>
           </div>`).join('')}
         <div id="home-create-card" style="cursor:pointer;background:var(--panel-2);border:1.5px dashed var(--accent-border);border-radius:14px;padding:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:120px;">
           <div style="font-size:24px;color:var(--accent-text);margin-bottom:4px;line-height:1;">+</div>
@@ -826,7 +834,7 @@ function renderHomeScreen(){
   wireDialog(app);
 
   app.querySelectorAll('.home-portfolio-card').forEach(card=>card.addEventListener('click', async (e) => {
-    if(e.target.closest('.home-portfolio-delete')) return;
+    if(e.target.closest('.home-portfolio-menu-btn, .home-portfolio-menu')) return;
     const id = card.getAttribute('data-id');
     const target = portfolios.find(p=>p.id===id);
     portfolioId = id;
@@ -839,8 +847,49 @@ function renderHomeScreen(){
     render(null);
   }));
 
+  app.querySelectorAll('.home-portfolio-menu-btn').forEach(btn=>btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const id = btn.getAttribute('data-id');
+    openCardMenu = openCardMenu === id ? null : id;
+    render(currentScenario);
+  }));
+
+  if(openCardMenu){
+    document.addEventListener('click', function closeCardMenu(e){
+      if(!e.target.closest('.home-portfolio-menu, .home-portfolio-menu-btn')){
+        openCardMenu = null;
+        document.removeEventListener('click', closeCardMenu);
+        render(currentScenario);
+      }
+    });
+  }
+
+  app.querySelectorAll('.home-portfolio-rename').forEach(btn=>btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const id = btn.getAttribute('data-id'), name = btn.getAttribute('data-name');
+    openCardMenu = null;
+    askPrompt('Editar nombre', 'Nombre de la cartera', async (value) => {
+      await supabase.from('portfolios').update({ name: value }).eq('id', id);
+      if(portfolioId === id) activePortfolioName = value;
+      await loadPortfolios();
+      render(null);
+    }, name);
+  }));
+
+  app.querySelectorAll('.home-portfolio-describe').forEach(btn=>btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const id = btn.getAttribute('data-id'), description = btn.getAttribute('data-description');
+    openCardMenu = null;
+    askPrompt('Editar descripción', 'Descripción breve de la cartera', async (value) => {
+      await supabase.from('portfolios').update({ description: value || null }).eq('id', id);
+      await loadPortfolios();
+      render(null);
+    }, description, { maxLength:60, allowEmpty:true, confirmLabel:'Guardar' });
+  }));
+
   app.querySelectorAll('.home-portfolio-delete').forEach(btn=>btn.addEventListener('click', (e) => {
     e.stopPropagation();
+    openCardMenu = null;
     if(portfolios.length <= 1){ showStatus('No puedes eliminar tu única cartera.'); render(currentScenario); return; }
     const id = btn.getAttribute('data-id'), name = btn.getAttribute('data-name');
     askConfirm('Eliminar cartera', `¿Eliminar "${name}"? Sus posiciones dejarán de verse (se puede recuperar más adelante).`, async () => {
