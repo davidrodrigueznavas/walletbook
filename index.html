@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <title>Walletbook</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%235B8DEF'/%3E%3Ccircle cx='35' cy='52' r='16' fill='%23FFFFFF'/%3E%3Ccircle cx='65' cy='52' r='16' fill='%23FFFFFF'/%3E%3Ccircle cx='38' cy='49' r='6' fill='%231E2024'/%3E%3Ccircle cx='68' cy='49' r='6' fill='%231E2024'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #18191C;
@@ -1004,17 +1007,17 @@ function menuBlock(){
 }
 
 function topNavBar(){
-  return `<div style="height:64px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 4px;margin-bottom:20px;border-bottom:1px solid var(--border);">
-    <button id="logo-home-btn" title="Ir a Mis carteras" style="cursor:pointer;background:none;border:none;display:flex;align-items:center;gap:12px;padding:6px 4px;">
-      <div style="width:36px;height:36px;border-radius:10px;background:var(--accent-soft-strong);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-        <svg viewBox="0 0 100 100" style="width:22px;height:22px;">
+  return `<div style="height:76px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 4px;margin-bottom:22px;border-bottom:1px solid var(--border);">
+    <button id="logo-home-btn" title="Ir a Mis carteras" style="cursor:pointer;background:none;border:none;display:flex;align-items:center;gap:14px;padding:6px 4px;">
+      <div style="width:48px;height:48px;border-radius:13px;background:var(--accent-soft-strong);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg viewBox="0 0 100 100" style="width:29px;height:29px;">
           <circle cx="35" cy="52" r="15" fill="#5B8DEF"/>
           <circle cx="65" cy="52" r="15" fill="#5B8DEF"/>
           <circle cx="38" cy="49" r="4.5" fill="#FFFFFF"/>
           <circle cx="68" cy="49" r="4.5" fill="#FFFFFF"/>
         </svg>
       </div>
-      <span style="font-family:'Calibri','Carlito',sans-serif;font-weight:700;font-size:17px;color:var(--text);letter-spacing:.01em;">Walletbook</span>
+      <span style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:29px;color:var(--text);letter-spacing:-.01em;">Walletbook</span>
     </button>
     ${menuBlock()}
   </div>`;
@@ -1346,7 +1349,7 @@ function renderLogin(){
             <circle cx="68" cy="49" r="4.5" fill="#FFFFFF"/>
           </svg>
         </div>
-        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:30px;margin:0;">Walletbook</h1>
+        <h1 style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:34px;margin:0;letter-spacing:-.01em;">Walletbook</h1>
         <div style="font-size:15px;color:var(--text-faint);margin-top:7px;">Sigue tu cartera. Descubre otras.</div>
       </div>
       <form id="login-form" style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:30px;box-sizing:border-box;box-shadow:0 12px 32px rgba(0,0,0,0.18);">
