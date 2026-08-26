@@ -159,6 +159,8 @@ const TIER = {
 const RULE_METRIC = {
   gain_pct: {label:'Ganancia %', fmt:v=>(v>=0?'+':'')+fmtPct(v)},
   gain_eur: {label:'Ganancia €', fmt:v=>(v>=0?'+':'')+fmtEUR(v)},
+  loss_pct: {label:'Pérdida %', fmt:v=>(v>=0?'-':'+')+fmtPct(Math.abs(v))},
+  loss_eur: {label:'Pérdida €', fmt:v=>(v>=0?'-':'+')+fmtEUR(Math.abs(v))},
   weight_deviation: {label:'Desviación del peso objetivo', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+' pp'},
   annualized_return: {label:'Rentabilidad anualizada', fmt:v=>(v>=0?'+':'')+fmtPct(v)},
   holding_age_days: {label:'Antigüedad de la posición', fmt:v=>Math.round(v)+' días'},
@@ -174,6 +176,8 @@ function ruleMetricValue(metric, p, portfolioValue){
   switch(metric){
     case 'gain_pct': return gainPctOf(p);
     case 'gain_eur': { const gp = gainPctOf(p); return gp===null ? null : currentValueOf(p) - investedOf(p); }
+    case 'loss_pct': { const gp = gainPctOf(p); return gp===null ? null : -gp; }
+    case 'loss_eur': { const gp = gainPctOf(p); return gp===null ? null : investedOf(p) - currentValueOf(p); }
     case 'weight_deviation': {
       if(!p.target_weight || !portfolioValue) return null;
       const weightPct = portfolioValue>0 ? currentValueOf(p)/portfolioValue*100 : 0;
