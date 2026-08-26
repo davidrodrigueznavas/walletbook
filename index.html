@@ -1557,7 +1557,7 @@ function renderLogin(){
     loginBusy = true; loginError = null; authInfo = null;
     renderLogin();
     if(mode === 'signup'){
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: 'https://davidrodrigueznavas.github.io/walletbook/' } });
       loginBusy = false;
       if(error){
         let msg = 'No se pudo crear la cuenta.';
