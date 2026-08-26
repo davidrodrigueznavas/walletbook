@@ -836,7 +836,10 @@ function renderModal(){
           </div>
           <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${p.sector} · ${p.cluster} ${p.tier?('· '+(TIER[p.tier]?.label||p.tier)):''}</div>
         </div>
-        <button id="modal-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <button id="modal-delete" style="cursor:pointer;background:none;border:none;color:var(--red);font-size:11px;padding:2px 0;">Eliminar posición</button>
+          <button id="modal-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
+        </div>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:12px;margin:14px 0;text-align:center;">
@@ -1232,6 +1235,21 @@ function render(scenario){
   if(closeBtn) closeBtn.addEventListener('click', () => { selectedId = null; modalChartToken++; modalCompanyToken++; render(currentScenario); });
   const backdrop = document.getElementById('modal-backdrop');
   if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ selectedId = null; modalChartToken++; modalCompanyToken++; render(currentScenario); } });
+
+  const deleteBtn = document.getElementById('modal-delete');
+  if(deleteBtn) deleteBtn.addEventListener('click', () => {
+    const pos = portfolio.positions.find(p=>p.id===selectedId);
+    if(!pos) return;
+    askConfirm('Eliminar posición', `¿Eliminar "${pos.name}"? Se puede recuperar más adelante.`, async () => {
+      await supabase.from('deleted_items_log').insert({ item_type:'position', item_id:pos.id, snapshot:pos });
+      await supabase.from('positions').update({ deleted_at: new Date().toISOString() }).eq('id', pos.id);
+      selectedId = null; modalChartToken++; modalCompanyToken++;
+      markDirty();
+      await loadAll();
+      showStatus(`Posición "${pos.name}" eliminada.`);
+      render(currentScenario);
+    }, { danger:true, confirmLabel:'Eliminar' });
+  });
 
   app.querySelectorAll('input[data-field], textarea[data-field]').forEach(el=>{
     el.addEventListener('blur', async () => {
