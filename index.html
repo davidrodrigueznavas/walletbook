@@ -220,7 +220,7 @@ let exploreList = null, exploreLoading = false, exploreDetailId = null, exploreD
 
 async function loadExploreList(){
   exploreLoading = true;
-  const { data, error } = await supabase.from('portfolios').select('*').eq('shared', true).is('deleted_at', null).order('created_at', { ascending:false });
+  const { data, error } = await supabase.from('shared_portfolios_summary').select('*').order('overall_gain_pct', { ascending:false, nullsFirst:false });
   if(error){ console.error(error); exploreList = []; exploreLoading = false; return; }
   exploreList = (data || []).filter(p => !session || p.owner_id !== session.user.id);
   exploreLoading = false;
@@ -891,12 +891,22 @@ function renderViewOverlay(){
       </div>
     </div>`;
   } else if(activeView === 'explorar'){
+    const gainChip = (g, size) => {
+      const color = g==null ? 'var(--text-dim)' : (g>=0 ? 'var(--green)' : 'var(--red)');
+      const bg = g==null ? 'var(--panel)' : (g>=0 ? 'var(--green-soft)' : 'var(--red-soft)');
+      const border = g==null ? 'var(--border)' : (g>=0 ? 'var(--green-border)' : 'var(--red-border)');
+      const label = g==null ? '—' : (g>=0?'+':'')+g+'%';
+      return `<div style="font-family:'Manrope',system-ui,sans-serif;font-weight:800;font-size:${size}px;padding:5px 13px;border-radius:20px;background:${bg};border:1px solid ${border};color:${color};white-space:nowrap;flex-shrink:0;">${label}</div>`;
+    };
     if(exploreDetailId){
       const port = (exploreList||[]).find(p=>p.id===exploreDetailId);
       body = `<div>
-        <button id="explore-back-btn" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:12px;padding:0;margin-bottom:14px;">← Volver</button>
-        <h3 style="margin:0 0 4px;font-family:'Calibri','Carlito',sans-serif;font-size:15px;">${port?port.name:''}</h3>
-        <div style="font-size:12px;color:var(--text-faint);margin-bottom:16px;">${port&&port.description ? port.description : 'Sin descripción'}</div>
+        <button id="explore-back-btn" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:12px;padding:0;margin-bottom:16px;">← Volver</button>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px;">
+          <h3 style="margin:0;font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:17px;">${port?port.name:''}</h3>
+          ${gainChip(port?port.overall_gain_pct:null, 15)}
+        </div>
+        <div style="font-size:12px;color:var(--text-faint);margin-bottom:18px;">${port&&port.description ? port.description+' · ' : ''}${port?port.position_count:0} posición${port&&port.position_count===1?'':'es'}</div>
         ${exploreLoading ? `<div style="font-size:12px;color:var(--text-faint);">Cargando…</div>`
           : (exploreDetailPositions && exploreDetailPositions.length ? `<div style="overflow-x:auto;">
               <table class="postable">
@@ -917,10 +927,17 @@ function renderViewOverlay(){
     } else {
       body = exploreLoading ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Cargando carteras compartidas…</div>`
         : (!exploreList || !exploreList.length) ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Todavía no hay carteras compartidas. En cuanto alguien active "Compartir con otros" en una tarjeta, aparecerá aquí.</div>`
-        : `<div style="display:flex;flex-direction:column;gap:10px;">
-            ${exploreList.map(p=>`<button class="explore-card" data-id="${p.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:14px;">
-              <div style="font-size:13.5px;font-weight:600;margin-bottom:4px;">${p.name}</div>
-              <div style="font-size:11.5px;color:var(--text-faint);">${p.description ? p.description : 'Sin descripción'}</div>
+        : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;">
+            ${exploreList.map(p=>`<button class="explore-card" data-id="${p.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+                <div style="width:34px;height:34px;border-radius:10px;background:var(--accent-soft);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:900;font-size:15px;color:var(--accent-text);flex-shrink:0;">${(p.name||'?').trim().charAt(0).toUpperCase()}</div>
+                ${gainChip(p.overall_gain_pct, 13)}
+              </div>
+              <div>
+                <div style="font-size:13.5px;font-weight:700;margin-bottom:3px;">${p.name}</div>
+                <div style="font-size:11px;color:var(--text-faint);line-height:1.4;min-height:28px;">${p.description ? p.description : 'Sin descripción'}</div>
+              </div>
+              <div style="font-size:10px;color:var(--text-faint);padding-top:10px;border-top:1px solid var(--border-soft);">${p.position_count} posición${p.position_count===1?'':'es'}</div>
             </button>`).join('')}
           </div>`;
     }
@@ -928,7 +945,7 @@ function renderViewOverlay(){
     body = `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Esta sección todavía no está construida — próximamente.</div>`;
   }
   return `<div class="modal-backdrop" id="view-backdrop">
-    <div class="modal-card" style="max-width:${activeView==='explorar'?'640px':'440px'};padding:24px;">
+    <div class="modal-card" style="max-width:${activeView==='explorar'?'760px':'440px'};padding:24px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
         <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:17px;margin:0;">${titles[activeView]}</h2>
         <button id="view-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
