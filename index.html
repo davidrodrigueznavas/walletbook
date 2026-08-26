@@ -179,6 +179,7 @@ const RANGE_LABELS = {dia:'Día', semana:'Semana', mes:'Mes', anio:'Año'};
 
 let portfolio = {positions:[]}, history = [], currentScenario = null, selectedId = null;
 let session = null, portfolioId = null, loginError = null, loginBusy = false;
+let activePortfolioName = 'Mi cartera', portfolios = [], menuOpen = false, activeView = null, viewBusy = false;
 let theme = localStorage.getItem('ps_theme') || 'dark';
 let statusMessage = '', statusMessageTimer = null;
 function showStatus(msg, ms=4000){
@@ -508,13 +509,21 @@ async function loadModalCompanyInfo(pos){
 }
 
 async function loadPortfolioId(){
-  const { data, error } = await supabase.from('portfolios').select('id').is('deleted_at', null).limit(1).maybeSingle();
+  const { data, error } = await supabase.from('portfolios').select('id,name').is('deleted_at', null).order('created_at').limit(1).maybeSingle();
   if(error){ console.error(error); return null; }
+  if(data) activePortfolioName = data.name;
   return data ? data.id : null;
+}
+
+async function loadPortfolios(){
+  const { data, error } = await supabase.from('portfolios').select('*').is('deleted_at', null).order('created_at');
+  if(error){ console.error(error); return; }
+  portfolios = data || [];
 }
 
 async function loadAll(){
   portfolioId = portfolioId || await loadPortfolioId();
+  await loadPortfolios();
   if(!portfolioId){ portfolio = {positions:[]}; history = []; return; }
   const [{ data: rows, error: posErr }, { data: histRows, error: histErr }] = await Promise.all([
     supabase.from('positions').select('*').eq('portfolio_id', portfolioId).is('deleted_at', null),
@@ -583,6 +592,34 @@ function renderPositionsTable(scenario){
   const chunks = [sorted.slice(0,chunkSize), sorted.slice(chunkSize,chunkSize*2), sorted.slice(chunkSize*2)];
   return `<div style="flex:1;min-height:0;display:flex;gap:18px;overflow-y:auto;">
     ${chunks.map(chunk=>renderTableChunk(chunk, scenario)).join('')}
+  </div>`;
+}
+
+function renderViewOverlay(){
+  if(!activeView) return '';
+  const titles = { carteras:'Mis carteras', explorar:'Explorar en Walletbook', reglas:'Mis reglas', cuenta:'Mi cuenta' };
+  let body;
+  if(activeView === 'carteras'){
+    body = `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+      ${portfolios.map(p => `
+        <div class="portfolio-row" data-id="${p.id}" style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:8px;border:1px solid ${p.id===portfolioId?'var(--accent-border)':'var(--border)'};background:${p.id===portfolioId?'var(--accent-soft)':'var(--panel-2)'};cursor:pointer;">
+          <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${p.id===portfolioId?'font-weight:600;color:var(--accent-text);':''}">${p.name}</span>
+          ${p.id===portfolioId?'<span style="font-size:9.5px;color:var(--accent-text);flex-shrink:0;">ACTUAL</span>':''}
+          <button class="portfolio-delete" data-id="${p.id}" data-name="${p.name}" title="Eliminar cartera" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:15px;flex-shrink:0;line-height:1;padding:2px;">✕</button>
+        </div>`).join('') || `<div style="font-size:12px;color:var(--text-faint);">No tienes carteras todavía.</div>`}
+    </div>
+    <button id="create-portfolio-btn" class="pill-btn" style="width:100%;border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:11px;font-size:13px;font-weight:600;" ${viewBusy?'disabled':''}>+ Crear cartera</button>`;
+  } else {
+    body = `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Esta sección todavía no está construida — próximamente.</div>`;
+  }
+  return `<div class="modal-backdrop" id="view-backdrop">
+    <div class="modal-card" style="max-width:440px;padding:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+        <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:17px;margin:0;">${titles[activeView]}</h2>
+        <button id="view-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
+      </div>
+      ${body}
+    </div>
   </div>`;
 }
 
@@ -669,7 +706,7 @@ function render(scenario){
     <div style="display:flex;gap:16px;flex-wrap:nowrap;align-items:flex-end;min-width:0;">
       <div style="flex-shrink:0;white-space:nowrap;">
         <div style="font-family:'Calibri','Carlito',sans-serif;font-size:11px;letter-spacing:.12em;color:var(--accent);text-transform:uppercase;white-space:nowrap;">Walletbook</div>
-        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:500;font-size:19px;margin:2px 0 0;white-space:nowrap;">Mi cartera</h1>
+        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:500;font-size:19px;margin:2px 0 0;white-space:nowrap;">${activePortfolioName}</h1>
       </div>
       ${kpiBlock('Invertido', fmtEUR(totals.invested))}
       ${kpiBlock('Valor actual', fmtEUR(totals.value))}
@@ -690,6 +727,15 @@ function render(scenario){
         <button id="snapshot-btn" class="pill-btn" style="border:1px solid var(--teal-border);background:var(--teal-soft);color:var(--teal);">Guardar snapshot</button>
         <button id="theme-toggle" class="theme-toggle" title="Cambiar a modo ${theme==='dark'?'claro':'oscuro'}">${theme==='dark'?'☀':'☾'}</button>
         <button id="logout-btn" class="theme-toggle" title="Cerrar sesión (${session?session.user.email:''})">⏻</button>
+        <div style="position:relative;">
+          <button id="menu-btn" class="theme-toggle" title="Menú">☰</button>
+          ${menuOpen ? `<div id="nav-menu" style="position:fixed;top:50px;right:24px;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,0.25);min-width:210px;z-index:60;overflow:hidden;">
+            <button class="nav-item" data-view="carteras" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Mis carteras</button>
+            <button class="nav-item" data-view="explorar" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Explorar en Walletbook</button>
+            <button class="nav-item" data-view="reglas" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Mis reglas</button>
+            <button class="nav-item" data-view="cuenta" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;color:var(--text);padding:11px 14px;font-size:12.5px;">Mi cuenta</button>
+          </div>` : ''}
+        </div>
       </div>
       <div id="update-status" style="font-size:10.5px;color:var(--text-faint);">${statusMessage}</div>
     </div>
@@ -716,7 +762,8 @@ function render(scenario){
 
   ${renderPositionsTable(scenario)}
 
-  ${renderModal()}`;
+  ${renderModal()}
+  ${renderViewOverlay()}`;
 
   app.innerHTML = html;
 
@@ -812,6 +859,71 @@ function render(scenario){
 
   const logoutBtn = document.getElementById('logout-btn');
   if(logoutBtn) logoutBtn.addEventListener('click', async () => { await supabase.auth.signOut(); });
+
+  const menuBtn = document.getElementById('menu-btn');
+  if(menuBtn) menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menuOpen = !menuOpen; render(currentScenario); });
+
+  if(menuOpen){
+    document.addEventListener('click', function closeMenuOnce(){ menuOpen = false; render(currentScenario); document.removeEventListener('click', closeMenuOnce); }, { once:true });
+  }
+
+  app.querySelectorAll('.nav-item').forEach(btn=>btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    activeView = btn.getAttribute('data-view');
+    menuOpen = false;
+    render(currentScenario);
+  }));
+
+  const viewClose = document.getElementById('view-close');
+  if(viewClose) viewClose.addEventListener('click', () => { activeView = null; render(currentScenario); });
+  const viewBackdrop = document.getElementById('view-backdrop');
+  if(viewBackdrop) viewBackdrop.addEventListener('click', (e) => { if(e.target===viewBackdrop){ activeView = null; render(currentScenario); } });
+
+  app.querySelectorAll('.portfolio-row').forEach(row=>row.addEventListener('click', async (e) => {
+    if(e.target.closest('.portfolio-delete')) return;
+    const id = row.getAttribute('data-id');
+    if(id === portfolioId) return;
+    portfolioId = id;
+    activeView = null;
+    selectedId = null;
+    diversificationFilter = null;
+    document.getElementById('app').innerHTML = 'Cargando…';
+    await loadAll();
+    render(null);
+  }));
+
+  app.querySelectorAll('.portfolio-delete').forEach(btn=>btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if(portfolios.length <= 1){ alert('No puedes eliminar tu única cartera.'); return; }
+    const id = btn.getAttribute('data-id'), name = btn.getAttribute('data-name');
+    if(!confirm(`¿Eliminar la cartera "${name}"? Sus posiciones dejarán de verse (se puede recuperar más adelante).`)) return;
+    const target = portfolios.find(p=>p.id===id);
+    if(target) await supabase.from('deleted_items_log').insert({ item_type:'portfolio', item_id:id, snapshot:target });
+    await supabase.from('portfolios').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    if(id === portfolioId){
+      portfolioId = null;
+      selectedId = null;
+      diversificationFilter = null;
+      document.getElementById('app').innerHTML = 'Cargando…';
+      await loadAll();
+      render(null);
+    } else {
+      await loadPortfolios();
+      render(currentScenario);
+    }
+  }));
+
+  const createPortfolioBtn = document.getElementById('create-portfolio-btn');
+  if(createPortfolioBtn) createPortfolioBtn.addEventListener('click', async () => {
+    const name = prompt('Nombre de la nueva cartera:');
+    if(!name || !name.trim()) return;
+    viewBusy = true; render(currentScenario);
+    const { error } = await supabase.from('portfolios').insert({ name: name.trim() });
+    viewBusy = false;
+    if(error){ alert('Error al crear la cartera.'); render(currentScenario); return; }
+    await loadPortfolios();
+    render(currentScenario);
+  });
 }
 
 function renderLogin(){
