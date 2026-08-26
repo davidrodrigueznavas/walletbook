@@ -928,7 +928,7 @@ function renderViewOverlay(){
       body = exploreLoading ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Cargando carteras compartidas…</div>`
         : (!exploreList || !exploreList.length) ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Todavía no hay carteras compartidas. En cuanto alguien active "Compartir con otros" en una tarjeta, aparecerá aquí.</div>`
         : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;">
-            ${exploreList.map(p=>`<button class="explore-card" data-id="${p.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;">
+            ${exploreList.map(p=>`<button class="explore-card" data-id="${p.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;color:var(--text);font-family:inherit;">
               <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
                 <div style="width:34px;height:34px;border-radius:10px;background:var(--accent-soft);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:900;font-size:15px;color:var(--accent-text);flex-shrink:0;">${(p.name||'?').trim().charAt(0).toUpperCase()}</div>
                 ${gainChip(p.overall_gain_pct, 13)}
