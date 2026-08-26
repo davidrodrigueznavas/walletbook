@@ -92,6 +92,32 @@
   .login-screen { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; box-sizing:border-box; padding:20px; background:radial-gradient(ellipse 70% 55% at 50% 35%, var(--accent-soft), transparent), var(--bg); }
   .login-screen .field label { font-size:13.5px; margin-bottom:6px; }
   .login-screen .field input { font-size:16px; padding:12px 14px; border-radius:8px; }
+
+  /* ---- Móvil: la app pasa de "todo cabe en una pantalla" a scroll normal ---- */
+  @media (max-width: 760px) {
+    body { overflow: auto; }
+    #app { height: auto; min-height: 100vh; padding: 12px 14px; }
+    .home-wrap { height: auto !important; overflow-y: visible !important; padding: 12px 16px 28px !important; }
+
+    .pf-header { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
+    .pf-kpis { flex-wrap: wrap !important; row-gap: 10px !important; column-gap: 18px !important; }
+    .pf-controls { align-items: stretch !important; }
+    .pf-controls > div { flex-wrap: wrap !important; }
+    #scenario-select { max-width: none !important; flex: 1 1 auto !important; }
+
+    .pf-charts-row { flex-direction: column !important; height: auto !important; gap: 8px !important; }
+    .pf-chart { height: 160px !important; flex: none !important; }
+    .pf-donut { height: 190px !important; flex: none !important; }
+
+    .pf-table-chunks { flex-direction: column !important; overflow-y: visible !important; gap: 4px !important; }
+    table.postable { font-size: 12.5px !important; }
+
+    .modal-two-col { grid-template-columns: 1fr !important; gap: 16px !important; }
+    .modal-fields-grid { grid-template-columns: 1fr 1fr !important; }
+    .modal-card { padding: 18px 16px !important; max-height: 94vh !important; }
+
+    .home-portfolio-card { min-height: auto !important; }
+  }
 </style>
 </head>
 <body>
@@ -647,7 +673,7 @@ function renderPositionsTable(scenario){
   const sorted = [...positions].sort((a,b)=> a.sector.localeCompare(b.sector,'es') || a.name.localeCompare(b.name,'es'));
   const chunkSize = Math.ceil(sorted.length/3);
   const chunks = [sorted.slice(0,chunkSize), sorted.slice(chunkSize,chunkSize*2), sorted.slice(chunkSize*2)];
-  return `<div style="flex:1;min-height:0;display:flex;gap:18px;overflow-y:auto;">
+  return `<div class="pf-table-chunks" style="flex:1;min-height:0;display:flex;gap:18px;overflow-y:auto;">
     ${chunks.map(chunk=>renderTableChunk(chunk, scenario)).join('')}
   </div>`;
 }
@@ -910,7 +936,7 @@ function renderModal(){
           : `<div style="font-size:12px;color:var(--text-dim);line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;" title="${(modalCompanyState.summary||'').replace(/"/g,'&quot;')}">${modalCompanyState.summary||''}</div>`}
       </div>` : ''}
 
-      <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:24px;align-items:stretch;">
+      <div class="modal-two-col" style="display:grid;grid-template-columns:1.15fr 1fr;gap:24px;align-items:stretch;">
         <div style="display:flex;flex-direction:column;">
           ${resp ? `<div style="margin-bottom:14px;font-size:11.5px;flex-shrink:0;">Ante <b>${sc.label}</b>, este sector está: <span style="padding:2px 8px;border-radius:10px;background:${RESP[resp].color}22;color:${RESP[resp].color};">${RESP[resp].label}</span></div>` : `<div style="margin-bottom:14px;font-size:11px;color:var(--text-faint);flex-shrink:0;">Selecciona un escenario macro en la pantalla principal para ver cómo afecta a este sector.</div>`}
 
@@ -928,7 +954,7 @@ function renderModal(){
             </div>
           </div>` : '<div style="flex:1;"></div>'}
 
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;flex-shrink:0;">
+          <div class="modal-fields-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;flex-shrink:0;">
             <div class="field"><label>Invertido (€)</label><input data-id="${p.id}" data-field="invested" value="${p.invested??''}" placeholder="0"/></div>
             <div class="field"><label>Precio compra (€)</label><input data-id="${p.id}" data-field="price" value="${p.price??''}" placeholder="ej. 512,30"/></div>
             <div class="field"><label>Comisión broker (€)</label><input data-id="${p.id}" data-field="commission" value="${p.commission??''}" placeholder="0"/></div>
@@ -964,7 +990,7 @@ function renderAddPositionModal(){
 
       <div class="field" style="margin-bottom:12px;"><label>Nombre</label><input id="addpos-name" value="${sel?sel.name.replace(/"/g,'&quot;'):''}" placeholder="Nombre de la empresa"/></div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div class="modal-fields-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
         <div class="field"><label>Mercado</label><select id="addpos-market">
           <option value="">— Elegir —</option>
           ${Object.entries(MARKET).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}
@@ -980,7 +1006,7 @@ function renderAddPositionModal(){
         <div class="field"><label>Cluster (opcional)</label><input id="addpos-cluster" placeholder="ej. IA / semis"/></div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:6px;">
+      <div class="modal-fields-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:6px;">
         <div class="field"><label>Invertido (€)</label><input id="addpos-invested" placeholder="0"/></div>
         <div class="field"><label>Precio compra (€)</label><input id="addpos-price" placeholder="ej. 512,30"/></div>
         <div class="field"><label>Comisión broker (€)</label><input id="addpos-commission" placeholder="0"/></div>
@@ -1062,7 +1088,7 @@ function wireMenu(app){
 
 function renderHomeScreen(){
   const app = document.getElementById('app');
-  app.innerHTML = `<div style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:16px 32px 32px;">
+  app.innerHTML = `<div class="home-wrap" style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:16px 32px 32px;">
     <div style="max-width:1040px;margin:0 auto;">
       ${topNavBar()}
       <div style="margin-bottom:26px;">
@@ -1211,8 +1237,8 @@ function render(scenario){
 
   html += topNavBar();
 
-  html += `<div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;margin-bottom:12px;gap:16px;">
-    <div style="display:flex;gap:16px;flex-wrap:nowrap;align-items:center;min-width:0;">
+  html += `<div class="pf-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;margin-bottom:12px;gap:16px;">
+    <div class="pf-kpis" style="display:flex;gap:16px;flex-wrap:nowrap;align-items:center;min-width:0;">
       <div style="flex-shrink:0;white-space:nowrap;">
         <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:20px;margin:0;white-space:nowrap;">${activePortfolioName}</h1>
       </div>
@@ -1225,7 +1251,7 @@ function render(scenario){
       ${kpiBlock('Rentab. anual.', cagr.value===null?'—':(cagr.value>=0?'+':'')+fmtPct(cagr.value), cagr.value===null?'var(--text-dim)':(cagr.value>=0?'var(--green)':'var(--red)'), cagr.value===null ? `Necesita al menos 30 días de historial desde la primera compra (llevas ${cagr.days}).` : `CAGR desde la primera compra, hace ${cagr.days} días.`)}
       ${kpiBlock('Concentración', conc.name?Math.round(conc.pct)+'%':'—', null, conc.name ? `Tu posición mayor es ${conc.name}, con el ${Math.round(conc.pct)}% del valor actual de la cartera.` : '')}
     </div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+    <div class="pf-controls" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
       <div style="display:flex; gap:8px;">
         <select id="scenario-select" class="pill-select" style="border:1px solid ${scenario?'var(--accent-border)':'var(--border)'};background:${scenario?'var(--accent-soft)':'var(--panel-2)'};color:${scenario?'var(--accent-text)':'var(--text-dim)'};max-width:180px;font-size:10.5px;">
           <option value="">Posibles escenarios</option>
@@ -1236,15 +1262,15 @@ function render(scenario){
     </div>
   </div>
 
-  <div style="display:flex;gap:10px;flex-shrink:0;height:clamp(110px,18vh,180px);margin-bottom:10px;">
-    <div style="flex:2.2;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px 16px;box-sizing:border-box;">
+  <div class="pf-charts-row" style="display:flex;gap:10px;flex-shrink:0;height:clamp(110px,18vh,180px);margin-bottom:10px;">
+    <div class="pf-chart" style="flex:2.2;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px 16px;box-sizing:border-box;">
       ${drawChart()}
     </div>
-    <div style="flex:0.9;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;display:flex;flex-direction:column;">
+    <div class="pf-donut" style="flex:0.9;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;display:flex;flex-direction:column;">
       <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;flex-shrink:0;">Por mercado</div>
       <div style="flex:1;min-height:0;">${drawDiversification(breakdownByWeight(p=>p.market), k=>MARKET[k]?.color||'#6E7177', k=>MARKET[k]?.label||k, 5, fundedDetail(p=>p.market), 'market')}</div>
     </div>
-    <div style="flex:0.9;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;display:flex;flex-direction:column;">
+    <div class="pf-donut" style="flex:0.9;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;display:flex;flex-direction:column;">
       <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;flex-shrink:0;">Por sector</div>
       <div style="flex:1;min-height:0;">${drawDiversification(breakdownByWeight(p=>p.sector), sectorColor, k=>k, 6, fundedDetail(p=>p.sector), 'sector')}</div>
     </div>
