@@ -183,6 +183,8 @@ const RANGE_LABELS = {dia:'Día', semana:'Semana', mes:'Mes', anio:'Año'};
 let portfolio = {positions:[]}, history = [], currentScenario = null, selectedId = null;
 let session = null, portfolioId = null, loginError = null, loginBusy = false;
 let activePortfolioName = 'Mi cartera', portfolios = [], menuOpen = false, activeView = null;
+let profile = null;
+const COUNTRIES = ['España','Andorra','Portugal','Francia','Alemania','Italia','Reino Unido','Irlanda','Países Bajos','Bélgica','Suiza','Austria','Suecia','Noruega','Dinamarca','Finlandia','Polonia','República Checa','Grecia','Estados Unidos','Canadá','México','Argentina','Chile','Colombia','Perú','Uruguay','Paraguay','Bolivia','Venezuela','Ecuador','Costa Rica','Panamá','República Dominicana','Cuba','Brasil','Japón','China','Corea del Sur','Taiwán','India','Australia','Nueva Zelanda','Marruecos','Sudáfrica','Israel','Emiratos Árabes Unidos'];
 let currentScreen = null; // null (cargando) | 'home' | 'portfolio'
 let openCardMenu = null; // id de la cartera cuyo menú de tres puntos está abierto
 let theme = localStorage.getItem('ps_theme') || 'dark';
@@ -534,6 +536,12 @@ async function loadPortfolios(){
   portfolios = data || [];
 }
 
+async function loadProfile(){
+  const { data, error } = await supabase.from('profiles').select('*').maybeSingle();
+  if(error){ console.error(error); return; }
+  profile = data || {};
+}
+
 async function loadAll(){
   portfolioId = portfolioId || await loadPortfolioId();
   await loadPortfolios();
@@ -792,16 +800,26 @@ function renderViewOverlay(){
   const titles = { explorar:'Explorar en Walletbook', reglas:'Mis reglas', cuenta:'Mi cuenta' };
   let body;
   if(activeView === 'cuenta'){
+    const pr = profile || {};
     body = `<div style="display:flex;flex-direction:column;gap:14px;">
       <div>
         <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Email</div>
         <div style="font-size:13px;color:var(--text);">${session ? session.user.email : ''}</div>
       </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="field"><label>Nombre</label><input data-profile-field="first_name" value="${(pr.first_name||'').replace(/"/g,'&quot;')}" placeholder="Tu nombre"/></div>
+        <div class="field"><label>Apellidos</label><input data-profile-field="last_name" value="${(pr.last_name||'').replace(/"/g,'&quot;')}" placeholder="Tus apellidos"/></div>
+        <div class="field"><label>Fecha de nacimiento</label><input type="date" data-profile-field="birth_date" value="${pr.birth_date||''}"/></div>
+        <div class="field"><label>País</label><select data-profile-field="country">
+          <option value="">— Elegir —</option>
+          ${COUNTRIES.map(c=>`<option value="${c}" ${pr.country===c?'selected':''}>${c}</option>`).join('')}
+        </select></div>
+      </div>
+      <div id="profile-save-status" style="font-size:10.5px;color:var(--text-faint);min-height:12px;"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--panel-2);border-radius:8px;">
         <span style="font-size:12.5px;">Tema</span>
         <button id="account-theme-toggle" class="pill-btn" style="border:1px solid var(--border);background:var(--panel);color:var(--text-dim);padding:6px 14px;font-size:11.5px;">${theme==='dark'?'☀ Modo claro':'☾ Modo oscuro'}</button>
       </div>
-      <div style="font-size:11.5px;color:var(--text-faint);">Nombre, apellidos y más ajustes de cuenta — próximamente.</div>
     </div>`;
   } else {
     body = `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Esta sección todavía no está construida — próximamente.</div>`;
@@ -815,6 +833,34 @@ function renderViewOverlay(){
       ${body}
     </div>
   </div>`;
+}
+
+function wireViewOverlay(app){
+  const viewClose = document.getElementById('view-close');
+  if(viewClose) viewClose.addEventListener('click', () => { activeView = null; render(currentScenario); });
+  const viewBackdrop = document.getElementById('view-backdrop');
+  if(viewBackdrop) viewBackdrop.addEventListener('click', (e) => { if(e.target===viewBackdrop){ activeView = null; render(currentScenario); } });
+  const accountThemeBtn = document.getElementById('account-theme-toggle');
+  if(accountThemeBtn) accountThemeBtn.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('ps_theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
+    render(currentScenario);
+  });
+
+  app.querySelectorAll('[data-profile-field]').forEach(el => {
+    const evt = el.tagName === 'SELECT' ? 'change' : 'blur';
+    el.addEventListener(evt, async () => {
+      const field = el.getAttribute('data-profile-field');
+      const value = el.value.trim() ? el.value.trim() : null;
+      const statusEl = document.getElementById('profile-save-status');
+      if(statusEl) statusEl.textContent = 'Guardando…';
+      const { error } = await supabase.from('profiles').upsert({ [field]: value });
+      if(error){ if(statusEl) statusEl.textContent = 'Error al guardar.'; return; }
+      profile = { ...(profile||{}), [field]: value };
+      if(statusEl) statusEl.textContent = 'Guardado.';
+    });
+  });
 }
 
 function renderModal(){
@@ -1106,17 +1152,7 @@ function renderHomeScreen(){
     });
   });
 
-  const viewClose = document.getElementById('view-close');
-  if(viewClose) viewClose.addEventListener('click', () => { activeView = null; render(currentScenario); });
-  const viewBackdrop = document.getElementById('view-backdrop');
-  if(viewBackdrop) viewBackdrop.addEventListener('click', (e) => { if(e.target===viewBackdrop){ activeView = null; render(currentScenario); } });
-  const accountThemeBtn = document.getElementById('account-theme-toggle');
-  if(accountThemeBtn) accountThemeBtn.addEventListener('click', () => {
-    theme = theme === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('ps_theme', theme);
-    document.documentElement.setAttribute('data-theme', theme);
-    render(currentScenario);
-  });
+  wireViewOverlay(app);
 }
 
 function render(scenario){
@@ -1297,17 +1333,7 @@ function render(scenario){
   wireMenu(app);
   wireDialog(app);
 
-  const viewClose = document.getElementById('view-close');
-  if(viewClose) viewClose.addEventListener('click', () => { activeView = null; render(currentScenario); });
-  const viewBackdrop = document.getElementById('view-backdrop');
-  if(viewBackdrop) viewBackdrop.addEventListener('click', (e) => { if(e.target===viewBackdrop){ activeView = null; render(currentScenario); } });
-  const accountThemeBtn = document.getElementById('account-theme-toggle');
-  if(accountThemeBtn) accountThemeBtn.addEventListener('click', () => {
-    theme = theme === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('ps_theme', theme);
-    document.documentElement.setAttribute('data-theme', theme);
-    render(currentScenario);
-  });
+  wireViewOverlay(app);
 }
 
 function renderLogin(){
@@ -1365,10 +1391,11 @@ supabase.auth.onAuthStateChange(async (event, s) => {
     document.getElementById('app').innerHTML = 'Cargando…';
     portfolioId = null;
     await loadPortfolios();
+    await loadProfile();
     currentScreen = 'home';
     render(null);
   } else {
-    portfolio = {positions:[]}; history = []; portfolioId = null; currentScreen = null;
+    portfolio = {positions:[]}; history = []; portfolioId = null; currentScreen = null; profile = null;
     renderLogin();
   }
 });
