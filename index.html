@@ -596,6 +596,58 @@ function renderPositionsTable(scenario){
   </div>`;
 }
 
+let dialogState = null; // {type:'prompt'|'confirm', title, message, placeholder, defaultValue, danger, confirmLabel, error, onConfirm}
+
+function askPrompt(title, placeholder, onConfirm, defaultValue){
+  dialogState = { type:'prompt', title, placeholder, defaultValue, onConfirm, error:null };
+  render(currentScenario);
+}
+function askConfirm(title, message, onConfirm, opts){
+  opts = opts || {};
+  dialogState = { type:'confirm', title, message, danger:opts.danger, confirmLabel:opts.confirmLabel||'Confirmar', onConfirm, error:null };
+  render(currentScenario);
+}
+
+function renderDialog(){
+  if(!dialogState) return '';
+  const isPrompt = dialogState.type === 'prompt';
+  return `<div class="modal-backdrop" id="dialog-backdrop" style="z-index:80;">
+    <div class="modal-card" style="max-width:380px;padding:22px;">
+      <h3 style="font-family:'Calibri','Carlito',sans-serif;font-size:15px;font-weight:600;margin:0 0 10px;">${dialogState.title}</h3>
+      ${dialogState.message ? `<div style="font-size:12.5px;color:var(--text-dim);margin-bottom:14px;line-height:1.5;">${dialogState.message}</div>` : ''}
+      ${isPrompt ? `<input id="dialog-input" type="text" placeholder="${dialogState.placeholder||''}" value="${dialogState.defaultValue||''}" style="width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:9px 11px;box-sizing:border-box;margin-bottom:14px;" autofocus/>` : '<div style="margin-bottom:6px;"></div>'}
+      ${dialogState.error ? `<div style="color:var(--red);font-size:11.5px;margin-bottom:12px;">${dialogState.error}</div>` : ''}
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="dialog-cancel" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);padding:8px 16px;font-size:12.5px;">Cancelar</button>
+        <button id="dialog-confirm" class="pill-btn" style="border:1px solid ${dialogState.danger?'var(--red-border)':'var(--accent-border)'};background:${dialogState.danger?'var(--red-soft)':'var(--accent-soft)'};color:${dialogState.danger?'var(--red)':'var(--accent-text)'};padding:8px 16px;font-size:12.5px;font-weight:600;">${dialogState.confirmLabel||'Aceptar'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function wireDialog(app){
+  const input = document.getElementById('dialog-input');
+  if(input) input.addEventListener('keydown', (e) => { if(e.key==='Enter'){ e.preventDefault(); document.getElementById('dialog-confirm').click(); } });
+  const cancelBtn = document.getElementById('dialog-cancel');
+  if(cancelBtn) cancelBtn.addEventListener('click', () => { dialogState = null; render(currentScenario); });
+  const confirmBtn = document.getElementById('dialog-confirm');
+  if(confirmBtn) confirmBtn.addEventListener('click', async () => {
+    if(dialogState.type === 'prompt'){
+      const value = document.getElementById('dialog-input').value.trim();
+      if(!value){ dialogState.error = 'Escribe un nombre.'; render(currentScenario); return; }
+      const cb = dialogState.onConfirm;
+      dialogState = null;
+      await cb(value);
+    } else {
+      const cb = dialogState.onConfirm;
+      dialogState = null;
+      await cb();
+    }
+  });
+  const backdrop = document.getElementById('dialog-backdrop');
+  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ dialogState = null; render(currentScenario); } });
+}
+
 function renderViewOverlay(){
   if(!activeView) return '';
   const titles = { explorar:'Explorar en Walletbook', reglas:'Mis reglas', cuenta:'Mi cuenta' };
@@ -743,6 +795,7 @@ function renderHomeScreen(){
         <div>
           <div style="font-family:'Calibri','Carlito',sans-serif;font-size:11px;letter-spacing:.12em;color:var(--accent);text-transform:uppercase;">Walletbook</div>
           <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:24px;margin:4px 0 0;">Mis carteras</h1>
+          ${statusMessage ? `<div style="font-size:11.5px;color:var(--text-faint);margin-top:4px;">${statusMessage}</div>` : ''}
         </div>
         ${menuBlock()}
       </div>
@@ -766,9 +819,11 @@ function renderHomeScreen(){
       </div>
     </div>
     ${renderViewOverlay()}
+    ${renderDialog()}
   </div>`;
 
   wireMenu(app);
+  wireDialog(app);
 
   app.querySelectorAll('.home-portfolio-card').forEach(card=>card.addEventListener('click', async (e) => {
     if(e.target.closest('.home-portfolio-delete')) return;
@@ -784,32 +839,33 @@ function renderHomeScreen(){
     render(null);
   }));
 
-  app.querySelectorAll('.home-portfolio-delete').forEach(btn=>btn.addEventListener('click', async (e) => {
+  app.querySelectorAll('.home-portfolio-delete').forEach(btn=>btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if(portfolios.length <= 1){ alert('No puedes eliminar tu única cartera.'); return; }
+    if(portfolios.length <= 1){ showStatus('No puedes eliminar tu única cartera.'); render(currentScenario); return; }
     const id = btn.getAttribute('data-id'), name = btn.getAttribute('data-name');
-    if(!confirm(`¿Eliminar la cartera "${name}"? Sus posiciones dejarán de verse (se puede recuperar más adelante).`)) return;
-    const target = portfolios.find(p=>p.id===id);
-    if(target) await supabase.from('deleted_items_log').insert({ item_type:'portfolio', item_id:id, snapshot:target });
-    await supabase.from('portfolios').update({ deleted_at: new Date().toISOString() }).eq('id', id);
-    await loadPortfolios();
-    render(null);
+    askConfirm('Eliminar cartera', `¿Eliminar "${name}"? Sus posiciones dejarán de verse (se puede recuperar más adelante).`, async () => {
+      const target = portfolios.find(p=>p.id===id);
+      if(target) await supabase.from('deleted_items_log').insert({ item_type:'portfolio', item_id:id, snapshot:target });
+      await supabase.from('portfolios').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+      await loadPortfolios();
+      render(null);
+    }, { danger:true, confirmLabel:'Eliminar' });
   }));
 
   const createCard = document.getElementById('home-create-card');
-  if(createCard) createCard.addEventListener('click', async () => {
-    const name = prompt('Nombre de la nueva cartera:');
-    if(!name || !name.trim()) return;
-    const { data, error } = await supabase.from('portfolios').insert({ name: name.trim() }).select('id').single();
-    if(error){ alert('Error al crear la cartera.'); return; }
-    portfolioId = data.id;
-    activePortfolioName = name.trim();
-    currentScreen = 'portfolio';
-    selectedId = null;
-    diversificationFilter = null;
-    document.getElementById('app').innerHTML = 'Cargando…';
-    await loadAll();
-    render(null);
+  if(createCard) createCard.addEventListener('click', () => {
+    askPrompt('Nueva cartera', 'Nombre de la cartera', async (name) => {
+      const { data, error } = await supabase.from('portfolios').insert({ name }).select('id').single();
+      if(error){ showStatus('Error al crear la cartera.'); render(currentScenario); return; }
+      portfolioId = data.id;
+      activePortfolioName = name;
+      currentScreen = 'portfolio';
+      selectedId = null;
+      diversificationFilter = null;
+      document.getElementById('app').innerHTML = 'Cargando…';
+      await loadAll();
+      render(null);
+    });
   });
 
   const viewClose = document.getElementById('view-close');
@@ -888,7 +944,8 @@ function render(scenario){
   ${renderPositionsTable(scenario)}
 
   ${renderModal()}
-  ${renderViewOverlay()}`;
+  ${renderViewOverlay()}
+  ${renderDialog()}`;
 
   app.innerHTML = html;
 
@@ -975,6 +1032,7 @@ function render(scenario){
   });
 
   wireMenu(app);
+  wireDialog(app);
 
   const viewClose = document.getElementById('view-close');
   if(viewClose) viewClose.addEventListener('click', () => { activeView = null; render(currentScenario); });
