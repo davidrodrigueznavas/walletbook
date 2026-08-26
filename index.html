@@ -179,7 +179,8 @@ const RANGE_LABELS = {dia:'Día', semana:'Semana', mes:'Mes', anio:'Año'};
 
 let portfolio = {positions:[]}, history = [], currentScenario = null, selectedId = null;
 let session = null, portfolioId = null, loginError = null, loginBusy = false;
-let activePortfolioName = 'Mi cartera', portfolios = [], menuOpen = false, activeView = null, viewBusy = false;
+let activePortfolioName = 'Mi cartera', portfolios = [], menuOpen = false, activeView = null;
+let currentScreen = null; // null (cargando) | 'home' | 'portfolio'
 let theme = localStorage.getItem('ps_theme') || 'dark';
 let statusMessage = '', statusMessageTimer = null;
 function showStatus(msg, ms=4000){
@@ -597,18 +598,20 @@ function renderPositionsTable(scenario){
 
 function renderViewOverlay(){
   if(!activeView) return '';
-  const titles = { carteras:'Mis carteras', explorar:'Explorar en Walletbook', reglas:'Mis reglas', cuenta:'Mi cuenta' };
+  const titles = { explorar:'Explorar en Walletbook', reglas:'Mis reglas', cuenta:'Mi cuenta' };
   let body;
-  if(activeView === 'carteras'){
-    body = `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
-      ${portfolios.map(p => `
-        <div class="portfolio-row" data-id="${p.id}" style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:8px;border:1px solid ${p.id===portfolioId?'var(--accent-border)':'var(--border)'};background:${p.id===portfolioId?'var(--accent-soft)':'var(--panel-2)'};cursor:pointer;">
-          <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${p.id===portfolioId?'font-weight:600;color:var(--accent-text);':''}">${p.name}</span>
-          ${p.id===portfolioId?'<span style="font-size:9.5px;color:var(--accent-text);flex-shrink:0;">ACTUAL</span>':''}
-          <button class="portfolio-delete" data-id="${p.id}" data-name="${p.name}" title="Eliminar cartera" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:15px;flex-shrink:0;line-height:1;padding:2px;">✕</button>
-        </div>`).join('') || `<div style="font-size:12px;color:var(--text-faint);">No tienes carteras todavía.</div>`}
-    </div>
-    <button id="create-portfolio-btn" class="pill-btn" style="width:100%;border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:11px;font-size:13px;font-weight:600;" ${viewBusy?'disabled':''}>+ Crear cartera</button>`;
+  if(activeView === 'cuenta'){
+    body = `<div style="display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Email</div>
+        <div style="font-size:13px;color:var(--text);">${session ? session.user.email : ''}</div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--panel-2);border-radius:8px;">
+        <span style="font-size:12.5px;">Tema</span>
+        <button id="account-theme-toggle" class="pill-btn" style="border:1px solid var(--border);background:var(--panel);color:var(--text-dim);padding:6px 14px;font-size:11.5px;">${theme==='dark'?'☀ Modo claro':'☾ Modo oscuro'}</button>
+      </div>
+      <div style="font-size:11.5px;color:var(--text-faint);">Nombre, apellidos y más ajustes de cuenta — próximamente.</div>
+    </div>`;
   } else {
     body = `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Esta sección todavía no está construida — próximamente.</div>`;
   }
@@ -694,7 +697,139 @@ function renderModal(){
   </div>`;
 }
 
+function menuBlock(){
+  return `<div style="position:relative;">
+    <button id="menu-btn" class="theme-toggle" title="Menú">☰</button>
+    ${menuOpen ? `<div id="nav-menu" style="position:fixed;top:50px;right:24px;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,0.25);min-width:210px;z-index:60;overflow:hidden;">
+      <button class="nav-item" data-view="carteras" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Mis carteras</button>
+      <button class="nav-item" data-view="explorar" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Explorar en Walletbook</button>
+      <button class="nav-item" data-view="reglas" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Mis reglas</button>
+      <button class="nav-item" data-view="cuenta" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Mi cuenta</button>
+      <button id="menu-logout-btn" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;color:var(--red);padding:11px 14px;font-size:12.5px;">Cerrar sesión</button>
+    </div>` : ''}
+  </div>`;
+}
+
+function wireMenu(app){
+  const menuBtn = document.getElementById('menu-btn');
+  if(menuBtn) menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menuOpen = !menuOpen; render(currentScenario); });
+  if(menuOpen){
+    document.addEventListener('click', function closeMenuOnce(){ menuOpen = false; render(currentScenario); document.removeEventListener('click', closeMenuOnce); }, { once:true });
+  }
+  app.querySelectorAll('.nav-item').forEach(btn=>btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const view = btn.getAttribute('data-view');
+    menuOpen = false;
+    if(view === 'carteras'){
+      currentScreen = 'home';
+      selectedId = null;
+      diversificationFilter = null;
+      await loadPortfolios();
+      render(null);
+    } else {
+      activeView = view;
+      render(currentScenario);
+    }
+  }));
+  const menuLogoutBtn = document.getElementById('menu-logout-btn');
+  if(menuLogoutBtn) menuLogoutBtn.addEventListener('click', async (e) => { e.stopPropagation(); await supabase.auth.signOut(); });
+}
+
+function renderHomeScreen(){
+  const app = document.getElementById('app');
+  app.innerHTML = `<div style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:28px 24px;">
+    <div style="max-width:960px;margin:0 auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+        <div>
+          <div style="font-family:'Calibri','Carlito',sans-serif;font-size:11px;letter-spacing:.12em;color:var(--accent);text-transform:uppercase;">Walletbook</div>
+          <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:24px;margin:4px 0 0;">Mis carteras</h1>
+        </div>
+        ${menuBlock()}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;">
+        ${portfolios.map(p => `
+          <div class="home-portfolio-card" data-id="${p.id}" style="position:relative;cursor:pointer;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;">
+            <button class="home-portfolio-delete" data-id="${p.id}" data-name="${p.name}" title="Eliminar cartera" style="position:absolute;top:14px;right:14px;cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;line-height:1;padding:4px;">✕</button>
+            <div style="width:40px;height:40px;border-radius:10px;background:var(--accent-soft-strong);display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
+              <svg viewBox="0 0 100 100" style="width:24px;height:24px;">
+                <circle cx="35" cy="52" r="15" fill="#5B8DEF"/><circle cx="65" cy="52" r="15" fill="#5B8DEF"/>
+                <circle cx="38" cy="49" r="4.5" fill="#FFFFFF"/><circle cx="68" cy="49" r="4.5" fill="#FFFFFF"/>
+              </svg>
+            </div>
+            <div style="font-size:15px;font-weight:600;padding-right:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name}</div>
+            <div style="font-size:11.5px;color:var(--text-faint);margin-top:4px;">Abrir cartera →</div>
+          </div>`).join('')}
+        <div id="home-create-card" style="cursor:pointer;background:var(--panel-2);border:1.5px dashed var(--accent-border);border-radius:14px;padding:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:120px;">
+          <div style="font-size:24px;color:var(--accent-text);margin-bottom:4px;line-height:1;">+</div>
+          <div style="font-size:13px;color:var(--accent-text);font-weight:600;">${portfolios.length===0 ? 'Crear mi primera cartera' : 'Crear cartera'}</div>
+        </div>
+      </div>
+    </div>
+    ${renderViewOverlay()}
+  </div>`;
+
+  wireMenu(app);
+
+  app.querySelectorAll('.home-portfolio-card').forEach(card=>card.addEventListener('click', async (e) => {
+    if(e.target.closest('.home-portfolio-delete')) return;
+    const id = card.getAttribute('data-id');
+    const target = portfolios.find(p=>p.id===id);
+    portfolioId = id;
+    activePortfolioName = target ? target.name : 'Mi cartera';
+    currentScreen = 'portfolio';
+    selectedId = null;
+    diversificationFilter = null;
+    document.getElementById('app').innerHTML = 'Cargando…';
+    await loadAll();
+    render(null);
+  }));
+
+  app.querySelectorAll('.home-portfolio-delete').forEach(btn=>btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if(portfolios.length <= 1){ alert('No puedes eliminar tu única cartera.'); return; }
+    const id = btn.getAttribute('data-id'), name = btn.getAttribute('data-name');
+    if(!confirm(`¿Eliminar la cartera "${name}"? Sus posiciones dejarán de verse (se puede recuperar más adelante).`)) return;
+    const target = portfolios.find(p=>p.id===id);
+    if(target) await supabase.from('deleted_items_log').insert({ item_type:'portfolio', item_id:id, snapshot:target });
+    await supabase.from('portfolios').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    await loadPortfolios();
+    render(null);
+  }));
+
+  const createCard = document.getElementById('home-create-card');
+  if(createCard) createCard.addEventListener('click', async () => {
+    const name = prompt('Nombre de la nueva cartera:');
+    if(!name || !name.trim()) return;
+    const { data, error } = await supabase.from('portfolios').insert({ name: name.trim() }).select('id').single();
+    if(error){ alert('Error al crear la cartera.'); return; }
+    portfolioId = data.id;
+    activePortfolioName = name.trim();
+    currentScreen = 'portfolio';
+    selectedId = null;
+    diversificationFilter = null;
+    document.getElementById('app').innerHTML = 'Cargando…';
+    await loadAll();
+    render(null);
+  });
+
+  const viewClose = document.getElementById('view-close');
+  if(viewClose) viewClose.addEventListener('click', () => { activeView = null; render(currentScenario); });
+  const viewBackdrop = document.getElementById('view-backdrop');
+  if(viewBackdrop) viewBackdrop.addEventListener('click', (e) => { if(e.target===viewBackdrop){ activeView = null; render(currentScenario); } });
+  const accountThemeBtn = document.getElementById('account-theme-toggle');
+  if(accountThemeBtn) accountThemeBtn.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('ps_theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
+    render(currentScenario);
+  });
+}
+
 function render(scenario){
+  if(currentScreen !== 'portfolio'){
+    renderHomeScreen();
+    return;
+  }
   currentScenario = scenario;
   const app = document.getElementById('app');
   const totals = computeTotals();
@@ -725,17 +860,7 @@ function render(scenario){
         </select>
         <button id="update-prices-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);">Actualizar cotizaciones</button>
         <button id="snapshot-btn" class="pill-btn" style="border:1px solid var(--teal-border);background:var(--teal-soft);color:var(--teal);">Guardar snapshot</button>
-        <button id="theme-toggle" class="theme-toggle" title="Cambiar a modo ${theme==='dark'?'claro':'oscuro'}">${theme==='dark'?'☀':'☾'}</button>
-        <button id="logout-btn" class="theme-toggle" title="Cerrar sesión (${session?session.user.email:''})">⏻</button>
-        <div style="position:relative;">
-          <button id="menu-btn" class="theme-toggle" title="Menú">☰</button>
-          ${menuOpen ? `<div id="nav-menu" style="position:fixed;top:50px;right:24px;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,0.25);min-width:210px;z-index:60;overflow:hidden;">
-            <button class="nav-item" data-view="carteras" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Mis carteras</button>
-            <button class="nav-item" data-view="explorar" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Explorar en Walletbook</button>
-            <button class="nav-item" data-view="reglas" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:11px 14px;font-size:12.5px;">Mis reglas</button>
-            <button class="nav-item" data-view="cuenta" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;color:var(--text);padding:11px 14px;font-size:12.5px;">Mi cuenta</button>
-          </div>` : ''}
-        </div>
+        ${menuBlock()}
       </div>
       <div id="update-status" style="font-size:10.5px;color:var(--text-faint);">${statusMessage}</div>
     </div>
@@ -786,14 +911,6 @@ function render(scenario){
 
   const sel = document.getElementById('scenario-select');
   if(sel) sel.addEventListener('change', () => render(sel.value || null));
-
-  const themeBtn = document.getElementById('theme-toggle');
-  if(themeBtn) themeBtn.addEventListener('click', () => {
-    theme = theme === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('ps_theme', theme);
-    document.documentElement.setAttribute('data-theme', theme);
-    render(currentScenario);
-  });
 
   app.querySelectorAll('.div-slice').forEach(el=>el.addEventListener('click',()=>{
     const type = el.getAttribute('data-type'), key = el.getAttribute('data-key');
@@ -857,81 +974,17 @@ function render(scenario){
     render(currentScenario);
   });
 
-  const logoutBtn = document.getElementById('logout-btn');
-  if(logoutBtn) logoutBtn.addEventListener('click', async () => { await supabase.auth.signOut(); });
-
-  const menuBtn = document.getElementById('menu-btn');
-  if(menuBtn) menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menuOpen = !menuOpen; render(currentScenario); });
-
-  if(menuOpen){
-    document.addEventListener('click', function closeMenuOnce(){ menuOpen = false; render(currentScenario); document.removeEventListener('click', closeMenuOnce); }, { once:true });
-  }
-
-  app.querySelectorAll('.nav-item').forEach(btn=>btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    activeView = btn.getAttribute('data-view');
-    menuOpen = false;
-    render(currentScenario);
-  }));
+  wireMenu(app);
 
   const viewClose = document.getElementById('view-close');
   if(viewClose) viewClose.addEventListener('click', () => { activeView = null; render(currentScenario); });
   const viewBackdrop = document.getElementById('view-backdrop');
   if(viewBackdrop) viewBackdrop.addEventListener('click', (e) => { if(e.target===viewBackdrop){ activeView = null; render(currentScenario); } });
-
-  app.querySelectorAll('.portfolio-row').forEach(row=>row.addEventListener('click', async (e) => {
-    if(e.target.closest('.portfolio-delete')) return;
-    const id = row.getAttribute('data-id');
-    if(id === portfolioId) return;
-    portfolioId = id;
-    activeView = null;
-    selectedId = null;
-    diversificationFilter = null;
-    document.getElementById('app').innerHTML = 'Cargando…';
-    await loadAll();
-    render(null);
-  }));
-
-  app.querySelectorAll('.portfolio-delete').forEach(btn=>btn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    if(portfolios.length <= 1){ alert('No puedes eliminar tu única cartera.'); return; }
-    const id = btn.getAttribute('data-id'), name = btn.getAttribute('data-name');
-    if(!confirm(`¿Eliminar la cartera "${name}"? Sus posiciones dejarán de verse (se puede recuperar más adelante).`)) return;
-    const target = portfolios.find(p=>p.id===id);
-    if(target) await supabase.from('deleted_items_log').insert({ item_type:'portfolio', item_id:id, snapshot:target });
-    await supabase.from('portfolios').update({ deleted_at: new Date().toISOString() }).eq('id', id);
-    if(id === portfolioId){
-      portfolioId = null;
-      selectedId = null;
-      diversificationFilter = null;
-      document.getElementById('app').innerHTML = 'Cargando…';
-      await loadAll();
-      render(null);
-    } else {
-      await loadPortfolios();
-      render(currentScenario);
-    }
-  }));
-
-  const createPortfolioBtn = document.getElementById('create-portfolio-btn');
-  if(createPortfolioBtn) createPortfolioBtn.addEventListener('click', async () => {
-    const name = prompt('Nombre de la nueva cartera:');
-    if(!name || !name.trim()) return;
-    viewBusy = true; render(currentScenario);
-    const { data, error } = await supabase.from('portfolios').insert({ name: name.trim() }).select('id').single();
-    viewBusy = false;
-    if(error){ alert('Error al crear la cartera.'); render(currentScenario); return; }
-    if(!portfolioId){
-      portfolioId = data.id;
-      activeView = null;
-      selectedId = null;
-      diversificationFilter = null;
-      document.getElementById('app').innerHTML = 'Cargando…';
-      await loadAll();
-      render(null);
-      return;
-    }
-    await loadPortfolios();
+  const accountThemeBtn = document.getElementById('account-theme-toggle');
+  if(accountThemeBtn) accountThemeBtn.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('ps_theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
     render(currentScenario);
   });
 }
@@ -989,10 +1042,12 @@ supabase.auth.onAuthStateChange(async (event, s) => {
   lastRenderedForSession = sessionKey;
   if(session){
     document.getElementById('app').innerHTML = 'Cargando…';
-    await loadAll();
+    portfolioId = null;
+    await loadPortfolios();
+    currentScreen = 'home';
     render(null);
   } else {
-    portfolio = {positions:[]}; history = []; portfolioId = null;
+    portfolio = {positions:[]}; history = []; portfolioId = null; currentScreen = null;
     renderLogin();
   }
 });
