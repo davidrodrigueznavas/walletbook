@@ -1455,7 +1455,13 @@ function renderLogin(){
     if(mode === 'signup'){
       const { error } = await supabase.auth.signUp({ email, password });
       loginBusy = false;
-      if(error){ loginError = error.message.includes('already registered') || error.message.includes('already exists') ? 'Ya existe una cuenta con ese email.' : 'No se pudo crear la cuenta.'; renderLogin(); return; }
+      if(error){
+        let msg = 'No se pudo crear la cuenta.';
+        if(/already registered|already exists/i.test(error.message)) msg = 'Ya existe una cuenta con ese email.';
+        else if(/rate limit/i.test(error.message)) msg = 'Demasiados intentos seguidos — espera unos minutos y vuelve a intentarlo.';
+        else if(/invalid/i.test(error.message)) msg = 'Ese email no es válido.';
+        loginError = msg; renderLogin(); return;
+      }
       authMode = 'login';
       authInfo = 'Cuenta creada. Revisa tu email para confirmarla antes de entrar.';
       renderLogin();
@@ -1477,6 +1483,7 @@ supabase.auth.onAuthStateChange(async (event, s) => {
     renderLogin();
     return;
   }
+  if(authMode === 'recovery' && session) return; // no navegar a la app mientras se muestra el formulario de recuperación
   const sessionKey = session ? session.user.id : null;
   if(sessionKey === lastRenderedForSession) return; // evita recargar dos veces en el arranque
   lastRenderedForSession = sessionKey;
