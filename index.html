@@ -100,6 +100,16 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const FIELD_TO_COLUMN = { date: 'purchase_date' };
 function dbField(f){ return FIELD_TO_COLUMN[f] || f; }
 
+async function callEdgeFunction(name, params){
+  const { data: { session: s } } = await supabase.auth.getSession();
+  const token = s ? s.access_token : SUPABASE_ANON_KEY;
+  const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}${qs}`, {
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` }
+  });
+  return res.json();
+}
+
 const MARKET = {
   eeuu:{label:'EEUU',color:'#5B8DEF'}, europa:{label:'Europa',color:'#2FBF9F'},
   japon:{label:'Japón',color:'#E8776C'}, canada:{label:'Canadá',color:'#B79CED'},
@@ -462,15 +472,38 @@ function drawPriceChart(points, p){
 }
 
 async function loadModalChart(ticker, range){
-  // El histórico por ticker se sirve desde una Edge Function (Fase 3, todavía no construida).
-  modalChartState = {loading:false, error:'El gráfico por posición llega en la próxima fase (Edge Functions).', points:null};
+  const token = ++modalChartToken;
+  modalChartState = {loading:true, error:null, points:null};
+  try{
+    const res = await callEdgeFunction('ticker-history', {ticker, range});
+    if(token !== modalChartToken) return;
+    if(res.ok) modalChartState = {loading:false, error: res.points.length>1 ? null : 'Sin datos suficientes.', points: res.points};
+    else modalChartState = {loading:false, error: res.error || 'Error al consultar Yahoo Finance.', points:null};
+  } catch(e){
+    if(token !== modalChartToken) return;
+    modalChartState = {loading:false, error:'Error de conexión.', points:null};
+  }
   render(currentScenario);
 }
 
 async function loadModalCompanyInfo(pos){
-  // Ya migramos las 45 descripciones curadas como business_summary -- esto solo se
-  // dispararía para una posición nueva sin descripción, algo que llega en fases futuras.
-  modalCompanyState = {loading:false, error:'Descripción no disponible todavía para esta posición.', summary:null};
+  const token = ++modalCompanyToken;
+  try{
+    const res = await callEdgeFunction('company-info', {ticker: pos.ticker});
+    if(token !== modalCompanyToken) return;
+    if(res.ok && res.summary){
+      modalCompanyState = {loading:false, error:null, summary:res.summary, source:res.source};
+      pos.business_summary = res.summary;
+      pos.business_summary_source = res.source;
+      await updatePositionField(pos.id, 'business_summary', res.summary);
+      await updatePositionField(pos.id, 'business_summary_source', res.source);
+    } else {
+      modalCompanyState = {loading:false, error:'Sin descripción disponible.', summary:null};
+    }
+  } catch(e){
+    if(token !== modalCompanyToken) return;
+    modalCompanyState = {loading:false, error:'Error de conexión.', summary:null};
+  }
   render(currentScenario);
 }
 
@@ -769,8 +802,11 @@ function render(scenario){
   });
 
   const updBtn = document.getElementById('update-prices-btn');
-  if(updBtn) updBtn.addEventListener('click', () => {
-    showStatus('Actualizar cotizaciones llega en la próxima fase (Edge Functions).');
+  if(updBtn) updBtn.addEventListener('click', async () => {
+    document.getElementById('update-status').textContent = 'Consultando Yahoo Finance…';
+    const { data, error } = await supabase.functions.invoke('bulk-quotes');
+    await loadAll();
+    showStatus(error ? 'Error al actualizar cotizaciones.' : `Cotizaciones actualizadas (${data.updated}/${data.total}).`);
     render(currentScenario);
   });
 
