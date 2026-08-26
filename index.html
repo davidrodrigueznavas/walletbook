@@ -802,14 +802,8 @@ function renderPositionsTable(scenario){
     positions = positions.filter(p => diversificationFilter.type==='market' ? p.market===diversificationFilter.key : p.sector===diversificationFilter.key);
   }
   const sorted = [...positions].sort((a,b)=> a.sector.localeCompare(b.sector,'es') || a.name.localeCompare(b.name,'es'));
-  const perColumn = 15; // misma densidad que 45 posiciones repartidas en 3 columnas
-  const numCols = sorted.length ? Math.min(3, Math.ceil(sorted.length/perColumn)) : 1;
-  const chunkSize = Math.ceil(sorted.length/numCols);
-  const chunks = [];
-  for(let i=0; i<numCols; i++){
-    const chunk = sorted.slice(i*chunkSize, (i+1)*chunkSize);
-    if(chunk.length) chunks.push(chunk);
-  }
+  const chunkSize = Math.max(1, Math.ceil(sorted.length/3));
+  const chunks = [sorted.slice(0,chunkSize), sorted.slice(chunkSize,chunkSize*2), sorted.slice(chunkSize*2)];
   return `<div class="pf-table-chunks" style="flex:1;min-height:0;display:flex;gap:18px;overflow-y:auto;">
     ${chunks.map(chunk=>renderTableChunk(chunk, scenario)).join('')}
   </div>`;
