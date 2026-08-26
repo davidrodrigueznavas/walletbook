@@ -155,6 +155,51 @@ const TIER = {
   beta:{label:'Alto beta · riesgo elevado',color:'#F87171'},
   satelite:{label:'Satélite · muy especulativo',color:'#F87171'}
 };
+const RULE_METRIC = {
+  gain_pct: {label:'Ganancia %', fmt:v=>(v>=0?'+':'')+fmtPct(v)},
+  gain_eur: {label:'Ganancia €', fmt:v=>(v>=0?'+':'')+fmtEUR(v)},
+  weight_deviation: {label:'Desviación del peso objetivo', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+' pp'},
+  annualized_return: {label:'Rentabilidad anualizada', fmt:v=>(v>=0?'+':'')+fmtPct(v)},
+  holding_age_days: {label:'Antigüedad de la posición', fmt:v=>Math.round(v)+' días'},
+  horizon_proximity_years: {label:'Años hasta el horizonte', fmt:v=>Math.round(v)+' años'}
+};
+const RULE_OPERATOR = { gt:'mayor que', lt:'menor que' };
+const RULE_ACTION = {
+  comprar:'Comprar', recomprar:'Recomprar', reducir:'Reducir',
+  vender:'Vender (stop-loss)', revisar_tesis:'Revisar tesis', otra:'Otra'
+};
+function ruleMetricValue(metric, p, portfolioValue){
+  const price = num(p.price), cur = p.current_price_eur, date = p.date || p.purchase_date;
+  switch(metric){
+    case 'gain_pct': return gainPctOf(p);
+    case 'gain_eur': { const gp = gainPctOf(p); return gp===null ? null : currentValueOf(p) - investedOf(p); }
+    case 'weight_deviation': {
+      if(!p.target_weight || !portfolioValue) return null;
+      const weightPct = portfolioValue>0 ? currentValueOf(p)/portfolioValue*100 : 0;
+      return weightPct - p.target_weight;
+    }
+    case 'annualized_return': {
+      if(!price || !cur || price<=0 || !date) return null;
+      const days = Math.max(1, Math.round((new Date() - new Date(date+'T00:00:00')) / 86400000));
+      if(days < 30) return null;
+      return (Math.pow(cur/price, 365/days) - 1) * 100;
+    }
+    case 'holding_age_days': {
+      if(!date) return null;
+      return Math.round((new Date() - new Date(date+'T00:00:00')) / 86400000);
+    }
+    case 'horizon_proximity_years': {
+      const y = parseInt(p.horizon, 10);
+      if(!y || isNaN(y)) return null;
+      return y - new Date().getFullYear();
+    }
+    default: return null;
+  }
+}
+function ruleMatches(rule, value){
+  if(value===null || value===undefined) return false;
+  return rule.operator==='gt' ? value > rule.threshold : value < rule.threshold;
+}
 const PORTFOLIO_CATEGORY = {
   crecimiento:{label:'Crecimiento'},
   valor:{label:'Valor'},
@@ -225,6 +270,39 @@ let authMode = 'login', authInfo = null; // authMode: 'login' | 'signup' | 'rese
 let activePortfolioName = 'Mi cartera', portfolios = [], menuOpen = false, activeView = null;
 let profile = null;
 let exploreList = null, exploreLoading = false, exploreDetailId = null, exploreDetailPositions = null, exploreCategoryFilter = null;
+let positionRules = [], positionRulesLoading = false, ruleFormOpen = false, ruleFormError = null;
+let allRulesData = null, allRulesLoading = false;
+
+async function loadPositionRules(positionId){
+  positionRulesLoading = true;
+  const { data, error } = await supabase.from('rules').select('*').eq('position_id', positionId).eq('owner_id', session.user.id).order('created_at');
+  if(error) console.error(error);
+  positionRules = data || [];
+  positionRulesLoading = false;
+}
+
+async function loadAllRulesData(){
+  allRulesLoading = true;
+  const [rulesRes, positionsRes] = await Promise.all([
+    supabase.from('rules').select('*').eq('owner_id', session.user.id).order('created_at', { ascending:false }),
+    supabase.from('positions').select('id, portfolio_id, invested, price, current_price_eur, target_weight, purchase_date, horizon').eq('owner_id', session.user.id).is('deleted_at', null)
+  ]);
+  if(rulesRes.error) console.error(rulesRes.error);
+  if(positionsRes.error) console.error(positionsRes.error);
+  const positions = positionsRes.data || [];
+  const totalsByPortfolio = {};
+  positions.forEach(p => {
+    totalsByPortfolio[p.portfolio_id] = (totalsByPortfolio[p.portfolio_id] || 0) + currentValueOf(p);
+  });
+  const positionsById = {};
+  positions.forEach(p => { positionsById[p.id] = p; });
+  allRulesData = (rulesRes.data || []).map(rule => {
+    const p = positionsById[rule.position_id];
+    const value = p ? ruleMetricValue(rule.metric, p, totalsByPortfolio[rule.portfolio_id]) : null;
+    return { rule, value, matched: p ? ruleMatches(rule, value) : false, missing: !p };
+  });
+  allRulesLoading = false;
+}
 
 async function loadExploreList(){
   exploreLoading = true;
@@ -881,7 +959,7 @@ function wireAddPositionModal(app){
 
 function renderViewOverlay(){
   if(!activeView) return '';
-  const titles = { reglas:'Mis reglas', cuenta:'Mi cuenta' };
+  const titles = { cuenta:'Mi cuenta' };
   let body;
   if(activeView === 'cuenta'){
     const pr = profile || {};
@@ -1018,6 +1096,49 @@ function renderModal(){
           <textarea data-id="${p.id}" data-field="thesis" style="flex:1;width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;line-height:1.55;padding:10px 12px;box-sizing:border-box;resize:none;">${p.thesis??''}</textarea>
         </div>
       </div>
+
+      <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;">Reglas de esta posición</div>
+          <button id="rule-add-toggle" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:11.5px;font-weight:600;padding:0;">${ruleFormOpen?'Cancelar':'+ Añadir regla'}</button>
+        </div>
+
+        ${positionRulesLoading ? `<div style="font-size:11px;color:var(--text-faint);">Cargando…</div>` : (positionRules.length ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:${ruleFormOpen?'14px':'0'};">
+          ${positionRules.map(r=>{
+            const totals = computeTotals();
+            const value = ruleMetricValue(r.metric, p, totals.value);
+            const matched = ruleMatches(r, value);
+            const mv = RULE_METRIC[r.metric];
+            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:${matched?'var(--accent-soft)':'var(--panel-2)'};border:1px solid ${matched?'var(--accent-border)':'var(--border-soft)'};">
+              <div style="font-size:11.5px;">
+                ${matched?'⚠ ':''}<b>${mv.label}</b> ${RULE_OPERATOR[r.operator]} ${r.threshold} → <span style="color:var(--accent-text);">${RULE_ACTION[r.action]}</span>
+                ${value!==null ? `<span style="color:var(--text-faint);"> · actual: ${mv.fmt(value)}</span>` : ''}
+                ${r.note ? `<div style="color:var(--text-faint);margin-top:2px;">${r.note}</div>` : ''}
+              </div>
+              <button class="rule-delete-btn" data-id="${r.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;flex-shrink:0;">×</button>
+            </div>`;
+          }).join('')}
+        </div>` : (!ruleFormOpen ? `<div style="font-size:11px;color:var(--text-faint);">Sin reglas todavía.</div>` : ''))}
+
+        ${ruleFormOpen ? `<div style="display:grid;grid-template-columns:1.4fr .55fr .7fr 1fr;gap:8px;align-items:end;">
+          <div class="field"><label>Métrica</label><select id="rule-metric">
+            ${Object.entries(RULE_METRIC).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}
+          </select></div>
+          <div class="field"><label>Cond.</label><select id="rule-operator">
+            <option value="gt">&gt;</option>
+            <option value="lt">&lt;</option>
+          </select></div>
+          <div class="field"><label>Umbral</label><input id="rule-threshold" placeholder="ej. 10"/></div>
+          <div class="field"><label>Acción</label><select id="rule-action">
+            ${Object.entries(RULE_ACTION).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
+          </select></div>
+        </div>
+        <div class="field" style="margin-top:8px;"><label>Nota (opcional)</label><input id="rule-note" placeholder="ej. revisar antes de recomprar"/></div>
+        ${ruleFormError ? `<div style="color:var(--red);font-size:11px;margin-top:8px;">${ruleFormError}</div>` : ''}
+        <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+          <button id="rule-save-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:6px 14px;font-size:11.5px;font-weight:600;">Guardar regla</button>
+        </div>` : ''}
+      </div>
     </div>
   </div>`;
 }
@@ -1133,6 +1254,12 @@ function wireMenu(app){
       exploreDetailId = null; exploreDetailPositions = null; exploreCategoryFilter = null; exploreLoading = true;
       render(null);
       await loadExploreList();
+      render(null);
+    } else if(view === 'reglas'){
+      currentScreen = 'reglas';
+      allRulesLoading = true;
+      render(null);
+      await loadAllRulesData();
       render(null);
     } else {
       activeView = view;
@@ -1390,10 +1517,79 @@ function renderExploreScreen(){
   });
 }
 
+function renderRulesScreen(){
+  if(!session) return; // una operación asíncrona pendiente terminó después de cerrar sesión; no repintar la app
+  const app = document.getElementById('app');
+
+  const ruleRow = (item) => {
+    const { rule, value, matched, missing } = item;
+    const mv = RULE_METRIC[rule.metric];
+    const pf = portfolios.find(p=>p.id===rule.portfolio_id);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px;border-radius:12px;background:${matched?'var(--accent-soft)':'var(--panel-2)'};border:1px solid ${matched?'var(--accent-border)':'var(--border)'};">
+      <div style="min-width:0;">
+        <div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;">
+          ${matched?'⚠':''} ${rule.position_name}${rule.ticker?` <span style="font-weight:400;color:var(--text-faint);font-size:11.5px;">${rule.ticker}</span>`:''}
+          ${missing ? `<span style="font-size:10px;color:var(--text-faint);font-weight:400;">(posición ya no disponible)</span>` : ''}
+        </div>
+        <div style="font-size:11.5px;color:var(--text-dim);margin-top:3px;">
+          ${mv.label} ${RULE_OPERATOR[rule.operator]} ${rule.threshold}${value!==null&&value!==undefined?` · actual: <b style="color:${matched?'var(--accent-text)':'var(--text)'};">${mv.fmt(value)}</b>`:''}
+        </div>
+        <div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">${pf?pf.name+' · ':''}${RULE_ACTION[rule.action]}${rule.note?' · '+rule.note:''}</div>
+      </div>
+      <button class="global-rule-delete-btn" data-id="${rule.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;flex-shrink:0;">×</button>
+    </div>`;
+  };
+
+  const matched = (allRulesData||[]).filter(i=>i.matched);
+  const rest = (allRulesData||[]).filter(i=>!i.matched);
+
+  const body = allRulesLoading ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Cargando reglas…</div>`
+    : (!allRulesData || !allRulesData.length) ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Todavía no tienes reglas. Abre una posición dentro de una cartera y usa "+ Añadir regla".</div>`
+    : `<div style="display:flex;flex-direction:column;gap:24px;max-width:760px;">
+        ${matched.length ? `<div>
+          <div style="font-size:11px;color:var(--accent-text);text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:10px;">⚠ Reglas activas ahora (${matched.length})</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">${matched.map(ruleRow).join('')}</div>
+        </div>` : ''}
+        ${rest.length ? `<div>
+          <div style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:10px;">Resto de reglas (${rest.length})</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">${rest.map(ruleRow).join('')}</div>
+        </div>` : ''}
+      </div>`;
+
+  app.innerHTML = `<div class="home-wrap" style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:16px 32px 32px;">
+    <div style="max-width:1200px;margin:0 auto;">
+      ${topNavBar()}
+      <div style="margin-bottom:26px;">
+        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:26px;margin:0;">Mis reglas</h1>
+        <div style="font-size:12.5px;color:var(--text-faint);margin-top:4px;">Añade reglas desde el detalle de cada posición. Aquí verás cuáles están activas ahora mismo.</div>
+      </div>
+      ${body}
+    </div>
+    ${renderViewOverlay()}
+    ${renderDialog()}
+    ${renderStatusToast()}
+  </div>`;
+
+  wireMenu(app);
+  wireDialog(app);
+  wireViewOverlay(app);
+
+  app.querySelectorAll('.global-rule-delete-btn').forEach(btn=>btn.addEventListener('click', async () => {
+    const id = btn.getAttribute('data-id');
+    await supabase.from('rules').delete().eq('id', id);
+    await loadAllRulesData();
+    render(null);
+  }));
+}
+
 function render(scenario){
   if(!session) return; // una operación asíncrona pendiente terminó después de cerrar sesión; no repintar la app
   if(currentScreen === 'explorar'){
     renderExploreScreen();
+    return;
+  }
+  if(currentScreen === 'reglas'){
+    renderRulesScreen();
     return;
   }
   if(currentScreen !== 'portfolio'){
@@ -1475,9 +1671,11 @@ function render(scenario){
     } else {
       modalCompanyState = {loading:false, error:null, summary:null};
     }
+    ruleFormOpen = false; ruleFormError = null; positionRules = []; positionRulesLoading = true;
     render(currentScenario);
     if(pos && pos.ticker) loadModalChart(pos.ticker, modalRange);
     if(pos && pos.ticker && !pos.business_summary) loadModalCompanyInfo(pos);
+    loadPositionRules(selectedId).then(() => render(currentScenario));
   }));
 
   const sel = document.getElementById('scenario-select');
@@ -1506,9 +1704,40 @@ function render(scenario){
   }));
 
   const closeBtn = document.getElementById('modal-close');
-  if(closeBtn) closeBtn.addEventListener('click', () => { selectedId = null; modalChartToken++; modalCompanyToken++; render(currentScenario); });
+  if(closeBtn) closeBtn.addEventListener('click', () => { selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; render(currentScenario); });
   const backdrop = document.getElementById('modal-backdrop');
-  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ selectedId = null; modalChartToken++; modalCompanyToken++; render(currentScenario); } });
+  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; render(currentScenario); } });
+
+  const ruleAddToggle = document.getElementById('rule-add-toggle');
+  if(ruleAddToggle) ruleAddToggle.addEventListener('click', () => {
+    ruleFormOpen = !ruleFormOpen; ruleFormError = null;
+    render(currentScenario);
+  });
+  const ruleSaveBtn = document.getElementById('rule-save-btn');
+  if(ruleSaveBtn) ruleSaveBtn.addEventListener('click', async () => {
+    const pos = portfolio.positions.find(p=>p.id===selectedId);
+    if(!pos) return;
+    const metric = document.getElementById('rule-metric').value;
+    const operator = document.getElementById('rule-operator').value;
+    const threshold = num(document.getElementById('rule-threshold').value);
+    const action = document.getElementById('rule-action').value;
+    const note = document.getElementById('rule-note').value.trim();
+    if(threshold===null){ ruleFormError = 'Introduce un umbral numérico.'; render(currentScenario); return; }
+    const { error } = await supabase.from('rules').insert({
+      portfolio_id: portfolioId, position_id: pos.id, ticker: pos.ticker || null, position_name: pos.name,
+      metric, operator, threshold, action, note: note || null
+    });
+    if(error){ ruleFormError = 'No se pudo guardar la regla.'; render(currentScenario); return; }
+    ruleFormOpen = false; ruleFormError = null;
+    await loadPositionRules(selectedId);
+    render(currentScenario);
+  });
+  app.querySelectorAll('.rule-delete-btn').forEach(btn=>btn.addEventListener('click', async () => {
+    const id = btn.getAttribute('data-id');
+    await supabase.from('rules').delete().eq('id', id);
+    await loadPositionRules(selectedId);
+    render(currentScenario);
+  }));
 
   const deleteBtn = document.getElementById('modal-delete');
   if(deleteBtn) deleteBtn.addEventListener('click', () => {
