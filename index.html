@@ -1210,7 +1210,7 @@ function render(scenario){
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
       <div style="display:flex; gap:8px;">
         <select id="scenario-select" class="pill-select" style="border:1px solid ${scenario?'var(--accent-border)':'var(--border)'};background:${scenario?'var(--accent-soft)':'var(--panel-2)'};color:${scenario?'var(--accent-text)':'var(--text-dim)'};max-width:180px;font-size:10.5px;">
-          <option value="">Vista base (ganancia/pérdida)</option>
+          <option value="">Posibles escenarios</option>
           ${SCENARIOS.map(sc=>`<option value="${sc.key}" ${scenario===sc.key?'selected':''}>${sc.label}</option>`).join('')}
         </select>
         <button id="addpos-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);">+ Añadir posición</button>
