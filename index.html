@@ -578,14 +578,16 @@ async function loadModalCompanyInfo(pos){
 }
 
 async function loadPortfolioId(){
-  const { data, error } = await supabase.from('portfolios').select('id,name').is('deleted_at', null).order('created_at').limit(1).maybeSingle();
+  if(!session) return null;
+  const { data, error } = await supabase.from('portfolios').select('id,name').eq('owner_id', session.user.id).is('deleted_at', null).order('created_at').limit(1).maybeSingle();
   if(error){ console.error(error); return null; }
   if(data) activePortfolioName = data.name;
   return data ? data.id : null;
 }
 
 async function loadPortfolios(){
-  const { data, error } = await supabase.from('portfolios').select('*').is('deleted_at', null).order('created_at');
+  if(!session){ portfolios = []; return; }
+  const { data, error } = await supabase.from('portfolios').select('*').eq('owner_id', session.user.id).is('deleted_at', null).order('created_at');
   if(error){ console.error(error); return; }
   portfolios = data || [];
 }
