@@ -216,6 +216,24 @@ let session = null, portfolioId = null, loginError = null, loginBusy = false;
 let authMode = 'login', authInfo = null; // authMode: 'login' | 'signup' | 'reset' | 'recovery'
 let activePortfolioName = 'Mi cartera', portfolios = [], menuOpen = false, activeView = null;
 let profile = null;
+let exploreList = null, exploreLoading = false, exploreDetailId = null, exploreDetailPositions = null;
+
+async function loadExploreList(){
+  exploreLoading = true;
+  const { data, error } = await supabase.from('portfolios').select('*').eq('shared', true).is('deleted_at', null).order('created_at', { ascending:false });
+  if(error){ console.error(error); exploreList = []; exploreLoading = false; return; }
+  exploreList = (data || []).filter(p => !session || p.owner_id !== session.user.id);
+  exploreLoading = false;
+}
+
+async function loadExploreDetail(portfolioId){
+  exploreDetailId = portfolioId;
+  exploreLoading = true;
+  const { data, error } = await supabase.from('shared_positions').select('*').eq('portfolio_id', portfolioId).order('weight_pct', { ascending:false });
+  if(error) console.error(error);
+  exploreDetailPositions = data || [];
+  exploreLoading = false;
+}
 const COUNTRIES = ['España','Andorra','Portugal','Francia','Alemania','Italia','Reino Unido','Irlanda','Países Bajos','Bélgica','Suiza','Austria','Suecia','Noruega','Dinamarca','Finlandia','Polonia','República Checa','Grecia','Estados Unidos','Canadá','México','Argentina','Chile','Colombia','Perú','Uruguay','Paraguay','Bolivia','Venezuela','Ecuador','Costa Rica','Panamá','República Dominicana','Cuba','Brasil','Japón','China','Corea del Sur','Taiwán','India','Australia','Nueva Zelanda','Marruecos','Sudáfrica','Israel','Emiratos Árabes Unidos'];
 let currentScreen = null; // null (cargando) | 'home' | 'portfolio'
 let openCardMenu = null; // id de la cartera cuyo menú de tres puntos está abierto
@@ -857,11 +875,45 @@ function renderViewOverlay(){
         <button id="account-theme-toggle" class="pill-btn" style="border:1px solid var(--border);background:var(--panel);color:var(--text-dim);padding:6px 14px;font-size:11.5px;">${theme==='dark'?'☀ Modo claro':'☾ Modo oscuro'}</button>
       </div>
     </div>`;
+  } else if(activeView === 'explorar'){
+    if(exploreDetailId){
+      const port = (exploreList||[]).find(p=>p.id===exploreDetailId);
+      body = `<div>
+        <button id="explore-back-btn" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:12px;padding:0;margin-bottom:14px;">← Volver</button>
+        <h3 style="margin:0 0 4px;font-family:'Calibri','Carlito',sans-serif;font-size:15px;">${port?port.name:''}</h3>
+        <div style="font-size:12px;color:var(--text-faint);margin-bottom:16px;">${port&&port.description ? port.description : 'Sin descripción'}</div>
+        ${exploreLoading ? `<div style="font-size:12px;color:var(--text-faint);">Cargando…</div>`
+          : (exploreDetailPositions && exploreDetailPositions.length ? `<div style="overflow-x:auto;">
+              <table class="postable">
+                <colgroup><col style="width:12px;"><col style="width:70px;"><col><col style="width:56px;"><col style="width:56px;"></colgroup>
+                <thead><tr><th></th><th>Ticker</th><th>Nombre</th><th style="text-align:right;">Peso</th><th style="text-align:right;">Gan. %</th></tr></thead>
+                <tbody>
+                  ${exploreDetailPositions.map(p=>`<tr>
+                    <td><span style="width:8px;height:8px;border-radius:50%;background:${MARKET[p.market]?.color||'#6E7177'};display:inline-block;"></span></td>
+                    <td>${p.ticker||'—'}</td>
+                    <td>${p.name}</td>
+                    <td style="text-align:right;">${p.weight_pct!=null?p.weight_pct+'%':'—'}</td>
+                    <td style="text-align:right;color:${p.gain_pct==null?'var(--text-dim)':(p.gain_pct>=0?'var(--green)':'var(--red)')};">${p.gain_pct!=null?(p.gain_pct>=0?'+':'')+p.gain_pct+'%':'—'}</td>
+                  </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>` : `<div style="font-size:12px;color:var(--text-faint);">Esta cartera todavía no tiene posiciones.</div>`)}
+      </div>`;
+    } else {
+      body = exploreLoading ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Cargando carteras compartidas…</div>`
+        : (!exploreList || !exploreList.length) ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Todavía no hay carteras compartidas. En cuanto alguien active "Compartir con otros" en una tarjeta, aparecerá aquí.</div>`
+        : `<div style="display:flex;flex-direction:column;gap:10px;">
+            ${exploreList.map(p=>`<button class="explore-card" data-id="${p.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:14px;">
+              <div style="font-size:13.5px;font-weight:600;margin-bottom:4px;">${p.name}</div>
+              <div style="font-size:11.5px;color:var(--text-faint);">${p.description ? p.description : 'Sin descripción'}</div>
+            </button>`).join('')}
+          </div>`;
+    }
   } else {
     body = `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Esta sección todavía no está construida — próximamente.</div>`;
   }
   return `<div class="modal-backdrop" id="view-backdrop">
-    <div class="modal-card" style="max-width:440px;padding:24px;">
+    <div class="modal-card" style="max-width:${activeView==='explorar'?'640px':'440px'};padding:24px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
         <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:17px;margin:0;">${titles[activeView]}</h2>
         <button id="view-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
@@ -896,6 +948,19 @@ function wireViewOverlay(app){
       profile = { ...(profile||{}), [field]: value };
       if(statusEl) statusEl.textContent = 'Guardado.';
     });
+  });
+
+  app.querySelectorAll('.explore-card').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.getAttribute('data-id');
+    exploreLoading = true;
+    render(currentScenario);
+    await loadExploreDetail(id);
+    render(currentScenario);
+  }));
+  const exploreBackBtn = document.getElementById('explore-back-btn');
+  if(exploreBackBtn) exploreBackBtn.addEventListener('click', () => {
+    exploreDetailId = null; exploreDetailPositions = null;
+    render(currentScenario);
   });
 }
 
@@ -1081,7 +1146,14 @@ function wireMenu(app){
       await goHome();
     } else {
       activeView = view;
-      render(currentScenario);
+      if(view === 'explorar'){
+        exploreDetailId = null; exploreDetailPositions = null; exploreLoading = true;
+        render(currentScenario);
+        await loadExploreList();
+        render(currentScenario);
+      } else {
+        render(currentScenario);
+      }
     }
   }));
   const menuLogoutBtn = document.getElementById('menu-logout-btn');
