@@ -1163,6 +1163,7 @@ function wireMenu(app){
 }
 
 function renderHomeScreen(){
+  if(!session) return; // una operación asíncrona pendiente terminó después de cerrar sesión; no repintar la app
   const app = document.getElementById('app');
   app.innerHTML = `<div class="home-wrap" style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:16px 32px 32px;">
     <div style="max-width:1040px;margin:0 auto;">
@@ -1300,6 +1301,7 @@ function renderHomeScreen(){
 }
 
 function render(scenario){
+  if(!session) return; // una operación asíncrona pendiente terminó después de cerrar sesión; no repintar la app
   if(currentScreen !== 'portfolio'){
     renderHomeScreen();
     return;
