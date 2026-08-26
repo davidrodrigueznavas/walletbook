@@ -1476,8 +1476,6 @@ function renderLogin(){
 
 let lastRenderedForSession = undefined;
 supabase.auth.onAuthStateChange(async (event, s) => {
-  window.__authEvents = window.__authEvents || [];
-  window.__authEvents.push({t: Date.now(), event, authModeAtEntry: authMode, hasSession: !!s});
   session = s;
   if(event === 'PASSWORD_RECOVERY'){
     authMode = 'recovery';
@@ -1490,11 +1488,11 @@ supabase.auth.onAuthStateChange(async (event, s) => {
   if(sessionKey === lastRenderedForSession) return; // evita recargar dos veces en el arranque
   lastRenderedForSession = sessionKey;
   if(session){
-    window.__authEvents.push({t: Date.now(), took: 'HOME_BRANCH', event, authModeAtEntry: authMode});
     document.getElementById('app').innerHTML = 'Cargando…';
     portfolioId = null;
     await loadPortfolios();
     await loadProfile();
+    if(authMode === 'recovery') return; // un evento PASSWORD_RECOVERY tomó el control mientras cargábamos
     currentScreen = 'home';
     render(null);
   } else {
