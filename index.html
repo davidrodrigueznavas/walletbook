@@ -259,6 +259,17 @@ function currencyForTicker(ticker){
   for(const suf in SUFFIX_CURRENCY){ if(ticker.endsWith(suf)) return SUFFIX_CURRENCY[suf]; }
   return 'USD';
 }
+const SUFFIX_MARKET = { '.T':'japon', '.DE':'europa', '.PA':'europa', '.MI':'europa', '.AS':'europa', '.L':'europa', '.TO':'canada', '.V':'canada', '.TW':'taiwan', '.TWO':'taiwan' };
+function marketForTicker(ticker, exchange){
+  if(!ticker) return '';
+  for(const suf in SUFFIX_MARKET){ if(ticker.endsWith(suf)) return SUFFIX_MARKET[suf]; }
+  const ex = (exchange || '').toLowerCase();
+  if(ex.includes('toronto') || ex.includes('tsx')) return 'canada';
+  if(ex.includes('tokyo')) return 'japon';
+  if(ex.includes('taiwan')) return 'taiwan';
+  if(ex.includes('xetra') || ex.includes('frankfurt') || ex.includes('paris') || ex.includes('milan') || ex.includes('amsterdam') || ex.includes('london')) return 'europa';
+  return 'eeuu';
+}
 let diversificationFilter = null; // {type:'market'|'sector', key}
 
 function sectorResponse(sens, factors){
@@ -798,6 +809,8 @@ function wireAddPositionModal(app){
         tickerInput.value = r.symbol;
         const nameInput = document.getElementById('addpos-name');
         if(nameInput && !nameInput.value.trim()) nameInput.value = r.name;
+        const marketSelect = document.getElementById('addpos-market');
+        if(marketSelect){ const m = marketForTicker(r.symbol, r.exchange); if(m) marketSelect.value = m; }
         suggestionsBox.innerHTML = '';
       }));
     }, 300);
