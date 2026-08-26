@@ -918,9 +918,19 @@ function render(scenario){
     const name = prompt('Nombre de la nueva cartera:');
     if(!name || !name.trim()) return;
     viewBusy = true; render(currentScenario);
-    const { error } = await supabase.from('portfolios').insert({ name: name.trim() });
+    const { data, error } = await supabase.from('portfolios').insert({ name: name.trim() }).select('id').single();
     viewBusy = false;
     if(error){ alert('Error al crear la cartera.'); render(currentScenario); return; }
+    if(!portfolioId){
+      portfolioId = data.id;
+      activeView = null;
+      selectedId = null;
+      diversificationFilter = null;
+      document.getElementById('app').innerHTML = 'Cargando…';
+      await loadAll();
+      render(null);
+      return;
+    }
     await loadPortfolios();
     render(currentScenario);
   });
