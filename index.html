@@ -1476,6 +1476,7 @@ function renderLogin(){
 
 let lastRenderedForSession = undefined;
 supabase.auth.onAuthStateChange(async (event, s) => {
+  console.log('AUTH_EVENT', event, location.hash, location.search);
   session = s;
   if(event === 'PASSWORD_RECOVERY'){
     authMode = 'recovery';
