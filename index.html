@@ -79,7 +79,10 @@
   .modal-backdrop { position:fixed; inset:0; background:var(--backdrop); display:flex; align-items:center; justify-content:center; z-index:50; padding:24px; box-sizing:border-box; }
   .modal-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; width:100%; max-width:1020px; max-height:90vh; overflow-y:auto; padding:24px 28px; box-sizing:border-box; }
   .field label { font-size:9.5px; color:var(--text-faint); display:block; margin-bottom:3px; }
-  .field input, .field textarea { width:100%; background:var(--panel-2); border:1px solid var(--border); border-radius:4px; color:var(--text); font-size:12px; padding:6px 8px; box-sizing:border-box; }
+  .field input, .field textarea, .field select { width:100%; background:var(--panel-2); border:1px solid var(--border); border-radius:4px; color:var(--text); font-size:12px; padding:6px 8px; box-sizing:border-box; }
+  .ticker-suggestion { display:block; width:100%; text-align:left; cursor:pointer; background:none; border:none; border-bottom:1px solid var(--border-soft); color:var(--text); padding:8px 10px; font-size:12px; }
+  .ticker-suggestion:last-child { border-bottom:none; }
+  .ticker-suggestion:hover { background:var(--panel-2); }
   .pill-btn { cursor:pointer; font-size:11px; padding:6px 12px; border-radius:16px; }
   .pill-select { cursor:pointer; font-size:11px; padding:6px 28px 6px 12px; border-radius:16px; appearance:none; -webkit-appearance:none; background-repeat:no-repeat; background-position:right 10px center; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239B9FA6'/%3E%3C/svg%3E"); }
   .theme-toggle { cursor:pointer; width:30px; height:30px; border-radius:50%; border:1px solid var(--border); background:var(--panel-2); color:var(--text-dim); display:flex; align-items:center; justify-content:center; font-size:14px; line-height:1; }
@@ -192,6 +195,14 @@ function showStatus(msg, ms=4000){
 document.documentElement.setAttribute('data-theme', theme);
 let modalRange = 'mes', modalChartState = {loading:false, error:null, points:null}, modalChartToken = 0;
 let modalCompanyState = {loading:false, error:null, summary:null}, modalCompanyToken = 0;
+let addPositionOpen = false, addPositionError = null, addPositionSelected = null, addPositionSearchToken = 0;
+
+const SUFFIX_CURRENCY = { '.T':'JPY', '.DE':'EUR', '.PA':'EUR', '.MI':'EUR', '.AS':'EUR', '.SW':'CHF', '.CO':'DKK' };
+function currencyForTicker(ticker){
+  if(!ticker) return 'USD';
+  for(const suf in SUFFIX_CURRENCY){ if(ticker.endsWith(suf)) return SUFFIX_CURRENCY[suf]; }
+  return 'USD';
+}
 let diversificationFilter = null; // {type:'market'|'sector', key}
 
 function sectorResponse(sens, factors){
@@ -543,6 +554,34 @@ async function updatePositionField(id, field, value){
   return true;
 }
 
+let isDirty = false;
+function markDirty(){ isDirty = true; }
+
+async function autoUpdateQuotes(){
+  if(!portfolioId) return;
+  const { data, error } = await supabase.functions.invoke('bulk-quotes');
+  if(currentScreen !== 'portfolio' || !portfolioId) return;
+  await loadAll();
+  if(!error) showStatus(`Cotizaciones actualizadas (${data.updated}/${data.total}).`, 3000);
+  render(currentScenario);
+}
+
+async function saveSnapshotIfDirty(){
+  if(!isDirty || currentScreen !== 'portfolio' || !portfolioId) return;
+  const totals = computeTotals();
+  const today = new Date().toISOString().slice(0,10);
+  const { error } = await supabase.from('history').upsert(
+    { portfolio_id: portfolioId, date: today, invested: Math.round(totals.invested), value: Math.round(totals.value) },
+    { onConflict: 'portfolio_id,date' }
+  );
+  if(!error){
+    isDirty = false;
+    await loadAll();
+    render(currentScenario);
+  }
+}
+setInterval(saveSnapshotIfDirty, 60000);
+
 function kpiBlock(label, value, color, title){
   return `<div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0;white-space:nowrap;"${title?` title="${title}"`:''}>
     <div style="font-family:'Calibri','Carlito',sans-serif;font-size:18px;line-height:1;${color?`color:${color};`:''}">${value}</div>
@@ -656,6 +695,98 @@ function wireDialog(app){
   if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ dialogState = null; render(currentScenario); } });
 }
 
+function wireAddPositionModal(app){
+  const tickerInput = document.getElementById('addpos-ticker');
+  if(!tickerInput) return;
+
+  const closeBtn = document.getElementById('addpos-close');
+  if(closeBtn) closeBtn.addEventListener('click', () => { addPositionOpen = false; render(currentScenario); });
+  const cancelBtn = document.getElementById('addpos-cancel');
+  if(cancelBtn) cancelBtn.addEventListener('click', () => { addPositionOpen = false; render(currentScenario); });
+  const backdrop = document.getElementById('addpos-backdrop');
+  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ addPositionOpen = false; render(currentScenario); } });
+
+  const suggestionsBox = document.getElementById('addpos-suggestions');
+  let searchTimer = null;
+  tickerInput.addEventListener('input', () => {
+    addPositionSelected = null;
+    const q = tickerInput.value.trim();
+    if(searchTimer) clearTimeout(searchTimer);
+    if(q.length < 2){ suggestionsBox.innerHTML = ''; return; }
+    searchTimer = setTimeout(async () => {
+      const token = ++addPositionSearchToken;
+      suggestionsBox.innerHTML = `<div style="padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Buscando…</div>`;
+      let results = [];
+      try {
+        const res = await callEdgeFunction('ticker-search', {q});
+        results = (res && res.ok) ? res.results : [];
+      } catch(e){ results = null; }
+      if(token !== addPositionSearchToken) return;
+      if(results === null){ suggestionsBox.innerHTML = `<div style="padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Error al buscar.</div>`; return; }
+      if(!results.length){ suggestionsBox.innerHTML = `<div style="padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Sin resultados.</div>`; return; }
+      suggestionsBox.innerHTML = results.map((r,i) => `<button type="button" class="ticker-suggestion" data-idx="${i}">
+        <b>${r.symbol}</b> — ${r.name}${r.exchange?` <span style="color:var(--text-faint);">(${r.exchange})</span>`:''}
+      </button>`).join('');
+      suggestionsBox.querySelectorAll('.ticker-suggestion').forEach(btn => btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const r = results[Number(btn.getAttribute('data-idx'))];
+        addPositionSelected = r;
+        tickerInput.value = r.symbol;
+        const nameInput = document.getElementById('addpos-name');
+        if(nameInput && !nameInput.value.trim()) nameInput.value = r.name;
+        suggestionsBox.innerHTML = '';
+      }));
+    }, 300);
+  });
+  tickerInput.addEventListener('blur', () => {
+    setTimeout(() => { if(suggestionsBox) suggestionsBox.innerHTML = ''; }, 150);
+  });
+
+  const submitBtn = document.getElementById('addpos-submit');
+  if(submitBtn) submitBtn.addEventListener('click', async () => {
+    const ticker = tickerInput.value.trim().toUpperCase();
+    const name = document.getElementById('addpos-name').value.trim();
+    const market = document.getElementById('addpos-market').value;
+    const sector = document.getElementById('addpos-sector').value;
+    const tier = document.getElementById('addpos-tier').value;
+    const cluster = document.getElementById('addpos-cluster').value.trim();
+    const invested = num(document.getElementById('addpos-invested').value);
+    const price = num(document.getElementById('addpos-price').value);
+    const commission = num(document.getElementById('addpos-commission').value);
+    const date = document.getElementById('addpos-date').value;
+    const horizon = document.getElementById('addpos-horizon').value.trim();
+
+    if(!name){ addPositionError = 'Falta el nombre.'; render(currentScenario); return; }
+    if(!market){ addPositionError = 'Elige un mercado.'; render(currentScenario); return; }
+    if(!sector){ addPositionError = 'Elige un sector.'; render(currentScenario); return; }
+    if(invested===null || invested<=0){ addPositionError = 'Indica el importe invertido.'; render(currentScenario); return; }
+
+    const row = {
+      id: crypto.randomUUID(),
+      portfolio_id: portfolioId,
+      name,
+      ticker: ticker || null,
+      market,
+      sector,
+      cluster: cluster || null,
+      tier: tier || null,
+      invested,
+      price,
+      commission,
+      purchase_date: date || null,
+      horizon: horizon || null,
+      currency: currencyForTicker(ticker),
+    };
+    const { error } = await supabase.from('positions').insert(row);
+    if(error){ addPositionError = 'Error al guardar — revisa la conexión.'; render(currentScenario); return; }
+    addPositionOpen = false;
+    markDirty();
+    await loadAll();
+    showStatus(`Posición "${name}" añadida.`);
+    render(currentScenario);
+  });
+}
+
 function renderViewOverlay(){
   if(!activeView) return '';
   const titles = { explorar:'Explorar en Walletbook', reglas:'Mis reglas', cuenta:'Mi cuenta' };
@@ -757,6 +888,59 @@ function renderModal(){
   </div>`;
 }
 
+function renderAddPositionModal(){
+  if(!addPositionOpen) return '';
+  const sel = addPositionSelected;
+  return `<div class="modal-backdrop" id="addpos-backdrop" style="z-index:70;">
+    <div class="modal-card" style="max-width:520px;padding:22px 26px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <h3 style="font-family:'Calibri','Carlito',sans-serif;font-size:16px;font-weight:600;margin:0;">Añadir posición</h3>
+        <button id="addpos-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
+      </div>
+
+      <div class="field" style="margin-bottom:4px;position:relative;">
+        <label>Ticker</label>
+        <input id="addpos-ticker" placeholder="ej. AAPL, SAP.DE, 7203.T" value="${sel?sel.symbol:''}" autocomplete="off"/>
+        <div id="addpos-suggestions" style="position:absolute;top:100%;left:0;right:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 12px 32px rgba(0,0,0,0.25);z-index:10;overflow:hidden;"></div>
+      </div>
+      <div style="font-size:10px;color:var(--text-faint);margin-bottom:14px;">${sel ? `Seleccionado: ${sel.symbol} — ${sel.exchange||''}` : 'Escribe al menos 2 letras para buscar en Yahoo Finance.'}</div>
+
+      <div class="field" style="margin-bottom:12px;"><label>Nombre</label><input id="addpos-name" value="${sel?sel.name.replace(/"/g,'&quot;'):''}" placeholder="Nombre de la empresa"/></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div class="field"><label>Mercado</label><select id="addpos-market">
+          <option value="">— Elegir —</option>
+          ${Object.entries(MARKET).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}
+        </select></div>
+        <div class="field"><label>Sector</label><select id="addpos-sector">
+          <option value="">— Elegir —</option>
+          ${SECTOR_LIST.map(s=>`<option value="${s}">${s}</option>`).join('')}
+        </select></div>
+        <div class="field"><label>Tier</label><select id="addpos-tier">
+          <option value="">— Elegir —</option>
+          ${Object.entries(TIER).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}
+        </select></div>
+        <div class="field"><label>Cluster (opcional)</label><input id="addpos-cluster" placeholder="ej. IA / semis"/></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:6px;">
+        <div class="field"><label>Invertido (€)</label><input id="addpos-invested" placeholder="0"/></div>
+        <div class="field"><label>Precio compra (€)</label><input id="addpos-price" placeholder="ej. 512,30"/></div>
+        <div class="field"><label>Comisión broker (€)</label><input id="addpos-commission" placeholder="0"/></div>
+        <div class="field"><label>Fecha compra</label><input id="addpos-date" type="date"/></div>
+        <div class="field"><label>Horizonte (opcional)</label><input id="addpos-horizon" placeholder="ej. 2029"/></div>
+      </div>
+
+      ${addPositionError ? `<div style="color:var(--red);font-size:11.5px;margin:10px 0 0;">${addPositionError}</div>` : ''}
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+        <button id="addpos-cancel" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);padding:8px 16px;font-size:12.5px;">Cancelar</button>
+        <button id="addpos-submit" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:8px 16px;font-size:12.5px;font-weight:600;">Añadir</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function menuBlock(){
   return `<div style="position:relative;">
     <button id="menu-btn" class="theme-toggle" title="Menú">☰</button>
@@ -845,6 +1029,7 @@ function renderHomeScreen(){
     document.getElementById('app').innerHTML = 'Cargando…';
     await loadAll();
     render(null);
+    autoUpdateQuotes();
   }));
 
   app.querySelectorAll('.home-portfolio-menu-btn').forEach(btn=>btn.addEventListener('click', (e) => {
@@ -914,6 +1099,7 @@ function renderHomeScreen(){
       document.getElementById('app').innerHTML = 'Cargando…';
       await loadAll();
       render(null);
+      autoUpdateQuotes();
     });
   });
 
@@ -963,6 +1149,7 @@ function render(scenario){
           <option value="">Vista base (ganancia/pérdida)</option>
           ${SCENARIOS.map(sc=>`<option value="${sc.key}" ${scenario===sc.key?'selected':''}>${sc.label}</option>`).join('')}
         </select>
+        <button id="addpos-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);">+ Añadir posición</button>
         <button id="update-prices-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);">Actualizar cotizaciones</button>
         <button id="snapshot-btn" class="pill-btn" style="border:1px solid var(--teal-border);background:var(--teal-soft);color:var(--teal);">Guardar snapshot</button>
         ${menuBlock()}
@@ -993,6 +1180,7 @@ function render(scenario){
   ${renderPositionsTable(scenario)}
 
   ${renderModal()}
+  ${renderAddPositionModal()}
   ${renderViewOverlay()}
   ${renderDialog()}`;
 
@@ -1053,6 +1241,7 @@ function render(scenario){
       const ok = await updatePositionField(id, field, value);
       const pos = portfolio.positions.find(p=>p.id===id);
       if(pos && ok) pos[field] = value;
+      if(ok && (field==='invested'||field==='price')) markDirty();
       if(!ok) showStatus('Error al guardar — revisa la conexión.');
       render(currentScenario);
     });
@@ -1079,6 +1268,13 @@ function render(scenario){
     showStatus(error ? 'Error al actualizar cotizaciones.' : `Cotizaciones actualizadas (${data.updated}/${data.total}).`);
     render(currentScenario);
   });
+
+  const addPosBtn = document.getElementById('addpos-btn');
+  if(addPosBtn) addPosBtn.addEventListener('click', () => {
+    addPositionOpen = true; addPositionError = null; addPositionSelected = null;
+    render(currentScenario);
+  });
+  wireAddPositionModal(app);
 
   wireMenu(app);
   wireDialog(app);
