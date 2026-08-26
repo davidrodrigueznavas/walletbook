@@ -155,6 +155,14 @@ const TIER = {
   beta:{label:'Alto beta · riesgo elevado',color:'#F87171'},
   satelite:{label:'Satélite · muy especulativo',color:'#F87171'}
 };
+const PORTFOLIO_CATEGORY = {
+  crecimiento:{label:'Crecimiento'},
+  valor:{label:'Valor'},
+  dividendos:{label:'Dividendos'},
+  indexada:{label:'Indexada'},
+  especulativa:{label:'Especulativa'},
+  diversificada:{label:'Diversificada'}
+};
 const SENS = {
   'Tech / IA':{ai:2,rates:-1,recession:-1,aireg:-1,dollar:-1,credit:-1},
   'Semiconductores':{ai:2,taiwan:-2,china:-1,rates:-1,recession:-1,tariffs:-1},
@@ -216,7 +224,7 @@ let session = null, portfolioId = null, loginError = null, loginBusy = false;
 let authMode = 'login', authInfo = null; // authMode: 'login' | 'signup' | 'reset' | 'recovery'
 let activePortfolioName = 'Mi cartera', portfolios = [], menuOpen = false, activeView = null;
 let profile = null;
-let exploreList = null, exploreLoading = false, exploreDetailId = null, exploreDetailPositions = null;
+let exploreList = null, exploreLoading = false, exploreDetailId = null, exploreDetailPositions = null, exploreCategoryFilter = null;
 
 async function loadExploreList(){
   exploreLoading = true;
@@ -281,6 +289,13 @@ function sectorResponse(sens, factors){
 }
 function fmtEUR(n){ return Math.round(n).toLocaleString('es-ES') + ' €'; }
 function fmtPct(n){ return (Math.round(n*10)/10).toString().replace('.',',') + '%'; }
+function gainChip(g, size){
+  const color = g==null ? 'var(--text-dim)' : (g>=0 ? 'var(--green)' : 'var(--red)');
+  const bg = g==null ? 'var(--panel)' : (g>=0 ? 'var(--green-soft)' : 'var(--red-soft)');
+  const border = g==null ? 'var(--border)' : (g>=0 ? 'var(--green-border)' : 'var(--red-border)');
+  const label = g==null ? '—' : (g>=0?'+':'')+g+'%';
+  return `<div style="font-family:'Manrope',system-ui,sans-serif;font-weight:800;font-size:${size}px;padding:5px 13px;border-radius:20px;background:${bg};border:1px solid ${border};color:${color};white-space:nowrap;flex-shrink:0;">${label}</div>`;
+}
 function num(v){ if(v===null||v===undefined) return null; let s=String(v).trim(); if(s==='') return null; s=s.replace('€','').replace('$','').replace(/\s/g,''); if(s.includes(',')&&s.includes('.')){ s=s.replace(/\./g,'').replace(',','.'); } else if(s.includes(',')){ s=s.replace(',','.'); } const n=parseFloat(s); return isNaN(n)?null:n; }
 
 function investedOf(p){ const v = num(p.invested); return v!==null ? v : 0; }
@@ -866,7 +881,7 @@ function wireAddPositionModal(app){
 
 function renderViewOverlay(){
   if(!activeView) return '';
-  const titles = { explorar:'Explorar en Walletbook', reglas:'Mis reglas', cuenta:'Mi cuenta' };
+  const titles = { reglas:'Mis reglas', cuenta:'Mi cuenta' };
   let body;
   if(activeView === 'cuenta'){
     const pr = profile || {};
@@ -890,62 +905,11 @@ function renderViewOverlay(){
         <button id="account-theme-toggle" class="pill-btn" style="border:1px solid var(--border);background:var(--panel);color:var(--text-dim);padding:6px 14px;font-size:11.5px;">${theme==='dark'?'☀ Modo claro':'☾ Modo oscuro'}</button>
       </div>
     </div>`;
-  } else if(activeView === 'explorar'){
-    const gainChip = (g, size) => {
-      const color = g==null ? 'var(--text-dim)' : (g>=0 ? 'var(--green)' : 'var(--red)');
-      const bg = g==null ? 'var(--panel)' : (g>=0 ? 'var(--green-soft)' : 'var(--red-soft)');
-      const border = g==null ? 'var(--border)' : (g>=0 ? 'var(--green-border)' : 'var(--red-border)');
-      const label = g==null ? '—' : (g>=0?'+':'')+g+'%';
-      return `<div style="font-family:'Manrope',system-ui,sans-serif;font-weight:800;font-size:${size}px;padding:5px 13px;border-radius:20px;background:${bg};border:1px solid ${border};color:${color};white-space:nowrap;flex-shrink:0;">${label}</div>`;
-    };
-    if(exploreDetailId){
-      const port = (exploreList||[]).find(p=>p.id===exploreDetailId);
-      body = `<div>
-        <button id="explore-back-btn" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:12px;padding:0;margin-bottom:16px;">← Volver</button>
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px;">
-          <h3 style="margin:0;font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:17px;">${port?port.name:''}</h3>
-          ${gainChip(port?port.overall_gain_pct:null, 15)}
-        </div>
-        <div style="font-size:12px;color:var(--text-faint);margin-bottom:18px;">${port&&port.description ? port.description+' · ' : ''}${port?port.position_count:0} posición${port&&port.position_count===1?'':'es'}</div>
-        ${exploreLoading ? `<div style="font-size:12px;color:var(--text-faint);">Cargando…</div>`
-          : (exploreDetailPositions && exploreDetailPositions.length ? `<div style="overflow-x:auto;">
-              <table class="postable">
-                <colgroup><col style="width:12px;"><col style="width:70px;"><col><col style="width:56px;"><col style="width:56px;"></colgroup>
-                <thead><tr><th></th><th>Ticker</th><th>Nombre</th><th style="text-align:right;">Peso</th><th style="text-align:right;">Gan. %</th></tr></thead>
-                <tbody>
-                  ${exploreDetailPositions.map(p=>`<tr>
-                    <td><span style="width:8px;height:8px;border-radius:50%;background:${MARKET[p.market]?.color||'#6E7177'};display:inline-block;"></span></td>
-                    <td>${p.ticker||'—'}</td>
-                    <td>${p.name}</td>
-                    <td style="text-align:right;">${p.weight_pct!=null?p.weight_pct+'%':'—'}</td>
-                    <td style="text-align:right;color:${p.gain_pct==null?'var(--text-dim)':(p.gain_pct>=0?'var(--green)':'var(--red)')};">${p.gain_pct!=null?(p.gain_pct>=0?'+':'')+p.gain_pct+'%':'—'}</td>
-                  </tr>`).join('')}
-                </tbody>
-              </table>
-            </div>` : `<div style="font-size:12px;color:var(--text-faint);">Esta cartera todavía no tiene posiciones.</div>`)}
-      </div>`;
-    } else {
-      body = exploreLoading ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Cargando carteras compartidas…</div>`
-        : (!exploreList || !exploreList.length) ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Todavía no hay carteras compartidas. En cuanto alguien active "Compartir con otros" en una tarjeta, aparecerá aquí.</div>`
-        : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;">
-            ${exploreList.map(p=>`<button class="explore-card" data-id="${p.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;color:var(--text);font-family:inherit;">
-              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
-                <div style="width:34px;height:34px;border-radius:10px;background:var(--accent-soft);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:900;font-size:15px;color:var(--accent-text);flex-shrink:0;">${(p.name||'?').trim().charAt(0).toUpperCase()}</div>
-                ${gainChip(p.overall_gain_pct, 13)}
-              </div>
-              <div>
-                <div style="font-size:13.5px;font-weight:700;margin-bottom:3px;">${p.name}</div>
-                <div style="font-size:11px;color:var(--text-faint);line-height:1.4;min-height:28px;">${p.description ? p.description : 'Sin descripción'}</div>
-              </div>
-              <div style="font-size:10px;color:var(--text-faint);padding-top:10px;border-top:1px solid var(--border-soft);">${p.position_count} posición${p.position_count===1?'':'es'}</div>
-            </button>`).join('')}
-          </div>`;
-    }
   } else {
     body = `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Esta sección todavía no está construida — próximamente.</div>`;
   }
   return `<div class="modal-backdrop" id="view-backdrop">
-    <div class="modal-card" style="max-width:${activeView==='explorar'?'760px':'440px'};padding:24px;">
+    <div class="modal-card" style="max-width:440px;padding:24px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
         <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:17px;margin:0;">${titles[activeView]}</h2>
         <button id="view-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
@@ -982,18 +946,6 @@ function wireViewOverlay(app){
     });
   });
 
-  app.querySelectorAll('.explore-card').forEach(btn => btn.addEventListener('click', async () => {
-    const id = btn.getAttribute('data-id');
-    exploreLoading = true;
-    render(currentScenario);
-    await loadExploreDetail(id);
-    render(currentScenario);
-  }));
-  const exploreBackBtn = document.getElementById('explore-back-btn');
-  if(exploreBackBtn) exploreBackBtn.addEventListener('click', () => {
-    exploreDetailId = null; exploreDetailPositions = null;
-    render(currentScenario);
-  });
 }
 
 function renderModal(){
@@ -1176,16 +1128,15 @@ function wireMenu(app){
     menuOpen = false;
     if(view === 'carteras'){
       await goHome();
+    } else if(view === 'explorar'){
+      currentScreen = 'explorar';
+      exploreDetailId = null; exploreDetailPositions = null; exploreCategoryFilter = null; exploreLoading = true;
+      render(null);
+      await loadExploreList();
+      render(null);
     } else {
       activeView = view;
-      if(view === 'explorar'){
-        exploreDetailId = null; exploreDetailPositions = null; exploreLoading = true;
-        render(currentScenario);
-        await loadExploreList();
-        render(currentScenario);
-      } else {
-        render(currentScenario);
-      }
+      render(currentScenario);
     }
   }));
   const menuLogoutBtn = document.getElementById('menu-logout-btn');
@@ -1213,6 +1164,13 @@ function renderHomeScreen(){
             <div style="font-size:15px;font-weight:600;padding-right:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:8px;">${p.name}</div>
             <div style="font-size:12px;color:var(--text-faint);line-height:1.4;min-height:32px;">${p.description ? p.description : '<span style="opacity:.5;">Sin descripción</span>'}</div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid var(--border-soft);">
+              <span style="font-size:10.5px;color:var(--text-faint);">Tipo de cartera</span>
+              <select class="home-portfolio-category-select" data-id="${p.id}" style="cursor:pointer;font-size:10.5px;padding:3px 8px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);">
+                <option value="">— Elegir —</option>
+                ${Object.entries(PORTFOLIO_CATEGORY).map(([k,v])=>`<option value="${k}" ${p.category===k?'selected':''}>${v.label}</option>`).join('')}
+              </select>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
               <span style="font-size:10.5px;color:var(--text-faint);">Compartir con otros</span>
               <button class="home-portfolio-share-btn" data-id="${p.id}" data-shared="${p.shared?'1':'0'}" style="cursor:pointer;font-size:10.5px;font-weight:700;padding:3px 11px;border-radius:10px;border:1px solid ${p.shared?'var(--accent-border)':'var(--border)'};background:${p.shared?'var(--accent-soft)':'var(--panel-2)'};color:${p.shared?'var(--accent-text)':'var(--text-faint)'};">${p.shared?'Sí':'No'}</button>
             </div>
@@ -1233,7 +1191,7 @@ function renderHomeScreen(){
   wireDialog(app);
 
   app.querySelectorAll('.home-portfolio-card').forEach(card=>card.addEventListener('click', async (e) => {
-    if(e.target.closest('.home-portfolio-menu-btn, .home-portfolio-menu, .home-portfolio-share-btn')) return;
+    if(e.target.closest('.home-portfolio-menu-btn, .home-portfolio-menu, .home-portfolio-share-btn, .home-portfolio-category-select')) return;
     const id = card.getAttribute('data-id');
     const target = portfolios.find(p=>p.id===id);
     portfolioId = id;
@@ -1296,6 +1254,16 @@ function renderHomeScreen(){
     render(null);
   }));
 
+  app.querySelectorAll('.home-portfolio-category-select').forEach(sel=>{
+    sel.addEventListener('click', e => e.stopPropagation());
+    sel.addEventListener('change', async (e) => {
+      const id = sel.getAttribute('data-id');
+      await supabase.from('portfolios').update({ category: sel.value || null }).eq('id', id);
+      await loadPortfolios();
+      render(null);
+    });
+  });
+
   app.querySelectorAll('.home-portfolio-delete').forEach(btn=>btn.addEventListener('click', (e) => {
     e.stopPropagation();
     openCardMenu = null;
@@ -1330,8 +1298,104 @@ function renderHomeScreen(){
   wireViewOverlay(app);
 }
 
+function renderExploreScreen(){
+  if(!session) return; // una operación asíncrona pendiente terminó después de cerrar sesión; no repintar la app
+  const app = document.getElementById('app');
+  const port = exploreDetailId ? (exploreList||[]).find(p=>p.id===exploreDetailId) : null;
+  const filteredList = (exploreList||[]).filter(p => !exploreCategoryFilter || p.category === exploreCategoryFilter);
+
+  let body;
+  if(exploreDetailId){
+    body = `<div>
+      <button id="explore-back-btn" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:12.5px;padding:0;margin-bottom:20px;">← Volver a Explorar</button>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px;">
+        <h2 style="margin:0;font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:21px;">${port?port.name:''}</h2>
+        ${gainChip(port?port.overall_gain_pct:null, 16)}
+      </div>
+      <div style="font-size:12.5px;color:var(--text-faint);margin-bottom:22px;">${port&&port.category&&PORTFOLIO_CATEGORY[port.category] ? PORTFOLIO_CATEGORY[port.category].label+' · ' : ''}${port&&port.description ? port.description+' · ' : ''}${port&&port.position_count===1 ? '1 posición' : (port?port.position_count:0)+' posiciones'}</div>
+      ${exploreLoading ? `<div style="font-size:12px;color:var(--text-faint);">Cargando…</div>`
+        : (exploreDetailPositions && exploreDetailPositions.length ? `<div style="overflow-x:auto;">
+            <table class="postable">
+              <colgroup><col style="width:12px;"><col style="width:70px;"><col><col style="width:56px;"><col style="width:56px;"></colgroup>
+              <thead><tr><th></th><th>Ticker</th><th>Nombre</th><th style="text-align:right;">Peso</th><th style="text-align:right;">Gan. %</th></tr></thead>
+              <tbody>
+                ${exploreDetailPositions.map(p=>`<tr>
+                  <td><span style="width:8px;height:8px;border-radius:50%;background:${MARKET[p.market]?.color||'#6E7177'};display:inline-block;"></span></td>
+                  <td>${p.ticker||'—'}</td>
+                  <td>${p.name}</td>
+                  <td style="text-align:right;">${p.weight_pct!=null?p.weight_pct+'%':'—'}</td>
+                  <td style="text-align:right;color:${p.gain_pct==null?'var(--text-dim)':(p.gain_pct>=0?'var(--green)':'var(--red)')};">${p.gain_pct!=null?(p.gain_pct>=0?'+':'')+p.gain_pct+'%':'—'}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>` : `<div style="font-size:12px;color:var(--text-faint);">Esta cartera todavía no tiene posiciones.</div>`)}
+    </div>`;
+  } else {
+    body = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;">
+      <button class="explore-filter-pill" data-cat="" style="cursor:pointer;font-size:11.5px;font-weight:600;padding:6px 14px;border-radius:16px;border:1px solid ${!exploreCategoryFilter?'var(--accent-border)':'var(--border)'};background:${!exploreCategoryFilter?'var(--accent-soft)':'var(--panel-2)'};color:${!exploreCategoryFilter?'var(--accent-text)':'var(--text-dim)'};">Todas</button>
+      ${Object.entries(PORTFOLIO_CATEGORY).map(([k,v])=>`<button class="explore-filter-pill" data-cat="${k}" style="cursor:pointer;font-size:11.5px;font-weight:600;padding:6px 14px;border-radius:16px;border:1px solid ${exploreCategoryFilter===k?'var(--accent-border)':'var(--border)'};background:${exploreCategoryFilter===k?'var(--accent-soft)':'var(--panel-2)'};color:${exploreCategoryFilter===k?'var(--accent-text)':'var(--text-dim)'};">${v.label}</button>`).join('')}
+    </div>
+    ${exploreLoading ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Cargando carteras compartidas…</div>`
+      : (!filteredList.length) ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">${!exploreList||!exploreList.length ? 'Todavía no hay carteras compartidas. En cuanto alguien active "Compartir con otros" en una tarjeta, aparecerá aquí.' : 'Ninguna cartera compartida coincide con este filtro.'}</div>`
+      : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px;">
+          ${filteredList.map(p=>`<button class="explore-card" data-id="${p.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:14px;color:var(--text);font-family:inherit;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+              <div style="width:40px;height:40px;border-radius:12px;background:var(--accent-soft);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:900;font-size:17px;color:var(--accent-text);flex-shrink:0;">${(p.name||'?').trim().charAt(0).toUpperCase()}</div>
+              ${gainChip(p.overall_gain_pct, 14)}
+            </div>
+            <div>
+              <div style="font-size:14.5px;font-weight:700;margin-bottom:4px;">${p.name}</div>
+              <div style="font-size:11.5px;color:var(--text-faint);line-height:1.4;min-height:30px;">${p.description ? p.description : 'Sin descripción'}</div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;font-size:10.5px;color:var(--text-faint);padding-top:12px;border-top:1px solid var(--border-soft);">
+              <span>${p.category && PORTFOLIO_CATEGORY[p.category] ? PORTFOLIO_CATEGORY[p.category].label : 'Sin categoría'}</span>
+              <span>${p.position_count===1 ? '1 posición' : p.position_count+' posiciones'}</span>
+            </div>
+          </button>`).join('')}
+        </div>`}`;
+  }
+
+  app.innerHTML = `<div class="home-wrap" style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:16px 32px 32px;">
+    <div style="max-width:1200px;margin:0 auto;">
+      ${topNavBar()}
+      <div style="margin-bottom:26px;">
+        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:26px;margin:0;">Explorar en Walletbook</h1>
+      </div>
+      ${body}
+    </div>
+    ${renderViewOverlay()}
+    ${renderDialog()}
+    ${renderStatusToast()}
+  </div>`;
+
+  wireMenu(app);
+  wireDialog(app);
+  wireViewOverlay(app);
+
+  app.querySelectorAll('.explore-filter-pill').forEach(btn=>btn.addEventListener('click', () => {
+    exploreCategoryFilter = btn.getAttribute('data-cat') || null;
+    render(null);
+  }));
+  app.querySelectorAll('.explore-card').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.getAttribute('data-id');
+    exploreLoading = true;
+    render(null);
+    await loadExploreDetail(id);
+    render(null);
+  }));
+  const exploreBackBtn = document.getElementById('explore-back-btn');
+  if(exploreBackBtn) exploreBackBtn.addEventListener('click', () => {
+    exploreDetailId = null; exploreDetailPositions = null;
+    render(null);
+  });
+}
+
 function render(scenario){
   if(!session) return; // una operación asíncrona pendiente terminó después de cerrar sesión; no repintar la app
+  if(currentScreen === 'explorar'){
+    renderExploreScreen();
+    return;
+  }
   if(currentScreen !== 'portfolio'){
     renderHomeScreen();
     return;
