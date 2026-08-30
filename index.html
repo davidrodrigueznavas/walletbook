@@ -1271,6 +1271,7 @@ function renderModal(){
             <div class="field"><label>Comisión broker (€)</label><input data-id="${p.id}" data-field="commission" value="${p.commission??''}" placeholder="0"/></div>
             <div class="field"><label>Fecha compra</label><input type="date" data-id="${p.id}" data-field="date" value="${p.date??''}"/></div>
             <div class="field"><label>Horizonte</label><input data-id="${p.id}" data-field="horizon" value="${p.horizon??''}" placeholder="ej. 2029"/></div>
+            <div class="field"><label>Pendiente invertir (€)</label><input data-id="${p.id}" data-field="pending_investment" value="${p.pending_investment??pendingInvestmentFor(p)}" placeholder="ej. 500"/></div>
           </div>
         </div>
         <div style="display:flex;flex-direction:column;min-height:420px;">
@@ -2236,6 +2237,8 @@ function render(scenario){
   const totals = computeTotals();
   const cagr = computeCAGR(totals);
   const conc = computeConcentration(totals);
+  const pendingInvestTotal = portfolio.positions.reduce((sum,p) => sum + pendingInvestmentFor(p), 0);
+  const estimatedTotal = totals.value + pendingInvestTotal;
   let html = '';
 
   html += `<div class="pf-wrap" style="flex:1;min-height:0;display:flex;flex-direction:column;box-sizing:border-box;padding:0 32px;">
@@ -2256,6 +2259,8 @@ function render(scenario){
       ${kpiBlock('Comisiones broker', fmtEUR(totals.commission))}
       ${kpiBlock('Rentab. anual.', cagr.value===null?'—':(cagr.value>=0?'+':'')+fmtPct(cagr.value), cagr.value===null?'var(--text-dim)':(cagr.value>=0?'var(--green)':'var(--red)'), cagr.value===null ? `Necesita al menos 30 días de historial desde la primera compra (llevas ${cagr.days}).` : `CAGR desde la primera compra, hace ${cagr.days} días.`)}
       ${kpiBlock('Concentración', conc.name?Math.round(conc.pct)+'%':'—', null, conc.name ? `Tu posición mayor es ${conc.name}, con el ${Math.round(conc.pct)}% del valor actual de la cartera.` : '')}
+      ${kpiBlock('Pdt. invertir', fmtEUR(pendingInvestTotal), null, 'Suma del campo "Pendiente invertir" de cada posición — cantidad planeada para seguir invirtiendo, no dinero ya invertido.')}
+      ${kpiBlock('Total cartera estimado', fmtEUR(estimatedTotal), null, 'Valor actual + lo pendiente de invertir en todas las posiciones — una proyección, no el valor real de hoy.')}
     </div>
     <div class="pf-controls" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
@@ -2391,7 +2396,7 @@ function render(scenario){
   app.querySelectorAll('input[data-field], textarea[data-field]').forEach(el=>{
     el.addEventListener('blur', async () => {
       const id = el.getAttribute('data-id'), field = el.getAttribute('data-field');
-      const isNumeric = field==='invested'||field==='price'||field==='commission';
+      const isNumeric = field==='invested'||field==='price'||field==='commission'||field==='pending_investment';
       const value = isNumeric ? num(el.value) : el.value;
       const ok = await updatePositionField(id, field, value);
       const pos = portfolio.positions.find(p=>p.id===id);
