@@ -188,8 +188,9 @@ const METRIC_INFO = {
   targetPrice: 'Media de las estimaciones de precio de los analistas que cubren la acción, normalmente a 12 meses. Por encima del precio actual sugiere que ven recorrido al alza; por debajo, lo contrario.',
   recommendations: 'Reparto de las recomendaciones de los analistas que cubren la acción, de venta fuerte a compra fuerte.',
   rsi: 'Indicador técnico entre 0 y 100 que mide la fuerza y velocidad de los movimientos recientes de precio. Por encima de 70 se suele leer como "sobrecompra" (ha subido mucho y rápido); por debajo de 30, "sobreventa". No implica automáticamente comprar ni vender.',
-  sma50: 'Precio medio de cierre de los últimos 50 días. Cuando el precio cotiza por encima, suele leerse como tendencia alcista de corto/medio plazo; por debajo, bajista.',
-  sma200: 'Precio medio de cierre de los últimos 200 días. Cuando el precio cotiza por encima, suele leerse como tendencia alcista de largo plazo; por debajo, bajista.',
+  w10: 'Precio medio de cierre de las últimas 10 semanas. Media corta, reacciona rápido a cambios de tendencia — muy usada en el análisis de "stage analysis" de Stan Weinstein.',
+  w50: 'Precio medio de cierre de las últimas 50 semanas (~1 año). Cuando el precio cotiza por encima, suele leerse como tendencia alcista de medio plazo; por debajo, bajista.',
+  w200: 'Precio medio de cierre de las últimas 200 semanas (~4 años). Media muy larga, usada para identificar la tendencia estructural de fondo.',
 };
 const RULE_OPERATOR = { gt:'mayor que', lt:'menor que' };
 const RULE_ACTION = {
@@ -305,7 +306,11 @@ let allRulesData = null, allRulesLoading = false;
 
 let stockViewerQuery = '', stockViewerResults = [], stockViewerSearchToken = 0;
 let stockViewerTicker = null, stockViewerQuoteLoading = false, stockViewerQuoteError = null, stockViewerQuote = null;
+let stockViewerDividends = [], stockViewerEstimates = null;
 let stockViewerChartLoading = false, stockViewerChartError = null, stockViewerChartPoints = null;
+let stockViewerWeeklyPoints = null;
+let stockViewerMASelection = { w10:false, w50:true, w200:true };
+const MA_WEEK_OPTIONS = [{key:'w10', weeks:10, label:'MA 10 sem', color:'#5B8DEF'}, {key:'w50', weeks:50, label:'MA 50 sem', color:'#FBBF24'}, {key:'w200', weeks:200, label:'MA 200 sem', color:'#B79CED'}];
 
 function computeSMA(values, period){
   const out = new Array(values.length).fill(null);
@@ -339,9 +344,14 @@ function computeRSI(values, period=14){
 
 async function loadStockViewerQuote(ticker){
   stockViewerQuoteLoading = true; stockViewerQuoteError = null; stockViewerQuote = null;
+  stockViewerDividends = []; stockViewerEstimates = null;
   try{
     const res = await callEdgeFunction('stock-quote', {ticker});
-    if(res.ok) stockViewerQuote = res.quote;
+    if(res.ok){
+      stockViewerQuote = res.quote;
+      stockViewerDividends = res.dividends || [];
+      stockViewerEstimates = res.estimates || null;
+    }
     else stockViewerQuoteError = res.error || 'Error al consultar datos fundamentales.';
   } catch(e){
     stockViewerQuoteError = 'Error de conexión.';
@@ -350,11 +360,15 @@ async function loadStockViewerQuote(ticker){
 }
 
 async function loadStockViewerChart(ticker){
-  stockViewerChartLoading = true; stockViewerChartError = null; stockViewerChartPoints = null;
+  stockViewerChartLoading = true; stockViewerChartError = null; stockViewerChartPoints = null; stockViewerWeeklyPoints = null;
   try{
-    const res = await callEdgeFunction('ticker-history', {ticker, range:'tecnico'});
-    if(res.ok && res.points && res.points.length>1) stockViewerChartPoints = res.points;
-    else stockViewerChartError = (res && res.error) || 'Sin datos suficientes.';
+    const [daily, weekly] = await Promise.all([
+      callEdgeFunction('ticker-history', {ticker, range:'tecnico'}),
+      callEdgeFunction('ticker-history', {ticker, range:'semanal'}),
+    ]);
+    if(daily.ok && daily.points && daily.points.length>1) stockViewerChartPoints = daily.points;
+    else stockViewerChartError = (daily && daily.error) || 'Sin datos suficientes.';
+    if(weekly.ok && weekly.points && weekly.points.length>1) stockViewerWeeklyPoints = weekly.points;
   } catch(e){
     stockViewerChartError = 'Error de conexión.';
   }
@@ -1432,28 +1446,56 @@ function treemapColor(gainPct){
   return t>=0 ? lerpColor('#3A3D44','#16A34A', t) : lerpColor('#3A3D44','#DC2626', -t);
 }
 
+function drawPositionCell(item){
+  const p = item.p;
+  const gp = gainPctOf(p);
+  const color = treemapColor(gp);
+  const label = p.ticker || p.name;
+  const gainLabel = gp===null ? '—' : (gp>=0?'+':'')+gp.toFixed(2)+'%';
+  const showLabel = item._w>34 && item._h>24;
+  const showGain = item._w>44 && item._h>40;
+  const showDot = item._w>20 && item._h>16;
+  const fontSize = Math.max(9, Math.min(17, item._w/6, item._h/3.4));
+  const marketColor = MARKET[p.market]?.color || '#6E7177';
+  return `<g class="treemap-cell" data-id="${p.id}" style="cursor:pointer;">
+    <rect x="${item._x}" y="${item._y}" width="${Math.max(0,item._w-1.5)}" height="${Math.max(0,item._h-1.5)}" fill="${color}" rx="2"/>
+    ${showDot ? `<circle cx="${item._x+9}" cy="${item._y+9}" r="3" fill="${marketColor}"/>` : ''}
+    ${showLabel ? `<text x="${item._x+item._w/2}" y="${item._y+item._h/2 - (showGain?fontSize*0.35:0)}" text-anchor="middle" font-size="${fontSize}" font-weight="700" fill="#F5F6F8" font-family="'Calibri','Carlito',sans-serif">${label}</text>` : ''}
+    ${showGain ? `<text x="${item._x+item._w/2}" y="${item._y+item._h/2 + fontSize*0.95}" text-anchor="middle" font-size="${fontSize*0.72}" fill="#F5F6F8" opacity="0.85" font-family="'Calibri','Carlito',sans-serif">${gainLabel}</text>` : ''}
+    <title>${p.name}${p.ticker?' ('+p.ticker+')':''} · ${MARKET[p.market]?.label||p.market||''} · ${p.sector||''} — Invertido: ${fmtEUR(item.value)} — Valor actual: ${fmtEUR(currentValueOf(p))} — ${gainLabel}</title>
+  </g>`;
+}
+
 function drawPortfolioTreemap(positions){
   const w=960, h=560;
   const items = positions
-    .map(p => ({ p, value: currentValueOf(p) }))
-    .filter(it => it.value>0)
-    .sort((a,b)=>b.value-a.value);
-  if(!items.length) return `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12.5px;color:var(--text-faint);">Sin posiciones con valor para representar.</div>`;
-  const laid = computeTreemap(items, 0, 0, w, h);
-  const cells = laid.map(item => {
-    const p = item.p;
-    const gp = gainPctOf(p);
-    const color = treemapColor(gp);
-    const label = p.ticker || p.name;
-    const gainLabel = gp===null ? '—' : (gp>=0?'+':'')+gp.toFixed(2)+'%';
-    const showLabel = item._w>34 && item._h>24;
-    const showGain = item._w>44 && item._h>40;
-    const fontSize = Math.max(9, Math.min(17, item._w/6, item._h/3.4));
-    return `<g class="treemap-cell" data-id="${p.id}" style="cursor:pointer;">
-      <rect x="${item._x}" y="${item._y}" width="${Math.max(0,item._w-1.5)}" height="${Math.max(0,item._h-1.5)}" fill="${color}" rx="2"/>
-      ${showLabel ? `<text x="${item._x+item._w/2}" y="${item._y+item._h/2 - (showGain?fontSize*0.35:0)}" text-anchor="middle" font-size="${fontSize}" font-weight="700" fill="#F5F6F8" font-family="'Calibri','Carlito',sans-serif">${label}</text>` : ''}
-      ${showGain ? `<text x="${item._x+item._w/2}" y="${item._y+item._h/2 + fontSize*0.95}" text-anchor="middle" font-size="${fontSize*0.72}" fill="#F5F6F8" opacity="0.85" font-family="'Calibri','Carlito',sans-serif">${gainLabel}</text>` : ''}
-      <title>${p.name}${p.ticker?' ('+p.ticker+')':''} — ${fmtEUR(item.value)} — ${gainLabel}</title>
+    .map(p => ({ p, value: investedOf(p) }))
+    .filter(it => it.value>0);
+  if(!items.length) return `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12.5px;color:var(--text-faint);">Sin posiciones con importe invertido para representar.</div>`;
+
+  const groupsMap = {};
+  items.forEach(it => {
+    const key = it.p.sector || 'Sin sector';
+    if(!groupsMap[key]) groupsMap[key] = { sector:key, value:0, items:[] };
+    groupsMap[key].value += it.value;
+    groupsMap[key].items.push(it);
+  });
+  const groups = Object.values(groupsMap).sort((a,b)=>b.value-a.value);
+  groups.forEach(g => g.items.sort((a,b)=>b.value-a.value));
+
+  const headerH = 18;
+  const laidGroups = computeTreemap(groups, 0, 0, w, h);
+  const cells = laidGroups.map(g => {
+    const innerY = g._y + Math.min(headerH, g._h*0.3);
+    const innerH = Math.max(0, g._h - (innerY - g._y));
+    const showHeader = g._h > 34 && g._w > 40;
+    const laidItems = computeTreemap(g.items, g._x, showHeader?innerY:g._y, g._w, showHeader?innerH:g._h);
+    const positionCells = laidItems.map(drawPositionCell).join('');
+    const headerFontSize = Math.max(8, Math.min(11, g._w/10));
+    return `<g>
+      <rect x="${g._x}" y="${g._y}" width="${Math.max(0,g._w-1.5)}" height="${Math.max(0,g._h-1.5)}" fill="none" stroke="#14151A" stroke-width="2"/>
+      ${showHeader ? `<text x="${g._x+6}" y="${g._y+13}" font-size="${headerFontSize}" font-weight="700" fill="#C9CCD3" text-transform="uppercase" letter-spacing="0.03em" font-family="'Calibri','Carlito',sans-serif">${g.sector.toUpperCase()}</text>` : ''}
+      ${positionCells}
     </g>`;
   }).join('');
   return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:100%;display:block;">${cells}</svg>`;
@@ -1466,7 +1508,7 @@ function renderMapaCarteraModal(){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
         <div>
           <h3 style="font-family:'Calibri','Carlito',sans-serif;font-size:16px;font-weight:600;margin:0;">Mapa de cartera</h3>
-          <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Tamaño = valor actual de la posición · Color = ganancia/pérdida %</div>
+          <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Tamaño = importe invertido · Color = ganancia/pérdida % · Agrupado por sector · Punto = mercado</div>
         </div>
         <button id="mapa-cartera-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
       </div>
@@ -1878,12 +1920,33 @@ function fmtMarketCap(v, currency){
   return v.toLocaleString('es-ES')+' '+cur;
 }
 
-function drawStockViewerChart(points){
+function drawStockViewerChart(points, dividends, weeklyPoints, maSelection){
   const closes = points.map(p=>p.c);
-  const sma50 = computeSMA(closes, 50);
-  const sma200 = computeSMA(closes, 200);
   const w=900,h=260,padL=58,padR=14,padT=14,padB=24;
-  const allVals = closes.concat(sma50.filter(v=>v!=null)).concat(sma200.filter(v=>v!=null));
+
+  // Las medias móviles se piden en semanas (10/50/200), pero el precio se
+  // dibuja en escala diaria (últimos 2 años). Se calcula cada media sobre el
+  // cierre semanal (hasta 5 años de histórico) y se proyecta sobre cada día
+  // usando la última semana ya cerrada en esa fecha.
+  const maLines = [];
+  if(weeklyPoints && weeklyPoints.length && maSelection){
+    const weeklyCloses = weeklyPoints.map(p=>p.c);
+    MA_WEEK_OPTIONS.forEach(opt => {
+      if(!maSelection[opt.key]) return;
+      const smaWeekly = computeSMA(weeklyCloses, opt.weeks);
+      const mapped = [];
+      let wi = 0;
+      points.forEach(pt => {
+        const t = new Date(pt.t).getTime();
+        while(wi+1 < weeklyPoints.length && new Date(weeklyPoints[wi+1].t).getTime() <= t) wi++;
+        const wt = new Date(weeklyPoints[wi].t).getTime();
+        mapped.push(wt<=t ? smaWeekly[wi] : null);
+      });
+      maLines.push({ color: opt.color, values: mapped });
+    });
+  }
+
+  const allVals = closes.concat(maLines.flatMap(m=>m.values.filter(v=>v!=null)));
   const min=Math.min.apply(null,allVals), max=Math.max.apply(null,allVals);
   const range=(max-min)||Math.max(min,1)*0.05||1;
   const lo=min-range*0.08, hi=max+range*0.08, r2=(hi-lo)||1;
@@ -1912,6 +1975,24 @@ function drawStockViewerChart(points){
       <text x="${xx}" y="${h-6}" font-size="9" fill="#6E7177" font-family="Calibri,Carlito,sans-serif" text-anchor="middle">${d.toLocaleDateString('es-ES',{month:'short',year:'2-digit'})}</text>`;
   }).join('');
 
+  const firstT = new Date(points[0].t).getTime();
+  const lastT = new Date(points[points.length-1].t).getTime();
+  const divMarkers = (dividends||[]).map(d => {
+    const t = new Date(d.date).getTime();
+    if(isNaN(t) || t<firstT || t>lastT) return '';
+    let nearest = 0, best = Infinity;
+    for(let i=0;i<points.length;i++){
+      const diff = Math.abs(new Date(points[i].t).getTime()-t);
+      if(diff<best){ best=diff; nearest=i; }
+    }
+    const xx = x(nearest);
+    return `<g>
+      <line x1="${xx}" y1="${padT}" x2="${xx}" y2="${h-padB}" stroke="#4ADE80" stroke-width="1" stroke-dasharray="2,3" opacity="0.55"/>
+      <circle cx="${xx}" cy="${padT+4}" r="3" fill="#4ADE80"/>
+      <title>Dividendo · ${d.date}${d.amount!=null?' · '+d.amount:''}</title>
+    </g>`;
+  }).join('');
+
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:100%;display:block;">
     <defs><linearGradient id="areaFillVisor" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${color}" stop-opacity="0.22"/>
@@ -1921,10 +2002,10 @@ function drawStockViewerChart(points){
     ${yGrid}
     <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="#2D2F35" stroke-width="1"/>
     <path d="${area}" fill="url(#areaFillVisor)"/>
-    <path d="${lineOf(sma200)}" fill="none" stroke="#B79CED" stroke-width="1.3"/>
-    <path d="${lineOf(sma50)}" fill="none" stroke="#FBBF24" stroke-width="1.3"/>
+    ${maLines.map(m=>`<path d="${lineOf(m.values)}" fill="none" stroke="${m.color}" stroke-width="1.3"/>`).join('')}
     <path d="${priceLine}" fill="none" stroke="${color}" stroke-width="1.8"/>
     <circle cx="${x(points.length-1)}" cy="${y(closes[closes.length-1])}" r="3" fill="${color}"/>
+    ${divMarkers}
   </svg>`;
 }
 
@@ -1996,7 +2077,7 @@ function renderStockViewerScreen(){
       const closes = stockViewerChartPoints.map(p=>p.c);
       const rsiArr = computeRSI(closes, 14);
       rsiValue = rsiArr[rsiArr.length-1];
-      chartBody = drawStockViewerChart(stockViewerChartPoints);
+      chartBody = drawStockViewerChart(stockViewerChartPoints, stockViewerDividends, stockViewerWeeklyPoints, stockViewerMASelection);
     }
     const rsiColor = rsiValue==null ? 'var(--text-dim)' : rsiValue>=70 ? 'var(--red)' : rsiValue<=30 ? 'var(--green)' : 'var(--text)';
     const rsiLabel = rsiValue==null ? '' : rsiValue>=70 ? 'sobrecompra' : rsiValue<=30 ? 'sobreventa' : 'neutral';
@@ -2018,14 +2099,41 @@ function renderStockViewerScreen(){
 
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px;">
-          <div style="display:flex;align-items:center;gap:16px;font-size:11px;color:var(--text-faint);">
-            <span style="cursor:help;border-bottom:1px dotted var(--text-faint);" title="${METRIC_INFO.sma50.replace(/"/g,'&quot;')}"><span style="display:inline-block;width:10px;height:2px;background:#FBBF24;margin-right:5px;vertical-align:middle;"></span>Media 50 días</span>
-            <span style="cursor:help;border-bottom:1px dotted var(--text-faint);" title="${METRIC_INFO.sma200.replace(/"/g,'&quot;')}"><span style="display:inline-block;width:10px;height:2px;background:#B79CED;margin-right:5px;vertical-align:middle;"></span>Media 200 días</span>
+          <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-faint);flex-wrap:wrap;">
+            ${MA_WEEK_OPTIONS.map(opt => `<button type="button" class="ma-toggle-btn" data-key="${opt.key}" title="${METRIC_INFO[opt.key].replace(/"/g,'&quot;')}" style="cursor:pointer;display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:12px;border:1px solid ${stockViewerMASelection[opt.key]?opt.color:'var(--border)'};background:${stockViewerMASelection[opt.key]?opt.color+'22':'var(--panel-2)'};color:${stockViewerMASelection[opt.key]?'var(--text)':'var(--text-faint)'};font-size:11px;">
+              <span style="display:inline-block;width:9px;height:2px;background:${opt.color};"></span>${opt.label}
+            </button>`).join('')}
+            ${stockViewerDividends.length ? `<span title="Fecha ex-dividendo dentro de los últimos 2 años" style="margin-left:4px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4ADE80;margin-right:5px;vertical-align:middle;"></span>Dividendo</span>` : ''}
           </div>
           ${rsiValue!=null ? `<div style="font-size:11.5px;color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="${METRIC_INFO.rsi.replace(/"/g,'&quot;')}">RSI (14d): <b style="color:${rsiColor};">${rsiValue.toFixed(1)}</b> <span style="color:${rsiColor};">${rsiLabel?'· '+rsiLabel:''}</span></div>` : ''}
         </div>
         <div style="height:260px;">${chartBody}</div>
       </div>
+
+      ${stockViewerEstimates && (stockViewerEstimates.fiscalYears.length || stockViewerEstimates.fiscalQuarters.length) ? `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-top:20px;">
+        <div style="font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Consenso de estimaciones de analistas para próximos periodos — no es una predicción propia, son las expectativas ya publicadas por analistas que cubren la acción.">Crecimiento futuro (consenso de analistas)</div>
+        ${stockViewerEstimates.epsGrowthNextYear!=null ? `<div style="font-size:12.5px;margin-bottom:12px;">Crecimiento de BPA estimado próximo año fiscal: <b style="color:${stockViewerEstimates.epsGrowthNextYear>=0?'var(--green)':'var(--red)'};">${avPct(stockViewerEstimates.epsGrowthNextYear)}</b></div>` : ''}
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
+            <thead><tr style="color:var(--text-faint);text-align:left;">
+              <th style="padding:4px 8px 6px 0;font-weight:500;">Periodo</th>
+              <th style="padding:4px 8px 6px;font-weight:500;">Horizonte</th>
+              <th style="padding:4px 8px 6px;font-weight:500;text-align:right;">BPA estimado</th>
+              <th style="padding:4px 8px 6px;font-weight:500;text-align:right;">Ingresos estimados</th>
+              <th style="padding:4px 0 6px 8px;font-weight:500;text-align:right;">Analistas</th>
+            </tr></thead>
+            <tbody>
+              ${[...stockViewerEstimates.fiscalYears, ...stockViewerEstimates.fiscalQuarters].map(e => `<tr style="border-top:1px solid var(--border-soft);">
+                <td style="padding:6px 8px 6px 0;">${e.date}</td>
+                <td style="padding:6px 8px;color:var(--text-faint);">${e.horizon==='fiscal year'?'Año fiscal':'Trimestre'}</td>
+                <td style="padding:6px 8px;text-align:right;">${e.epsEstimate!=null?avNum(e.epsEstimate):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;">${e.revenueEstimate!=null?fmtMarketCap(e.revenueEstimate, q?q.currency:''):'—'}</td>
+                <td style="padding:6px 0 6px 8px;text-align:right;color:var(--text-faint);">${e.analystCount!=null?Math.round(e.analystCount):'—'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
     </div>`;
   }
 
@@ -2090,6 +2198,12 @@ function renderStockViewerScreen(){
       if(val){ suggestionsBox.innerHTML = ''; selectStockViewerTicker(val); }
     }
   });
+
+  app.querySelectorAll('.ma-toggle-btn').forEach(btn => btn.addEventListener('click', () => {
+    const key = btn.getAttribute('data-key');
+    stockViewerMASelection[key] = !stockViewerMASelection[key];
+    render(null);
+  }));
 }
 
 function render(scenario){
@@ -2136,29 +2250,21 @@ function render(scenario){
       ${kpiBlock('Rentab. anual.', cagr.value===null?'—':(cagr.value>=0?'+':'')+fmtPct(cagr.value), cagr.value===null?'var(--text-dim)':(cagr.value>=0?'var(--green)':'var(--red)'), cagr.value===null ? `Necesita al menos 30 días de historial desde la primera compra (llevas ${cagr.days}).` : `CAGR desde la primera compra, hace ${cagr.days} días.`)}
       ${kpiBlock('Concentración', conc.name?Math.round(conc.pct)+'%':'—', null, conc.name ? `Tu posición mayor es ${conc.name}, con el ${Math.round(conc.pct)}% del valor actual de la cartera.` : '')}
     </div>
-    <div class="pf-controls" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-      <div style="display:flex; gap:8px;">
+    <div class="pf-controls" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
         <select id="scenario-select" class="pill-select" style="border:1px solid ${scenario?'var(--accent-border)':'var(--border)'};background:${scenario?'var(--accent-soft)':'var(--panel-2)'};color:${scenario?'var(--accent-text)':'var(--text-dim)'};max-width:180px;font-size:10.5px;">
           <option value="">Posibles escenarios</option>
           ${SCENARIOS.map(sc=>`<option value="${sc.key}" ${scenario===sc.key?'selected':''}>${sc.label}</option>`).join('')}
         </select>
-        <button id="mapa-cartera-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);">Mapa de cartera</button>
-        <button id="addpos-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);">+ Añadir posición</button>
+        <button id="mapa-cartera-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);white-space:nowrap;">Mapa de cartera</button>
+        <button id="addpos-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);white-space:nowrap;">+ Añadir posición</button>
       </div>
     </div>
   </div>
 
   <div class="pf-charts-row" style="display:flex;gap:10px;flex-shrink:0;height:clamp(110px,18vh,180px);margin-bottom:10px;">
-    <div class="pf-chart" style="flex:2.2;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px 16px;box-sizing:border-box;">
+    <div class="pf-chart" style="flex:1;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px 16px;box-sizing:border-box;">
       ${drawChart()}
-    </div>
-    <div class="pf-donut" style="flex:0.9;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;display:flex;flex-direction:column;">
-      <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;flex-shrink:0;">Por mercado</div>
-      <div style="flex:1;min-height:0;">${drawDiversification(breakdownByWeight(p=>p.market), k=>MARKET[k]?.color||'#6E7177', k=>MARKET[k]?.label||k, 5, fundedDetail(p=>p.market), 'market')}</div>
-    </div>
-    <div class="pf-donut" style="flex:0.9;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;display:flex;flex-direction:column;">
-      <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;flex-shrink:0;">Por sector</div>
-      <div style="flex:1;min-height:0;">${drawDiversification(breakdownByWeight(p=>p.sector), sectorColor, k=>k, 6, fundedDetail(p=>p.sector), 'sector')}</div>
     </div>
   </div>
 
