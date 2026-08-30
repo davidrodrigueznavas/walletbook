@@ -1491,18 +1491,20 @@ function drawPortfolioTreemap(positions){
   const groups = Object.values(groupsMap).sort((a,b)=>b.value-a.value);
   groups.forEach(g => g.items.sort((a,b)=>b.value-a.value));
 
-  const headerH = 18;
+  const headerH = 24;
   const laidGroups = computeTreemap(groups, 0, 0, w, h);
   const cells = laidGroups.map(g => {
-    const innerY = g._y + Math.min(headerH, g._h*0.3);
+    const showHeader = g._h > 46 && g._w > 55;
+    const innerY = g._y + (showHeader ? headerH : 0);
     const innerH = Math.max(0, g._h - (innerY - g._y));
-    const showHeader = g._h > 34 && g._w > 40;
-    const laidItems = computeTreemap(g.items, g._x, showHeader?innerY:g._y, g._w, showHeader?innerH:g._h);
+    const laidItems = computeTreemap(g.items, g._x, innerY, g._w, innerH);
     const positionCells = laidItems.map(drawPositionCell).join('');
-    const headerFontSize = Math.max(8, Math.min(11, g._w/10));
+    const groupCount = g.items.length;
     return `<g>
-      <rect x="${g._x}" y="${g._y}" width="${Math.max(0,g._w-1.5)}" height="${Math.max(0,g._h-1.5)}" fill="none" stroke="#14151A" stroke-width="2"/>
-      ${showHeader ? `<text x="${g._x+6}" y="${g._y+13}" font-size="${headerFontSize}" font-weight="700" fill="#C9CCD3" text-transform="uppercase" letter-spacing="0.03em" font-family="'Calibri','Carlito',sans-serif">${g.sector.toUpperCase()}</text>` : ''}
+      ${showHeader ? `<rect x="${g._x}" y="${g._y}" width="${Math.max(0,g._w-1.5)}" height="${headerH-1.5}" fill="#101114"/>
+      <text x="${g._x+8}" y="${g._y+16}" font-size="11.5" font-weight="700" fill="#E4E6EA" letter-spacing="0.03em" font-family="'Calibri','Carlito',sans-serif">${g.sector.toUpperCase()}</text>
+      <text x="${g._x+g._w-9}" y="${g._y+16}" text-anchor="end" font-size="10" fill="#7C7F87" font-family="'Calibri','Carlito',sans-serif">${groupCount}</text>` : ''}
+      <rect x="${g._x}" y="${g._y}" width="${Math.max(0,g._w-1.5)}" height="${Math.max(0,g._h-1.5)}" fill="none" stroke="#0B0C0E" stroke-width="3"/>
       ${positionCells}
     </g>`;
   }).join('');
@@ -1513,12 +1515,23 @@ function renderMapaCarteraModal(){
   if(!mapaCarteraOpen) return '';
   return `<div class="modal-backdrop" id="mapa-cartera-backdrop">
     <div class="modal-card" style="max-width:1020px;padding:22px 26px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:16px;">
         <div>
           <h3 style="font-family:'Calibri','Carlito',sans-serif;font-size:16px;font-weight:600;margin:0;">Mapa de cartera</h3>
-          <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Tamaño = nivel de riesgo (tier) · Color = ganancia/pérdida % · Agrupado por sector · Punto = mercado</div>
+          <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Cada bloque gris oscuro es un sector; dentro, una posición. Tamaño = nivel de riesgo (tier).</div>
         </div>
-        <button id="mapa-cartera-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
+        <button id="mapa-cartera-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;flex-shrink:0;">×</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:18px;margin-bottom:12px;flex-wrap:wrap;font-size:10.5px;color:var(--text-faint);">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span>Pérdida</span>
+          <span style="display:inline-block;width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#DC2626,#3A3D44,#16A34A);"></span>
+          <span>Ganancia</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6E7177;"></span>
+          <span>Punto = mercado (mismo color que la tabla)</span>
+        </div>
       </div>
       <div class="mapa-cartera-box" style="height:560px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;overflow:hidden;">
         ${drawPortfolioTreemap(portfolio.positions)}
@@ -2246,11 +2259,19 @@ function render(scenario){
 
   html += topNavBar();
 
-  html += `<div class="pf-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;margin-bottom:12px;gap:16px;">
-    <div class="pf-kpis" style="display:flex;gap:16px;flex-wrap:nowrap;align-items:center;min-width:0;">
-      <div style="flex-shrink:0;white-space:nowrap;">
-        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:20px;margin:0;white-space:nowrap;">${activePortfolioName}</h1>
+  html += `<div class="pf-header" style="display:flex;flex-direction:column;gap:10px;flex-shrink:0;margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
+      <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:20px;margin:0;white-space:nowrap;flex-shrink:0;">${activePortfolioName}</h1>
+      <div class="pf-controls" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+        <select id="scenario-select" class="pill-select" style="border:1px solid ${scenario?'var(--accent-border)':'var(--border)'};background:${scenario?'var(--accent-soft)':'var(--panel-2)'};color:${scenario?'var(--accent-text)':'var(--text-dim)'};max-width:180px;font-size:10.5px;">
+          <option value="">Posibles escenarios</option>
+          ${SCENARIOS.map(sc=>`<option value="${sc.key}" ${scenario===sc.key?'selected':''}>${sc.label}</option>`).join('')}
+        </select>
+        <button id="mapa-cartera-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);white-space:nowrap;">Mapa de cartera</button>
+        <button id="addpos-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);white-space:nowrap;">+ Añadir posición</button>
       </div>
+    </div>
+    <div class="pf-kpis" style="display:flex;gap:12px 16px;flex-wrap:wrap;align-items:center;min-width:0;row-gap:10px;">
       ${kpiBlock('Invertido', fmtEUR(totals.invested))}
       ${kpiBlock('Valor actual', fmtEUR(totals.value))}
       ${kpiBlock('Ganancia', (totals.gain>=0?'+':'')+fmtEUR(totals.gain), totals.gain>=0?'var(--green)':'var(--red)')}
@@ -2262,21 +2283,19 @@ function render(scenario){
       ${kpiBlock('Pdt. invertir', fmtEUR(pendingInvestTotal), null, 'Suma del campo "Pendiente invertir" de cada posición — cantidad planeada para seguir invirtiendo, no dinero ya invertido.')}
       ${kpiBlock('Total cartera estimado', fmtEUR(estimatedTotal), null, 'Valor actual + lo pendiente de invertir en todas las posiciones — una proyección, no el valor real de hoy.')}
     </div>
-    <div class="pf-controls" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-        <select id="scenario-select" class="pill-select" style="border:1px solid ${scenario?'var(--accent-border)':'var(--border)'};background:${scenario?'var(--accent-soft)':'var(--panel-2)'};color:${scenario?'var(--accent-text)':'var(--text-dim)'};max-width:180px;font-size:10.5px;">
-          <option value="">Posibles escenarios</option>
-          ${SCENARIOS.map(sc=>`<option value="${sc.key}" ${scenario===sc.key?'selected':''}>${sc.label}</option>`).join('')}
-        </select>
-        <button id="mapa-cartera-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);white-space:nowrap;">Mapa de cartera</button>
-        <button id="addpos-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);white-space:nowrap;">+ Añadir posición</button>
-      </div>
-    </div>
   </div>
 
   <div class="pf-charts-row" style="display:flex;gap:10px;flex-shrink:0;height:clamp(110px,18vh,180px);margin-bottom:10px;">
-    <div class="pf-chart" style="flex:1;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px 16px;box-sizing:border-box;">
+    <div class="pf-chart" style="flex:2.2;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px 16px;box-sizing:border-box;">
       ${drawChart()}
+    </div>
+    <div class="pf-donut" style="flex:0.9;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;display:flex;flex-direction:column;">
+      <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;flex-shrink:0;">Por mercado</div>
+      <div style="flex:1;min-height:0;">${drawDiversification(breakdownByWeight(p=>p.market), k=>MARKET[k]?.color||'#6E7177', k=>MARKET[k]?.label||k, 5, fundedDetail(p=>p.market), 'market')}</div>
+    </div>
+    <div class="pf-donut" style="flex:0.9;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;display:flex;flex-direction:column;">
+      <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;flex-shrink:0;">Por sector</div>
+      <div style="flex:1;min-height:0;">${drawDiversification(breakdownByWeight(p=>p.sector), sectorColor, k=>k, 6, fundedDetail(p=>p.sector), 'sector')}</div>
     </div>
   </div>
 
