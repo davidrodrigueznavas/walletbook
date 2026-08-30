@@ -101,6 +101,7 @@
     .home-wrap { height: auto !important; overflow-y: visible !important; padding: 12px 16px 28px !important; }
     .pf-wrap { padding: 0 14px !important; }
     .stockviewer-metrics-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+    .mapa-cartera-box { height: 420px !important; }
 
     .pf-header { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
     .pf-kpis { flex-wrap: wrap !important; row-gap: 10px !important; column-gap: 18px !important; }
@@ -435,6 +436,7 @@ let modalRange = 'mes', modalChartState = {loading:false, error:null, points:nul
 let modalCompanyState = {loading:false, error:null, summary:null}, modalCompanyToken = 0;
 let addPositionOpen = false, addPositionError = null, addPositionSelected = null, addPositionSearchToken = 0;
 let addPositionCompanyInfo = null;
+let mapaCarteraOpen = false;
 
 const SUFFIX_CURRENCY = { '.T':'JPY', '.DE':'EUR', '.PA':'EUR', '.MI':'EUR', '.AS':'EUR', '.SW':'CHF', '.CO':'DKK' };
 function currencyForTicker(ticker){
@@ -1218,10 +1220,10 @@ function renderModal(){
       </div>
 
       ${p.ticker ? `<div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
-        <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Qué hace la empresa${modalCompanyState.source==='yahoo'?' <span style="text-transform:none;letter-spacing:0;">· Yahoo Finance, en inglés</span>':''}</div>
+        <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Qué hace la empresa${modalCompanyState.source==='alphavantage'?' <span style="text-transform:none;letter-spacing:0;">· Alpha Vantage, en inglés</span>':''}</div>
         ${modalCompanyState.loading ? `<div style="font-size:11.5px;color:var(--text-faint);">Consultando…</div>`
           : modalCompanyState.error ? `<div style="font-size:11px;color:var(--text-faint);">${modalCompanyState.error}</div>`
-          : `<div style="font-size:12px;color:var(--text-dim);line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;" title="${(modalCompanyState.summary||'').replace(/"/g,'&quot;')}">${modalCompanyState.summary||''}</div>`}
+          : `<div style="font-size:12px;color:var(--text-dim);line-height:1.5;max-height:96px;overflow-y:auto;padding-right:6px;">${modalCompanyState.summary||''}</div>`}
       </div>` : ''}
 
       <div class="modal-two-col" style="display:grid;grid-template-columns:1.15fr 1fr;gap:24px;align-items:stretch;">
@@ -1350,6 +1352,126 @@ function renderAddPositionModal(){
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
         <button id="addpos-cancel" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);padding:8px 16px;font-size:12.5px;">Cancelar</button>
         <button id="addpos-submit" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:8px 16px;font-size:12.5px;font-weight:600;">Añadir</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Treemap "squarified" (Bruls/Huizing/Wijk): reparte rectángulos por área
+// proporcional al valor, intentando mantener cada celda lo más cuadrada
+// posible en vez de tiras finas — es el mismo enfoque que usan los mapas de
+// mercado tipo Finviz.
+function computeTreemap(items, x, y, w, h){
+  const results = [];
+  function worstRatio(row, side){
+    const sum = row.reduce((a,b)=>a+b.value,0);
+    if(sum<=0 || side<=0) return Infinity;
+    const rmax = Math.max.apply(null, row.map(r=>r.value));
+    const rmin = Math.min.apply(null, row.map(r=>r.value));
+    const sideSq = side*side;
+    return Math.max((sideSq*rmax)/(sum*sum), (sum*sum)/(sideSq*rmin));
+  }
+  function layoutRow(row, rx, ry, rw, rh, stackVertically){
+    const rowSum = row.reduce((a,b)=>a+b.value,0);
+    let offset = 0;
+    row.forEach(item => {
+      const ratio = rowSum>0 ? item.value/rowSum : 0;
+      if(stackVertically){
+        const ih = rh*ratio;
+        item._x=rx; item._y=ry+offset; item._w=rw; item._h=ih;
+        offset += ih;
+      } else {
+        const iw = rw*ratio;
+        item._x=rx+offset; item._y=ry; item._w=iw; item._h=rh;
+        offset += iw;
+      }
+      results.push(item);
+    });
+  }
+  function squarify(list, sx, sy, sw, sh){
+    if(!list.length || sw<=0 || sh<=0) return;
+    if(list.length===1){
+      list[0]._x=sx; list[0]._y=sy; list[0]._w=sw; list[0]._h=sh;
+      results.push(list[0]);
+      return;
+    }
+    const wide = sw>=sh;
+    const shortSide = Math.min(sw,sh);
+    let row = [list[0]];
+    let i = 1;
+    while(i<list.length){
+      const testRow = row.concat([list[i]]);
+      if(worstRatio(testRow, shortSide) <= worstRatio(row, shortSide)){ row = testRow; i++; }
+      else break;
+    }
+    const rowSum = row.reduce((a,b)=>a+b.value,0);
+    const total = list.reduce((a,b)=>a+b.value,0);
+    if(wide){
+      const rowW = total>0 ? (rowSum/total)*sw : 0;
+      layoutRow(row, sx, sy, rowW, sh, true);
+      squarify(list.slice(i), sx+rowW, sy, sw-rowW, sh);
+    } else {
+      const rowH = total>0 ? (rowSum/total)*sh : 0;
+      layoutRow(row, sx, sy, sw, rowH, false);
+      squarify(list.slice(i), sx, sy+rowH, sw, sh-rowH);
+    }
+  }
+  squarify(items, x, y, w, h);
+  return results;
+}
+
+function lerpColor(a, b, t){
+  const pa = [1,3,5].map(i=>parseInt(a.substr(i,2),16));
+  const pb = [1,3,5].map(i=>parseInt(b.substr(i,2),16));
+  const p = pa.map((v,i)=>Math.round(v+(pb[i]-v)*t));
+  return '#'+p.map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+function treemapColor(gainPct){
+  if(gainPct==null) return '#4B4E57';
+  const t = Math.max(-1, Math.min(1, gainPct/15));
+  return t>=0 ? lerpColor('#3A3D44','#16A34A', t) : lerpColor('#3A3D44','#DC2626', -t);
+}
+
+function drawPortfolioTreemap(positions){
+  const w=960, h=560;
+  const items = positions
+    .map(p => ({ p, value: currentValueOf(p) }))
+    .filter(it => it.value>0)
+    .sort((a,b)=>b.value-a.value);
+  if(!items.length) return `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12.5px;color:var(--text-faint);">Sin posiciones con valor para representar.</div>`;
+  const laid = computeTreemap(items, 0, 0, w, h);
+  const cells = laid.map(item => {
+    const p = item.p;
+    const gp = gainPctOf(p);
+    const color = treemapColor(gp);
+    const label = p.ticker || p.name;
+    const gainLabel = gp===null ? '—' : (gp>=0?'+':'')+gp.toFixed(2)+'%';
+    const showLabel = item._w>34 && item._h>24;
+    const showGain = item._w>44 && item._h>40;
+    const fontSize = Math.max(9, Math.min(17, item._w/6, item._h/3.4));
+    return `<g class="treemap-cell" data-id="${p.id}" style="cursor:pointer;">
+      <rect x="${item._x}" y="${item._y}" width="${Math.max(0,item._w-1.5)}" height="${Math.max(0,item._h-1.5)}" fill="${color}" rx="2"/>
+      ${showLabel ? `<text x="${item._x+item._w/2}" y="${item._y+item._h/2 - (showGain?fontSize*0.35:0)}" text-anchor="middle" font-size="${fontSize}" font-weight="700" fill="#F5F6F8" font-family="'Calibri','Carlito',sans-serif">${label}</text>` : ''}
+      ${showGain ? `<text x="${item._x+item._w/2}" y="${item._y+item._h/2 + fontSize*0.95}" text-anchor="middle" font-size="${fontSize*0.72}" fill="#F5F6F8" opacity="0.85" font-family="'Calibri','Carlito',sans-serif">${gainLabel}</text>` : ''}
+      <title>${p.name}${p.ticker?' ('+p.ticker+')':''} — ${fmtEUR(item.value)} — ${gainLabel}</title>
+    </g>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:100%;display:block;">${cells}</svg>`;
+}
+
+function renderMapaCarteraModal(){
+  if(!mapaCarteraOpen) return '';
+  return `<div class="modal-backdrop" id="mapa-cartera-backdrop">
+    <div class="modal-card" style="max-width:1020px;padding:22px 26px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div>
+          <h3 style="font-family:'Calibri','Carlito',sans-serif;font-size:16px;font-weight:600;margin:0;">Mapa de cartera</h3>
+          <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Tamaño = valor actual de la posición · Color = ganancia/pérdida %</div>
+        </div>
+        <button id="mapa-cartera-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
+      </div>
+      <div class="mapa-cartera-box" style="height:560px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;overflow:hidden;">
+        ${drawPortfolioTreemap(portfolio.positions)}
       </div>
     </div>
   </div>`;
@@ -2020,6 +2142,7 @@ function render(scenario){
           <option value="">Posibles escenarios</option>
           ${SCENARIOS.map(sc=>`<option value="${sc.key}" ${scenario===sc.key?'selected':''}>${sc.label}</option>`).join('')}
         </select>
+        <button id="mapa-cartera-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);">Mapa de cartera</button>
         <button id="addpos-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);">+ Añadir posición</button>
       </div>
     </div>
@@ -2050,6 +2173,7 @@ function render(scenario){
 
   ${renderModal()}
   ${renderAddPositionModal()}
+  ${renderMapaCarteraModal()}
   ${renderViewOverlay()}
   ${renderDialog()}
   ${renderStatusToast()}`;
@@ -2171,6 +2295,30 @@ function render(scenario){
     render(currentScenario);
   });
   wireAddPositionModal(app);
+
+  const mapaBtn = document.getElementById('mapa-cartera-btn');
+  if(mapaBtn) mapaBtn.addEventListener('click', () => { mapaCarteraOpen = true; render(currentScenario); });
+  const mapaClose = document.getElementById('mapa-cartera-close');
+  if(mapaClose) mapaClose.addEventListener('click', () => { mapaCarteraOpen = false; render(currentScenario); });
+  const mapaBackdrop = document.getElementById('mapa-cartera-backdrop');
+  if(mapaBackdrop) mapaBackdrop.addEventListener('click', (e) => { if(e.target===mapaBackdrop){ mapaCarteraOpen = false; render(currentScenario); } });
+  app.querySelectorAll('.treemap-cell').forEach(cell => cell.addEventListener('click', () => {
+    const id = cell.getAttribute('data-id');
+    const pos = portfolio.positions.find(p=>p.id===id);
+    if(!pos) return;
+    mapaCarteraOpen = false;
+    selectedId = id;
+    modalRange = 'mes';
+    modalChartState = {loading:true, error:null, points:null};
+    if(pos.business_summary) modalCompanyState = {loading:false, error:null, summary:pos.business_summary, source:pos.business_summary_source};
+    else if(pos.ticker) modalCompanyState = {loading:true, error:null, summary:null};
+    else modalCompanyState = {loading:false, error:null, summary:null};
+    ruleFormOpen = false; ruleFormError = null; positionRules = []; positionRulesLoading = true;
+    render(currentScenario);
+    if(pos.ticker) loadModalChart(pos.ticker, modalRange);
+    if(pos.ticker && !pos.business_summary) loadModalCompanyInfo(pos);
+    loadPositionRules(selectedId).then(() => render(currentScenario));
+  }));
 
   wireMenu(app);
   wireDialog(app);
