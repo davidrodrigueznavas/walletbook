@@ -536,6 +536,12 @@ function gainChip(g, size){
 function num(v){ if(v===null||v===undefined) return null; let s=String(v).trim(); if(s==='') return null; s=s.replace('€','').replace('$','').replace(/\s/g,''); if(s.includes(',')&&s.includes('.')){ s=s.replace(/\./g,'').replace(',','.'); } else if(s.includes(',')){ s=s.replace(',','.'); } const n=parseFloat(s); return isNaN(n)?null:n; }
 
 function investedOf(p){ const v = num(p.invested); return v!==null ? v : 0; }
+const TIER_PENDING_INVESTMENT = { nucleo:500, crecimiento:667, beta:833, satelite:1000 };
+function pendingInvestmentFor(p){
+  const v = num(p.pending_investment);
+  if(v!==null) return v;
+  return TIER_PENDING_INVESTMENT[p.tier] || 750;
+}
 function commissionOf(p){ const v = num(p.commission); return v!==null ? v : 0; }
 function currentValueOf(p){
   const inv = investedOf(p), price = num(p.price), cur = p.current_price_eur;
@@ -1117,6 +1123,7 @@ function wireAddPositionModal(app){
       purchase_date: date || null,
       horizon: horizon || null,
       currency: currencyForTicker(ticker),
+      pending_investment: TIER_PENDING_INVESTMENT[tier] || 750,
     };
     if(addPositionCompanyInfo && addPositionSelected && addPositionSelected.symbol === ticker){
       row.business_summary = addPositionCompanyInfo.summary || null;
@@ -1462,16 +1469,16 @@ function drawPositionCell(item){
     ${showDot ? `<circle cx="${item._x+9}" cy="${item._y+9}" r="3" fill="${marketColor}"/>` : ''}
     ${showLabel ? `<text x="${item._x+item._w/2}" y="${item._y+item._h/2 - (showGain?fontSize*0.35:0)}" text-anchor="middle" font-size="${fontSize}" font-weight="700" fill="#F5F6F8" font-family="'Calibri','Carlito',sans-serif">${label}</text>` : ''}
     ${showGain ? `<text x="${item._x+item._w/2}" y="${item._y+item._h/2 + fontSize*0.95}" text-anchor="middle" font-size="${fontSize*0.72}" fill="#F5F6F8" opacity="0.85" font-family="'Calibri','Carlito',sans-serif">${gainLabel}</text>` : ''}
-    <title>${p.name}${p.ticker?' ('+p.ticker+')':''} · ${MARKET[p.market]?.label||p.market||''} · ${p.sector||''} — Invertido: ${fmtEUR(item.value)} — Valor actual: ${fmtEUR(currentValueOf(p))} — ${gainLabel}</title>
+    <title>${p.name}${p.ticker?' ('+p.ticker+')':''} · ${MARKET[p.market]?.label||p.market||''} · ${p.sector||''} · ${TIER[p.tier]?.label||'sin tier'} — Invertido: ${fmtEUR(investedOf(p))} — Valor actual: ${fmtEUR(currentValueOf(p))} — ${gainLabel}</title>
   </g>`;
 }
 
 function drawPortfolioTreemap(positions){
   const w=960, h=560;
   const items = positions
-    .map(p => ({ p, value: investedOf(p) }))
+    .map(p => ({ p, value: pendingInvestmentFor(p) }))
     .filter(it => it.value>0);
-  if(!items.length) return `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12.5px;color:var(--text-faint);">Sin posiciones con importe invertido para representar.</div>`;
+  if(!items.length) return `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12.5px;color:var(--text-faint);">Sin posiciones para representar.</div>`;
 
   const groupsMap = {};
   items.forEach(it => {
@@ -1508,7 +1515,7 @@ function renderMapaCarteraModal(){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
         <div>
           <h3 style="font-family:'Calibri','Carlito',sans-serif;font-size:16px;font-weight:600;margin:0;">Mapa de cartera</h3>
-          <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Tamaño = importe invertido · Color = ganancia/pérdida % · Agrupado por sector · Punto = mercado</div>
+          <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Tamaño = nivel de riesgo (tier) · Color = ganancia/pérdida % · Agrupado por sector · Punto = mercado</div>
         </div>
         <button id="mapa-cartera-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
       </div>
