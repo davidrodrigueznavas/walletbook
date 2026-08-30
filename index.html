@@ -167,6 +167,29 @@ const RULE_METRIC = {
   holding_age_days: {label:'Antigüedad de la posición', fmt:v=>Math.round(v)+' días'},
   horizon_proximity_years: {label:'Años hasta el horizonte', fmt:v=>Math.round(v)+' años'}
 };
+const METRIC_INFO = {
+  marketCap: 'Valor total de mercado de la empresa (precio × nº de acciones). Mayor tamaño suele implicar más estabilidad, pero también menos margen de crecimiento porcentual.',
+  pe: 'Precio entre beneficio por acción. Un P/E más bajo suele leerse como "más barato" en relación al beneficio actual, aunque también puede reflejar que el mercado espera menos crecimiento futuro.',
+  peForward: 'Igual que el P/E pero con el beneficio estimado a futuro, no el actual. Si es menor que el P/E normal, el mercado espera que el beneficio crezca.',
+  peg: 'P/E dividido entre el crecimiento esperado del beneficio. Por debajo de 1 suele considerarse barato en relación a su crecimiento; por encima de 2, caro.',
+  ps: 'Precio entre ingresos por acción. Útil para empresas que aún no son rentables (sin P/E). Cuanto más bajo, más barata en relación a lo que factura.',
+  pb: 'Precio entre valor contable (activos menos deudas) por acción. Por debajo de 1 puede indicar que cotiza por debajo de su valor en libros; muy alto, mucha confianza del mercado en el futuro.',
+  netMargin: 'Porcentaje de los ingresos que se convierte en beneficio neto. Cuanto más alto, más eficiente es la empresa convirtiendo ventas en beneficio.',
+  opMargin: 'Porcentaje de los ingresos que queda como beneficio operativo, antes de intereses e impuestos. Más alto suele indicar un negocio más eficiente.',
+  roe: 'Rentabilidad sobre el capital de los accionistas. Más alto suele leerse como mejor uso del capital, aunque un ROE muy alto también puede deberse a mucha deuda.',
+  roa: 'Rentabilidad sobre el total de activos de la empresa. Más alto indica que genera más beneficio por cada euro de activos que tiene.',
+  revGrowth: 'Variación interanual de los ingresos. Positivo y creciente suele leerse como buena señal; negativo, como contracción del negocio.',
+  earnGrowth: 'Variación interanual del beneficio. Positivo y creciente suele leerse como buena señal; negativo, como deterioro de la rentabilidad.',
+  beta: 'Mide cuánto se mueve la acción en relación al mercado general. Por encima de 1, más volátil que el mercado; por debajo de 1, más estable.',
+  eps: 'Beneficio neto por acción, en la divisa de cotización. Cuanto más alto y más crece con el tiempo, mejor en términos absolutos.',
+  divPerShare: 'Cantidad que la empresa paga en dividendos por cada acción, al año.',
+  divYield: 'Dividendo anual entre precio actual. Un yield muy alto a veces señala que el precio ha caído mucho (riesgo), no solo generosidad de la empresa.',
+  targetPrice: 'Media de las estimaciones de precio de los analistas que cubren la acción, normalmente a 12 meses. Por encima del precio actual sugiere que ven recorrido al alza; por debajo, lo contrario.',
+  recommendations: 'Reparto de las recomendaciones de los analistas que cubren la acción, de venta fuerte a compra fuerte.',
+  rsi: 'Indicador técnico entre 0 y 100 que mide la fuerza y velocidad de los movimientos recientes de precio. Por encima de 70 se suele leer como "sobrecompra" (ha subido mucho y rápido); por debajo de 30, "sobreventa". No implica automáticamente comprar ni vender.',
+  sma50: 'Precio medio de cierre de los últimos 50 días. Cuando el precio cotiza por encima, suele leerse como tendencia alcista de corto/medio plazo; por debajo, bajista.',
+  sma200: 'Precio medio de cierre de los últimos 200 días. Cuando el precio cotiza por encima, suele leerse como tendencia alcista de largo plazo; por debajo, bajista.',
+};
 const RULE_OPERATOR = { gt:'mayor que', lt:'menor que' };
 const RULE_ACTION = {
   comprar:'Comprar', recomprar:'Recomprar', reducir:'Reducir',
@@ -411,6 +434,7 @@ document.documentElement.setAttribute('data-theme', theme);
 let modalRange = 'mes', modalChartState = {loading:false, error:null, points:null}, modalChartToken = 0;
 let modalCompanyState = {loading:false, error:null, summary:null}, modalCompanyToken = 0;
 let addPositionOpen = false, addPositionError = null, addPositionSelected = null, addPositionSearchToken = 0;
+let addPositionCompanyInfo = null;
 
 const SUFFIX_CURRENCY = { '.T':'JPY', '.DE':'EUR', '.PA':'EUR', '.MI':'EUR', '.AS':'EUR', '.SW':'CHF', '.CO':'DKK' };
 function currencyForTicker(ticker){
@@ -429,6 +453,52 @@ function marketForTicker(ticker, exchange){
   if(ex.includes('xetra') || ex.includes('frankfurt') || ex.includes('paris') || ex.includes('milan') || ex.includes('amsterdam') || ex.includes('london')) return 'europa';
   return 'eeuu';
 }
+// Alpha Vantage devuelve sectores/industrias genéricos (GICS); esto es una
+// aproximación por palabras clave a los 22 sectores propios del modelo de
+// sensibilidad a escenarios (SENS) — es una sugerencia editable, no exacta.
+const INDUSTRY_KEYWORD_SECTOR = [
+  [/semiconductor/, 'Semiconductores'],
+  [/software/, 'Software empresarial'],
+  [/security|cyber/, 'Ciberseguridad'],
+  [/quantum/, 'Computación cuántica'],
+  [/aerospace|defense/, 'Defensa'],
+  [/bank/, 'Banca'],
+  [/uranium/, 'Minería / uranio'],
+  [/mining|metals|steel/, 'Minería / uranio'],
+  [/chemical/, 'Química / materiales'],
+  [/oil|gas|energy/, 'Energía'],
+  [/auto/, 'Automóviles'],
+  [/marine|shipping/, 'Marítimo'],
+  [/railroad|trucking|logistics|airlines|air freight/, 'Transporte / logística'],
+  [/reit.*data center|data center.*reit/, 'Real estate de centros de datos (REIT)'],
+  [/telecom|communication equipment|networking/, 'Redes / conectividad'],
+  [/health|drug|biotech|pharma|medical/, 'Salud'],
+  [/credit services|financial data|fintech/, 'Pagos / fintech'],
+  [/water|utilities.*water/, 'Infraestructura / agua'],
+  [/consumer electronics|internet retail|specialty retail|restaurants|apparel|luxury|hotel|travel/, 'Consumo discrecional'],
+  [/household|packaged foods|beverages|grocery|discount stores/, 'Consumo defensivo'],
+];
+const SECTOR_KEYWORD_SECTOR = [
+  [/technology/, 'Tech / IA'],
+  [/financial/, 'Banca'],
+  [/health/, 'Salud'],
+  [/energy/, 'Energía'],
+  [/industrial/, 'Industria / automatización'],
+  [/consumer cyclical|consumer discretionary/, 'Consumo discrecional'],
+  [/consumer defensive|consumer staples/, 'Consumo defensivo'],
+  [/basic materials|materials/, 'Química / materiales'],
+  [/utilities/, 'Infraestructura / agua'],
+  [/real estate/, 'Real estate de centros de datos (REIT)'],
+  [/communication/, 'Redes / conectividad'],
+];
+function sectorForCompany(sector, industry){
+  const ind = (industry || '').toLowerCase();
+  for(const [re, val] of INDUSTRY_KEYWORD_SECTOR){ if(re.test(ind)) return val; }
+  const sec = (sector || '').toLowerCase();
+  for(const [re, val] of SECTOR_KEYWORD_SECTOR){ if(re.test(sec)) return val; }
+  return '';
+}
+
 let diversificationFilter = null; // {type:'market'|'sector', key}
 
 function sectorResponse(sens, factors){
@@ -972,12 +1042,24 @@ function wireAddPositionModal(app){
         e.preventDefault();
         const r = results[Number(btn.getAttribute('data-idx'))];
         addPositionSelected = r;
+        addPositionCompanyInfo = null;
         tickerInput.value = r.symbol;
         const nameInput = document.getElementById('addpos-name');
         if(nameInput && !nameInput.value.trim()) nameInput.value = r.name;
         const marketSelect = document.getElementById('addpos-market');
         if(marketSelect){ const m = marketForTicker(r.symbol, r.exchange); if(m) marketSelect.value = m; }
         suggestionsBox.innerHTML = '';
+        const symbol = r.symbol;
+        callEdgeFunction('company-info', {ticker: symbol}).then(info => {
+          if(addPositionSelected !== r) return; // el usuario ya eligió otro ticker
+          if(!info || !info.ok) return;
+          addPositionCompanyInfo = info;
+          const sectorSelect = document.getElementById('addpos-sector');
+          if(sectorSelect && !sectorSelect.value){
+            const guess = sectorForCompany(info.sector, info.industry);
+            if(guess) sectorSelect.value = guess;
+          }
+        }).catch(() => {});
       }));
     }, 300);
   });
@@ -1020,6 +1102,10 @@ function wireAddPositionModal(app){
       horizon: horizon || null,
       currency: currencyForTicker(ticker),
     };
+    if(addPositionCompanyInfo && addPositionSelected && addPositionSelected.symbol === ticker){
+      row.business_summary = addPositionCompanyInfo.summary || null;
+      row.business_summary_source = addPositionCompanyInfo.source || null;
+    }
     const { error } = await supabase.from('positions').insert(row);
     if(error){ addPositionError = 'Error al guardar — revisa la conexión.'; render(currentScenario); return; }
     addPositionOpen = false;
@@ -1729,8 +1815,8 @@ function renderStockViewerScreen(){
   if(!stockViewerTicker){
     body = `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Busca un ticker arriba para ver su cotización, sus métricas fundamentales y su gráfico técnico.</div>`;
   } else {
-    const metricRow = (label, value) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-soft);font-size:12px;">
-      <span style="color:var(--text-faint);">${label}</span><span>${value}</span>
+    const metricRow = (label, value, infoKey) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-soft);font-size:12px;">
+      <span style="color:var(--text-faint);${infoKey?'cursor:help;border-bottom:1px dotted var(--text-faint);':''}"${infoKey&&METRIC_INFO[infoKey]?` title="${METRIC_INFO[infoKey].replace(/"/g,'&quot;')}"`:''}>${label}</span><span>${value}</span>
     </div>`;
     const metricGroup = (title, rows) => `<div>
       <div style="font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">${title}</div>
@@ -1752,28 +1838,28 @@ function renderStockViewerScreen(){
       ].filter(Boolean);
       quoteBody = `<div class="stockviewer-metrics-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;">
         ${metricGroup('Valoración', [
-          metricRow('Capitalización', fmtMarketCap(q.marketCap, q.currency)),
-          metricRow('P/E', avRatio(q.trailingPE)),
-          metricRow('P/E forward', avRatio(q.forwardPE)),
-          metricRow('PEG', avRatio(q.pegRatio)),
-          metricRow('Precio/Ventas', avRatio(q.priceToSales)),
-          metricRow('Precio/Valor contable', avRatio(q.priceToBook)),
+          metricRow('Capitalización', fmtMarketCap(q.marketCap, q.currency), 'marketCap'),
+          metricRow('P/E', avRatio(q.trailingPE), 'pe'),
+          metricRow('P/E forward', avRatio(q.forwardPE), 'peForward'),
+          metricRow('PEG', avRatio(q.pegRatio), 'peg'),
+          metricRow('Precio/Ventas', avRatio(q.priceToSales), 'ps'),
+          metricRow('Precio/Valor contable', avRatio(q.priceToBook), 'pb'),
         ].join(''))}
         ${metricGroup('Rentabilidad y crecimiento', [
-          metricRow('Margen neto', avPct(q.profitMargins)),
-          metricRow('Margen operativo', avPct(q.operatingMargins)),
-          metricRow('ROE', avPct(q.returnOnEquity)),
-          metricRow('ROA', avPct(q.returnOnAssets)),
-          metricRow('Crec. ingresos (YoY)', avPct(q.revenueGrowth)),
-          metricRow('Crec. beneficio (YoY)', avPct(q.earningsGrowth)),
+          metricRow('Margen neto', avPct(q.profitMargins), 'netMargin'),
+          metricRow('Margen operativo', avPct(q.operatingMargins), 'opMargin'),
+          metricRow('ROE', avPct(q.returnOnEquity), 'roe'),
+          metricRow('ROA', avPct(q.returnOnAssets), 'roa'),
+          metricRow('Crec. ingresos (YoY)', avPct(q.revenueGrowth), 'revGrowth'),
+          metricRow('Crec. beneficio (YoY)', avPct(q.earningsGrowth), 'earnGrowth'),
         ].join(''))}
         ${metricGroup('Riesgo, dividendo y consenso', [
-          metricRow('Beta', avNum(q.beta)),
-          metricRow('EPS', avNum(q.eps)),
-          metricRow('Dividendo/acción', avNum(q.dividendPerShare)),
-          metricRow('Dividendo (yield)', avPct(q.dividendYield)),
-          metricRow('Precio objetivo analistas', avNum(q.targetMeanPrice)),
-          metricRow('Recomendaciones', analystParts.length ? analystParts.join(' · ') : '—'),
+          metricRow('Beta', avNum(q.beta), 'beta'),
+          metricRow('EPS', avNum(q.eps), 'eps'),
+          metricRow('Dividendo/acción', avNum(q.dividendPerShare), 'divPerShare'),
+          metricRow('Dividendo (yield)', avPct(q.dividendYield), 'divYield'),
+          metricRow('Precio objetivo analistas', avNum(q.targetMeanPrice), 'targetPrice'),
+          metricRow('Recomendaciones', analystParts.length ? analystParts.join(' · ') : '—', 'recommendations'),
         ].join(''))}
       </div>`;
     }
@@ -1811,10 +1897,10 @@ function renderStockViewerScreen(){
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px;">
           <div style="display:flex;align-items:center;gap:16px;font-size:11px;color:var(--text-faint);">
-            <span><span style="display:inline-block;width:10px;height:2px;background:#FBBF24;margin-right:5px;vertical-align:middle;"></span>Media 50 días</span>
-            <span><span style="display:inline-block;width:10px;height:2px;background:#B79CED;margin-right:5px;vertical-align:middle;"></span>Media 200 días</span>
+            <span style="cursor:help;border-bottom:1px dotted var(--text-faint);" title="${METRIC_INFO.sma50.replace(/"/g,'&quot;')}"><span style="display:inline-block;width:10px;height:2px;background:#FBBF24;margin-right:5px;vertical-align:middle;"></span>Media 50 días</span>
+            <span style="cursor:help;border-bottom:1px dotted var(--text-faint);" title="${METRIC_INFO.sma200.replace(/"/g,'&quot;')}"><span style="display:inline-block;width:10px;height:2px;background:#B79CED;margin-right:5px;vertical-align:middle;"></span>Media 200 días</span>
           </div>
-          ${rsiValue!=null ? `<div style="font-size:11.5px;color:var(--text-faint);">RSI (14d): <b style="color:${rsiColor};">${rsiValue.toFixed(1)}</b> <span style="color:${rsiColor};">${rsiLabel?'· '+rsiLabel:''}</span></div>` : ''}
+          ${rsiValue!=null ? `<div style="font-size:11.5px;color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="${METRIC_INFO.rsi.replace(/"/g,'&quot;')}">RSI (14d): <b style="color:${rsiColor};">${rsiValue.toFixed(1)}</b> <span style="color:${rsiColor};">${rsiLabel?'· '+rsiLabel:''}</span></div>` : ''}
         </div>
         <div style="height:260px;">${chartBody}</div>
       </div>
@@ -2081,7 +2167,7 @@ function render(scenario){
 
   const addPosBtn = document.getElementById('addpos-btn');
   if(addPosBtn) addPosBtn.addEventListener('click', () => {
-    addPositionOpen = true; addPositionError = null; addPositionSelected = null;
+    addPositionOpen = true; addPositionError = null; addPositionSelected = null; addPositionCompanyInfo = null;
     render(currentScenario);
   });
   wireAddPositionModal(app);
