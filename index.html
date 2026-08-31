@@ -32,10 +32,6 @@
     --red: #F87171;
     --red-soft: rgba(248,113,113,0.14);
     --red-border: rgba(248,113,113,0.4);
-    --teal: #2FBF9F;
-    --teal-soft: rgba(47,191,159,0.14);
-    --teal-border: rgba(47,191,159,0.4);
-    --amber: #FBBF24;
   }
   :root[data-theme="light"] {
     --bg: #F5F5F4;
@@ -60,10 +56,6 @@
     --red: #D3453B;
     --red-soft: rgba(211,69,59,0.10);
     --red-border: rgba(211,69,59,0.35);
-    --teal: #14966F;
-    --teal-soft: rgba(20,150,111,0.10);
-    --teal-border: rgba(20,150,111,0.35);
-    --amber: #B4841E;
   }
   html, body { height:100%; margin:0; }
   body { background:var(--bg); color:var(--text); font-family:'Calibri','Carlito',sans-serif; overflow:hidden; }
@@ -645,7 +637,7 @@ function renderMarketIndicators(){
   </div>`;
 }
 
-let stockViewerQuery = '', stockViewerResults = [], stockViewerSearchToken = 0;
+let stockViewerQuery = '', stockViewerSearchToken = 0;
 let stockViewerTicker = null, stockViewerQuoteLoading = false, stockViewerQuoteError = null, stockViewerQuote = null;
 let stockViewerDividends = [], stockViewerEstimates = null;
 let stockViewerChartLoading = false, stockViewerChartError = null, stockViewerChartPoints = null;
@@ -718,7 +710,6 @@ async function loadStockViewerChart(ticker){
 
 async function selectStockViewerTicker(symbol){
   stockViewerTicker = symbol;
-  stockViewerResults = [];
   stockViewerQuery = symbol;
   render(null);
   await Promise.all([loadStockViewerQuote(symbol), loadStockViewerChart(symbol)]);
@@ -943,6 +934,10 @@ function sectorResponse(sens, factors){
   if(score >= 1) return 'pos';
   if(score <= -1) return 'neg';
   return 'neutral';
+}
+function esc(s){
+  if(s===null||s===undefined) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function fmtEUR(n){ return Math.round(n).toLocaleString('es-ES') + ' €'; }
 function fmtPct(n){ return (Math.round(n*10)/10).toString().replace('.',',') + '%'; }
@@ -1645,10 +1640,10 @@ function renderModal(){
         <div>
           <div style="display:flex;align-items:center;gap:8px;">
             <span style="width:8px;height:8px;border-radius:50%;background:${MARKET[p.market]?.color||'#6E7177'};display:inline-block;"></span>
-            <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:500;font-size:20px;margin:0;">${p.name}</h2>
-            <span style="font-family:'Calibri','Carlito',sans-serif;font-size:12px;color:var(--text-faint);">${p.ticker||''}</span>
+            <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:500;font-size:20px;margin:0;">${esc(p.name)}</h2>
+            <span style="font-family:'Calibri','Carlito',sans-serif;font-size:12px;color:var(--text-faint);">${esc(p.ticker)||''}</span>
           </div>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${p.sector}${p.cluster?' · '+p.cluster:''}${p.tier?(' · '+(TIER[p.tier]?.label||p.tier)):''}</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${esc(p.sector)}${p.cluster?' · '+esc(p.cluster):''}${p.tier?(' · '+(TIER[p.tier]?.label||esc(p.tier))):''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:14px;">
           <button id="modal-delete" style="cursor:pointer;background:none;border:none;color:var(--red);font-size:11px;padding:2px 0;">Eliminar posición</button>
@@ -1667,7 +1662,7 @@ function renderModal(){
         <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Qué hace la empresa${modalCompanyState.source==='alphavantage'?' <span style="text-transform:none;letter-spacing:0;">· Alpha Vantage, en inglés</span>':''}</div>
         ${modalCompanyState.loading ? `<div style="font-size:11.5px;color:var(--text-faint);">Consultando…</div>`
           : modalCompanyState.error ? `<div style="font-size:11px;color:var(--text-faint);">${modalCompanyState.error}</div>`
-          : `<div style="font-size:12px;color:var(--text-dim);line-height:1.5;max-height:96px;overflow-y:auto;padding-right:6px;">${modalCompanyState.summary||''}</div>`}
+          : `<div style="font-size:12px;color:var(--text-dim);line-height:1.5;max-height:96px;overflow-y:auto;padding-right:6px;">${esc(modalCompanyState.summary||'')}</div>`}
       </div>` : ''}
 
       <div class="modal-two-col" style="display:grid;grid-template-columns:1.15fr 1fr;gap:24px;align-items:stretch;">
@@ -1699,7 +1694,7 @@ function renderModal(){
         </div>
         <div style="display:flex;flex-direction:column;min-height:420px;">
           <label style="font-size:9.5px;color:var(--text-faint);display:block;margin-bottom:4px;">Tesis de inversión</label>
-          <textarea data-id="${p.id}" data-field="thesis" style="flex:1;width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;line-height:1.55;padding:10px 12px;box-sizing:border-box;resize:none;">${p.thesis??''}</textarea>
+          <textarea data-id="${p.id}" data-field="thesis" style="flex:1;width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;line-height:1.55;padding:10px 12px;box-sizing:border-box;resize:none;">${esc(p.thesis??'')}</textarea>
         </div>
       </div>
 
@@ -1719,7 +1714,7 @@ function renderModal(){
               <div style="font-size:11.5px;">
                 ${matched?'⚠ ':''}<b>${mv.label}</b> ${RULE_OPERATOR[r.operator]} ${r.threshold} → <span style="color:var(--accent-text);">${RULE_ACTION[r.action]}</span>
                 ${value!==null ? `<span style="color:var(--text-faint);"> · actual: ${mv.fmt(value)}</span>` : ''}
-                ${r.note ? `<div style="color:var(--text-faint);margin-top:2px;">${r.note}</div>` : ''}
+                ${r.note ? `<div style="color:var(--text-faint);margin-top:2px;">${esc(r.note)}</div>` : ''}
               </div>
               <button class="rule-delete-btn" data-id="${r.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;flex-shrink:0;">×</button>
             </div>`;
@@ -1815,9 +1810,9 @@ function renderPortfolioNewsModal(){
       ${portfolioNews.map(n => `<a href="${n.link}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:12px;padding:9px 4px;border-radius:8px;text-decoration:none;color:inherit;border-bottom:1px solid var(--border-soft);">
         ${n.thumbnail ? `<img src="${n.thumbnail}" alt="" style="width:52px;height:52px;object-fit:cover;border-radius:6px;flex-shrink:0;"/>` : `<div style="width:52px;height:52px;border-radius:6px;flex-shrink:0;background:var(--panel-2);"></div>`}
         <div style="min-width:0;">
-          <div style="font-size:13px;color:var(--accent-text);font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${n.positionName} <span style="color:var(--text-faint);font-weight:600;">· ${n.ticker}</span></div>
-          <div style="font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${n.title}</div>
-          <div style="font-size:10.5px;color:var(--text-faint);margin-top:3px;">${n.publisher||''}${n.publisher&&n.publishedAt?' · ':''}${fmtNewsDate(n.publishedAt)}</div>
+          <div style="font-size:13px;color:var(--accent-text);font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(n.positionName)} <span style="color:var(--text-faint);font-weight:600;">· ${esc(n.ticker)}</span></div>
+          <div style="font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${esc(n.title)}</div>
+          <div style="font-size:10.5px;color:var(--text-faint);margin-top:3px;">${esc(n.publisher)}${n.publisher&&n.publishedAt?' · ':''}${fmtNewsDate(n.publishedAt)}</div>
         </div>
       </a>`).join('')}
     </div>`;
@@ -1827,7 +1822,7 @@ function renderPortfolioNewsModal(){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:16px;">
         <div>
           <h3 style="font-family:'Calibri','Carlito',sans-serif;font-size:16px;font-weight:600;margin:0;">Noticias de mi cartera</h3>
-          <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Últimas noticias de las posiciones de ${activePortfolioName}, ordenadas por fecha.</div>
+          <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Últimas noticias de las posiciones de ${esc(activePortfolioName)}, ordenadas por fecha.</div>
         </div>
         <button id="portfolio-news-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;flex-shrink:0;">×</button>
       </div>
@@ -1841,7 +1836,7 @@ function renderPortfolioNewsModal(){
 function menuBlock(){
   return `<div style="position:relative;">
     <button id="menu-btn" class="theme-toggle" title="Menú">☰</button>
-    ${menuOpen ? `<div id="nav-menu" style="position:absolute;top:46px;right:0;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);min-width:230px;z-index:60;overflow:hidden;">
+    ${menuOpen ? `<div style="position:absolute;top:46px;right:0;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);min-width:230px;z-index:60;overflow:hidden;">
       <button class="nav-item" data-view="carteras" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mis carteras</button>
       <button class="nav-item" data-view="explorar" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Explorar en Walletbook</button>
       <button class="nav-item" data-view="reglas" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mis reglas</button>
@@ -2015,12 +2010,12 @@ function renderHomeScreen(){
           <div class="home-portfolio-card" data-id="${p.id}" style="position:relative;cursor:pointer;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;display:flex;flex-direction:column;">
             <button class="home-portfolio-menu-btn" data-id="${p.id}" title="Opciones" style="position:absolute;top:12px;right:10px;cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;line-height:1;padding:6px;border-radius:6px;">⋮</button>
             ${openCardMenu===p.id ? `<div class="home-portfolio-menu" style="position:absolute;top:38px;right:10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,0.25);min-width:160px;z-index:40;overflow:hidden;">
-              <button class="home-portfolio-rename" data-id="${p.id}" data-name="${p.name}" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:9px 12px;font-size:12px;">Editar nombre</button>
-              <button class="home-portfolio-describe" data-id="${p.id}" data-description="${(p.description||'').replace(/"/g,'&quot;')}" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:9px 12px;font-size:12px;">Editar descripción</button>
-              <button class="home-portfolio-delete" data-id="${p.id}" data-name="${p.name}" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;color:var(--red);padding:9px 12px;font-size:12px;">Eliminar</button>
+              <button class="home-portfolio-rename" data-id="${p.id}" data-name="${esc(p.name)}" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:9px 12px;font-size:12px;">Editar nombre</button>
+              <button class="home-portfolio-describe" data-id="${p.id}" data-description="${esc(p.description||'')}" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:9px 12px;font-size:12px;">Editar descripción</button>
+              <button class="home-portfolio-delete" data-id="${p.id}" data-name="${esc(p.name)}" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;color:var(--red);padding:9px 12px;font-size:12px;">Eliminar</button>
             </div>` : ''}
-            <div style="font-size:15px;font-weight:600;padding-right:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:8px;">${p.name}</div>
-            <div style="font-size:12px;color:var(--text-faint);line-height:1.4;min-height:32px;">${p.description ? p.description : '<span style="opacity:.5;">Sin descripción</span>'}</div>
+            <div style="font-size:15px;font-weight:600;padding-right:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:8px;">${esc(p.name)}</div>
+            <div style="font-size:12px;color:var(--text-faint);line-height:1.4;min-height:32px;">${p.description ? esc(p.description) : '<span style="opacity:.5;">Sin descripción</span>'}</div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid var(--border-soft);">
               <span style="font-size:10.5px;color:var(--text-faint);">Tipo de cartera</span>
               <select class="home-portfolio-category-select" data-id="${p.id}" style="cursor:pointer;font-size:10.5px;padding:3px 8px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);">
@@ -2185,10 +2180,10 @@ function renderExploreScreen(){
     body = `<div>
       <button id="explore-back-btn" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:12.5px;padding:0;margin-bottom:20px;">← Volver a Explorar</button>
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px;">
-        <h2 style="margin:0;font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:21px;">${port?port.name:''}</h2>
+        <h2 style="margin:0;font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:21px;">${esc(port?port.name:'')}</h2>
         ${gainChip(port?port.overall_gain_pct:null, 16)}
       </div>
-      <div style="font-size:12.5px;color:var(--text-faint);margin-bottom:22px;">${port&&port.category&&PORTFOLIO_CATEGORY[port.category] ? PORTFOLIO_CATEGORY[port.category].label+' · ' : ''}${port&&port.description ? port.description+' · ' : ''}${port&&port.position_count===1 ? '1 posición' : (port?port.position_count:0)+' posiciones'}</div>
+      <div style="font-size:12.5px;color:var(--text-faint);margin-bottom:22px;">${port&&port.category&&PORTFOLIO_CATEGORY[port.category] ? PORTFOLIO_CATEGORY[port.category].label+' · ' : ''}${port&&port.description ? esc(port.description)+' · ' : ''}${port&&port.position_count===1 ? '1 posición' : (port?port.position_count:0)+' posiciones'}</div>
       ${exploreLoading ? `<div style="font-size:12px;color:var(--text-faint);">Cargando…</div>`
         : (exploreDetailPositions && exploreDetailPositions.length ? `<div style="overflow-x:auto;">
             <table class="postable">
@@ -2197,8 +2192,8 @@ function renderExploreScreen(){
               <tbody>
                 ${exploreDetailPositions.map(p=>`<tr>
                   <td><span style="width:8px;height:8px;border-radius:50%;background:${MARKET[p.market]?.color||'#6E7177'};display:inline-block;"></span></td>
-                  <td>${p.ticker||'—'}</td>
-                  <td>${p.name}</td>
+                  <td>${esc(p.ticker)||'—'}</td>
+                  <td>${esc(p.name)}</td>
                   <td style="text-align:right;">${p.weight_pct!=null?p.weight_pct+'%':'—'}</td>
                   <td style="text-align:right;color:${p.gain_pct==null?'var(--text-dim)':(p.gain_pct>=0?'var(--green)':'var(--red)')};">${p.gain_pct!=null?(p.gain_pct>=0?'+':'')+p.gain_pct+'%':'—'}</td>
                 </tr>`).join('')}
@@ -2220,8 +2215,8 @@ function renderExploreScreen(){
               ${gainChip(p.overall_gain_pct, 14)}
             </div>
             <div>
-              <div style="font-size:14.5px;font-weight:700;margin-bottom:4px;">${p.name}</div>
-              <div style="font-size:11.5px;color:var(--text-faint);line-height:1.4;min-height:30px;">${p.description ? p.description : 'Sin descripción'}</div>
+              <div style="font-size:14.5px;font-weight:700;margin-bottom:4px;">${esc(p.name)}</div>
+              <div style="font-size:11.5px;color:var(--text-faint);line-height:1.4;min-height:30px;">${p.description ? esc(p.description) : 'Sin descripción'}</div>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;font-size:10.5px;color:var(--text-faint);padding-top:12px;border-top:1px solid var(--border-soft);">
               <span>${p.category && PORTFOLIO_CATEGORY[p.category] ? PORTFOLIO_CATEGORY[p.category].label : 'Sin categoría'}</span>
@@ -2278,13 +2273,13 @@ function renderRulesScreen(){
     return `<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px;border-radius:12px;background:${matched?'var(--accent-soft)':'var(--panel-2)'};border:1px solid ${matched?'var(--accent-border)':'var(--border)'};">
       <div style="min-width:0;">
         <div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;">
-          ${matched?'⚠':''} ${rule.position_name}${rule.ticker?` <span style="font-weight:400;color:var(--text-faint);font-size:11.5px;">${rule.ticker}</span>`:''}
+          ${matched?'⚠':''} ${esc(rule.position_name)}${rule.ticker?` <span style="font-weight:400;color:var(--text-faint);font-size:11.5px;">${esc(rule.ticker)}</span>`:''}
           ${missing ? `<span style="font-size:10px;color:var(--text-faint);font-weight:400;">(posición ya no disponible)</span>` : ''}
         </div>
         <div style="font-size:11.5px;color:var(--text-dim);margin-top:3px;">
           ${mv.label} ${RULE_OPERATOR[rule.operator]} ${rule.threshold}${value!==null&&value!==undefined?` · actual: <b style="color:${matched?'var(--accent-text)':'var(--text)'};">${mv.fmt(value)}</b>`:''}
         </div>
-        <div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">${pf?pf.name+' · ':''}${RULE_ACTION[rule.action]}${rule.note?' · '+rule.note:''}</div>
+        <div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">${pf?esc(pf.name)+' · ':''}${RULE_ACTION[rule.action]}${rule.note?' · '+esc(rule.note):''}</div>
       </div>
       <button class="global-rule-delete-btn" data-id="${rule.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;flex-shrink:0;">×</button>
     </div>`;
@@ -2510,10 +2505,10 @@ function renderStockViewerScreen(){
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap;">
         <div>
           <div style="display:flex;align-items:baseline;gap:10px;">
-            <h2 style="margin:0;font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:22px;">${q?q.name:stockViewerTicker}</h2>
-            <span style="font-size:13px;color:var(--text-faint);">${stockViewerTicker}${q&&q.exchange?' · '+q.exchange:''}</span>
+            <h2 style="margin:0;font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:22px;">${esc(q?q.name:stockViewerTicker)}</h2>
+            <span style="font-size:13px;color:var(--text-faint);">${esc(stockViewerTicker)}${q&&q.exchange?' · '+esc(q.exchange):''}</span>
           </div>
-          ${q&&q.sector ? `<div style="font-size:11.5px;color:var(--text-faint);margin-top:3px;">${q.sector}${q.industry?' · '+q.industry:''}</div>` : ''}
+          ${q&&q.sector ? `<div style="font-size:11.5px;color:var(--text-faint);margin-top:3px;">${esc(q.sector)}${q.industry?' · '+esc(q.industry):''}</div>` : ''}
         </div>
         <div style="position:relative;">
           <button id="visor-addpos-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;">+ Añadir a cartera</button>
@@ -2522,7 +2517,7 @@ function renderStockViewerScreen(){
             ${!portfolios.length
               ? `<div style="font-size:12px;color:var(--text-faint);">Todavía no tienes ninguna cartera. Crea una primero desde "Mis carteras".</div>`
               : `<div style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;">
-                  ${portfolios.map(pf=>`<button class="visor-portfolio-btn" data-id="${pf.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:12.5px;color:var(--text);">${pf.name}</button>`).join('')}
+                  ${portfolios.map(pf=>`<button class="visor-portfolio-btn" data-id="${pf.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:12.5px;color:var(--text);">${esc(pf.name)}</button>`).join('')}
                 </div>`}
           </div>` : ''}
         </div>
@@ -2735,7 +2730,7 @@ function render(scenario){
 
   html += `<div class="pf-header" style="display:flex;flex-direction:column;gap:22px;flex-shrink:0;margin-bottom:16px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
-      <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:20px;margin:0;white-space:nowrap;flex-shrink:0;">${activePortfolioName}</h1>
+      <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:20px;margin:0;white-space:nowrap;flex-shrink:0;">${esc(activePortfolioName)}</h1>
       <div class="pf-controls" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
         <select id="scenario-select" class="pill-select" style="border:1px solid ${scenario?'var(--accent-border)':'var(--border)'};background:${scenario?'var(--accent-soft)':'var(--panel-2)'};color:${scenario?'var(--accent-text)':'var(--text-dim)'};max-width:180px;font-size:10.5px;">
           <option value="">Posibles escenarios</option>
