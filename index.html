@@ -513,58 +513,6 @@ function renderYieldCurveCard(){
   </div>`;
 }
 
-let goldenCrossIndicator = null, goldenCrossLoading = false, goldenCrossError = null;
-async function loadGoldenCrossIndicator(){
-  if(goldenCrossLoading) return;
-  goldenCrossLoading = true; goldenCrossError = null;
-  try{
-    const res = await callEdgeFunction('ticker-history', {ticker:'^GSPC', range:'tecnico'});
-    if(!res.ok || !res.points || res.points.length<201) throw new Error((res&&res.error)||'Sin datos suficientes del S&P 500.');
-    const closes = res.points.map(p=>p.c);
-    const sma50Arr = computeSMA(closes, 50);
-    const sma200Arr = computeSMA(closes, 200);
-    const sma50 = sma50Arr[sma50Arr.length-1];
-    const sma200 = sma200Arr[sma200Arr.length-1];
-    const pctDiff = sma200 ? ((sma50-sma200)/sma200)*100 : null;
-    const score = pctDiff==null ? null : Math.max(0, Math.min(100, 50 - pctDiff*10));
-    goldenCrossIndicator = { sma50, sma200, pctDiff, score };
-  } catch(e){
-    goldenCrossError = (e && e.message) || 'Error al consultar el cruce de medias.';
-  }
-  goldenCrossLoading = false;
-  render(null);
-}
-function renderGoldenCrossCard(){
-  if(!goldenCrossIndicator && !goldenCrossLoading && !goldenCrossError){
-    loadGoldenCrossIndicator();
-  }
-  let body;
-  if(goldenCrossLoading && !goldenCrossIndicator){
-    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">Consultando…</div>`;
-  } else if(goldenCrossError && !goldenCrossIndicator){
-    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">${goldenCrossError}</div>`;
-  } else if(goldenCrossIndicator){
-    const g = goldenCrossIndicator;
-    const band = g.pctDiff>=0 ? {label:'Cruce dorado', color:'#4ADE80'} : {label:'Cruce mortal', color:'#DC2626'};
-    body = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-        <div style="width:56px;height:56px;border-radius:50%;border:4px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:${band.color};flex-shrink:0;">${Math.round(g.score)}</div>
-        <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Media de 50 días frente a la de 200 días del S&amp;P 500. Cuando la de 50 cruza por encima de la de 200 se llama 'cruce dorado' (alcista); por debajo, 'cruce mortal' (bajista).">Media 50d vs 200d</span>
-          <span style="font-weight:700;color:${g.pctDiff>=0?'var(--green)':'var(--red)'};">${g.pctDiff>=0?'+':''}${g.pctDiff.toFixed(2)}%</span>
-        </div>
-      </div>`;
-  } else {
-    body = '';
-  }
-  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Cruce de medias móviles de 50 y 200 días del S&amp;P 500, vía Yahoo Finance.">Cruce dorado/mortal (S&amp;P 500)</div>
-    ${body}
-  </div>`;
-}
-
 let breadthIndicator = null, breadthLoading = false, breadthError = null;
 async function loadBreadthIndicator(){
   if(breadthLoading) return;
@@ -689,11 +637,10 @@ function renderConcentrationCard(){
 }
 
 function renderMarketIndicators(){
-  return `<div class="indicator-cards-row" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,300px));gap:14px;margin-bottom:20px;">
+  return `<div class="indicator-cards-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px;">
     ${renderCrashIndexCard()}
     ${renderLiquidityCard()}
     ${renderYieldCurveCard()}
-    ${renderGoldenCrossCard()}
     ${renderBreadthCard()}
     ${renderConcentrationCard()}
   </div>`;
@@ -1532,10 +1479,15 @@ function wireAddPositionModal(app){
     const date = document.getElementById('addpos-date').value;
     const horizon = document.getElementById('addpos-horizon').value.trim();
 
-    if(!name){ addPositionError = 'Falta el nombre.'; render(currentScenario); return; }
-    if(!market){ addPositionError = 'Elige un mercado.'; render(currentScenario); return; }
-    if(!sector){ addPositionError = 'Elige un sector.'; render(currentScenario); return; }
-    if(invested===null || invested<=0){ addPositionError = 'Indica el importe invertido.'; render(currentScenario); return; }
+    const showAddPosError = (msg) => {
+      addPositionError = msg;
+      const errEl = document.getElementById('addpos-error');
+      if(errEl){ errEl.textContent = msg; errEl.style.display = 'block'; }
+    };
+    if(!name){ showAddPosError('Falta el nombre.'); return; }
+    if(!market){ showAddPosError('Elige un mercado.'); return; }
+    if(!sector){ showAddPosError('Elige un sector.'); return; }
+    if(invested===null || invested<=0){ showAddPosError('Indica el importe invertido.'); return; }
 
     const row = {
       id: crypto.randomUUID(),
@@ -1559,7 +1511,7 @@ function wireAddPositionModal(app){
       row.business_summary_source = addPositionCompanyInfo.source || null;
     }
     const { error } = await supabase.from('positions').insert(row);
-    if(error){ addPositionError = 'Error al guardar — revisa la conexión.'; render(currentScenario); return; }
+    if(error){ showAddPosError('Error al guardar — revisa la conexión.'); return; }
     addPositionOpen = false;
     markDirty();
     await loadAll();
@@ -1798,7 +1750,7 @@ function renderAddPositionModal(){
         <div class="field"><label>Horizonte (opcional)</label><input id="addpos-horizon" placeholder="ej. 2029"/></div>
       </div>
 
-      ${addPositionError ? `<div style="color:var(--red);font-size:11.5px;margin:10px 0 0;">${addPositionError}</div>` : ''}
+      <div id="addpos-error" style="color:var(--red);font-size:11.5px;margin:10px 0 0;display:${addPositionError?'block':'none'};">${addPositionError||''}</div>
 
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
         <button id="addpos-cancel" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);padding:8px 16px;font-size:12.5px;">Cancelar</button>
