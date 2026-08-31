@@ -304,6 +304,87 @@ let exploreList = null, exploreLoading = false, exploreDetailId = null, exploreD
 let positionRules = [], positionRulesLoading = false, ruleFormOpen = false, ruleFormError = null;
 let allRulesData = null, allRulesLoading = false;
 
+let marketIndicators = null, marketIndicatorsLoading = false, marketIndicatorsError = null;
+
+function riskBand(score){
+  if(score>=80) return {label:'Riesgo de crash muy alto', color:'#DC2626'};
+  if(score>=60) return {label:'Riesgo elevado', color:'#F87171'};
+  if(score>=35) return {label:'Riesgo moderado', color:'#FBBF24'};
+  return {label:'Riesgo bajo', color:'#4ADE80'};
+}
+
+async function loadMarketIndicators(){
+  if(marketIndicatorsLoading) return;
+  marketIndicatorsLoading = true; marketIndicatorsError = null;
+  try{
+    const [sp500Res, vixRes] = await Promise.all([
+      callEdgeFunction('ticker-history', {ticker:'^GSPC', range:'semanal'}),
+      callEdgeFunction('ticker-history', {ticker:'^VIX', range:'mes'}),
+    ]);
+    if(!sp500Res.ok || !sp500Res.points || sp500Res.points.length<41) throw new Error((sp500Res&&sp500Res.error) || 'Sin datos del S&P 500.');
+    if(!vixRes.ok || !vixRes.points || !vixRes.points.length) throw new Error((vixRes&&vixRes.error) || 'Sin datos del VIX.');
+
+    const sp500Closes = sp500Res.points.map(p=>p.c);
+    const sma40Arr = computeSMA(sp500Closes, 40);
+    const lastSma40 = sma40Arr[sma40Arr.length-1];
+    const lastPrice = sp500Closes[sp500Closes.length-1];
+    const pctVsSma40 = lastSma40 ? ((lastPrice-lastSma40)/lastSma40)*100 : null;
+    const vixLevel = vixRes.points[vixRes.points.length-1].c;
+
+    // Cuanto más se acerca (o cruza por debajo) el S&P 500 a su media de 40
+    // semanas, más puntuación de riesgo — 0 muy por encima (seguro), 100 muy
+    // por debajo (crash). El VIX se mapea linealmente entre 10 (calma) y 40
+    // (pánico). El índice combinado es la media simple de ambos, sin más
+    // pretensión que ser una heurística legible, no un modelo validado.
+    const score40 = pctVsSma40==null ? null : Math.max(0, Math.min(100, 50 - pctVsSma40*5));
+    const scoreVix = Math.max(0, Math.min(100, (vixLevel-10)*(100/30)));
+    const combined = score40==null ? scoreVix : (score40+scoreVix)/2;
+
+    marketIndicators = { sp500Price:lastPrice, sp500Sma40:lastSma40, pctVsSma40, score40, vixLevel, scoreVix, combined };
+  } catch(e){
+    marketIndicatorsError = (e && e.message) || 'Error al consultar indicadores de mercado.';
+  }
+  marketIndicatorsLoading = false;
+  render(null);
+}
+
+function renderMarketIndicators(){
+  if(!marketIndicators && !marketIndicatorsLoading && !marketIndicatorsError){
+    loadMarketIndicators();
+  }
+  let body;
+  if(marketIndicatorsLoading && !marketIndicators){
+    body = `<div style="font-size:12px;color:var(--text-faint);">Consultando indicadores de mercado…</div>`;
+  } else if(marketIndicatorsError && !marketIndicators){
+    body = `<div style="font-size:12px;color:var(--text-faint);">${marketIndicatorsError}</div>`;
+  } else if(marketIndicators){
+    const m = marketIndicators;
+    const band = riskBand(m.combined);
+    body = `<div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:54px;height:54px;border-radius:50%;border:4px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:${band.color};flex-shrink:0;">${Math.round(m.combined)}</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:${band.color};">${band.label}</div>
+          <div style="font-size:10.5px;color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Media simple de dos señales: distancia del S&amp;P 500 a su media de 40 semanas, y nivel del VIX. Es una heurística orientativa, no un modelo predictivo validado.">Índice combinado de riesgo de mercado</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:11.5px;">
+        <div>
+          <div style="color:var(--text-faint);font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Distancia del S&amp;P 500 respecto a su media móvil de 40 semanas. Cuando el precio cruza por debajo, se suele leer como señal de cambio a tendencia bajista (análisis de Stan Weinstein).">S&P 500 vs media 40 sem</div>
+          <div style="font-weight:700;color:${m.pctVsSma40>=0?'var(--green)':'var(--red)'};">${m.pctVsSma40>=0?'+':''}${m.pctVsSma40.toFixed(1)}%${m.pctVsSma40<0?' · por debajo':''}</div>
+        </div>
+        <div>
+          <div style="color:var(--text-faint);font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Índice de volatilidad del S&amp;P 500. Por debajo de 15, mercado tranquilo; 15-20 normal; 20-30 nerviosismo; por encima de 30, estrés o pánico.">VIX</div>
+          <div style="font-weight:700;">${m.vixLevel.toFixed(1)}</div>
+        </div>
+      </div>
+    </div>`;
+  } else {
+    body = '';
+  }
+  return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 20px;margin-bottom:20px;">${body}</div>`;
+}
+
 let stockViewerQuery = '', stockViewerResults = [], stockViewerSearchToken = 0;
 let stockViewerTicker = null, stockViewerQuoteLoading = false, stockViewerQuoteError = null, stockViewerQuote = null;
 let stockViewerDividends = [], stockViewerEstimates = null;
@@ -1624,6 +1705,7 @@ function renderHomeScreen(){
   app.innerHTML = `<div class="home-wrap" style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:16px 32px 32px;">
     <div style="max-width:1200px;margin:0 auto;">
       ${topNavBar()}
+      ${renderMarketIndicators()}
       <div style="margin-bottom:26px;">
         <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:26px;margin:0;">Mis carteras</h1>
       </div>
