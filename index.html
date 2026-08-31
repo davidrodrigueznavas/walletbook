@@ -95,7 +95,7 @@
     .stockviewer-metrics-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
 
     .pf-header { flex-direction: column !important; align-items: stretch !important; gap: 16px !important; }
-    .pf-kpis { flex-wrap: wrap !important; row-gap: 10px !important; column-gap: 18px !important; }
+    .pf-kpis { flex-wrap: wrap !important; justify-content: center !important; row-gap: 12px !important; column-gap: 18px !important; padding: 14px 16px !important; }
     .pf-controls { align-items: stretch !important; }
     .pf-controls > div { flex-wrap: wrap !important; }
     #scenario-select { max-width: none !important; flex: 1 1 auto !important; }
@@ -1331,7 +1331,7 @@ async function saveSnapshotIfDirty(){
 setInterval(saveSnapshotIfDirty, 60000);
 
 function kpiBlock(label, value, color, title){
-  return `<div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0;white-space:nowrap;"${title?` title="${title}"`:''}>
+  return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;white-space:nowrap;"${title?` title="${title}"`:''}>
     <div style="font-family:'Calibri','Carlito',sans-serif;font-size:18px;line-height:1;${color?`color:${color};`:''}">${value}</div>
     <div style="font-size:9px;letter-spacing:.04em;color:var(--text-faint);text-transform:uppercase;">${label}</div>
   </div>`;
@@ -2728,7 +2728,7 @@ function render(scenario){
 
   html += topNavBar();
 
-  html += `<div class="pf-header" style="display:flex;flex-direction:column;gap:22px;flex-shrink:0;margin-bottom:16px;">
+  html += `<div class="pf-header" style="display:flex;flex-direction:column;gap:14px;flex-shrink:0;margin-bottom:16px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
       <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:20px;margin:0;white-space:nowrap;flex-shrink:0;">${esc(activePortfolioName)}</h1>
       <div class="pf-controls" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
@@ -2740,7 +2740,7 @@ function render(scenario){
         <button id="addpos-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);white-space:nowrap;">+ Añadir posición</button>
       </div>
     </div>
-    <div class="pf-kpis" style="display:flex;gap:12px 16px;flex-wrap:wrap;align-items:center;min-width:0;row-gap:10px;">
+    <div class="pf-kpis" style="display:flex;justify-content:space-evenly;align-items:center;flex-wrap:wrap;gap:16px 20px;min-width:0;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:12px;padding:14px 22px;">
       ${kpiBlock('Invertido', fmtEUR(totals.invested))}
       ${kpiBlock('Valor actual', fmtEUR(totals.value))}
       ${kpiBlock('Ganancia', (totals.gain>=0?'+':'')+fmtEUR(totals.gain), totals.gain>=0?'var(--green)':'var(--red)')}
