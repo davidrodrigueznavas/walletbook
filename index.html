@@ -348,41 +348,45 @@ async function loadMarketIndicators(){
   render(null);
 }
 
-function renderMarketIndicators(){
+function renderCrashIndexCard(){
   if(!marketIndicators && !marketIndicatorsLoading && !marketIndicatorsError){
     loadMarketIndicators();
   }
   let body;
   if(marketIndicatorsLoading && !marketIndicators){
-    body = `<div style="font-size:12px;color:var(--text-faint);">Consultando indicadores de mercado…</div>`;
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">Consultando…</div>`;
   } else if(marketIndicatorsError && !marketIndicators){
-    body = `<div style="font-size:12px;color:var(--text-faint);">${marketIndicatorsError}</div>`;
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">${marketIndicatorsError}</div>`;
   } else if(marketIndicators){
     const m = marketIndicators;
     const band = riskBand(m.combined);
-    body = `<div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div style="width:54px;height:54px;border-radius:50%;border:4px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:${band.color};flex-shrink:0;">${Math.round(m.combined)}</div>
-        <div>
-          <div style="font-size:13px;font-weight:700;color:${band.color};">${band.label}</div>
-          <div style="font-size:10.5px;color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Media simple de dos señales: distancia del S&amp;P 500 a su media de 40 semanas, y nivel del VIX. Es una heurística orientativa, no un modelo predictivo validado.">Índice combinado de riesgo de mercado</div>
-        </div>
+    body = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+        <div style="width:56px;height:56px;border-radius:50%;border:4px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:${band.color};flex-shrink:0;">${Math.round(m.combined)}</div>
+        <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
       </div>
-      <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:11.5px;">
-        <div>
-          <div style="color:var(--text-faint);font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Distancia del S&amp;P 500 respecto a su media móvil de 40 semanas. Cuando el precio cruza por debajo, se suele leer como señal de cambio a tendencia bajista (análisis de Stan Weinstein).">S&P 500 vs media 40 sem</div>
-          <div style="font-weight:700;color:${m.pctVsSma40>=0?'var(--green)':'var(--red)'};">${m.pctVsSma40>=0?'+':''}${m.pctVsSma40.toFixed(1)}%${m.pctVsSma40<0?' · por debajo':''}</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Distancia del S&amp;P 500 respecto a su media móvil de 40 semanas. Cuando el precio cruza por debajo, se suele leer como señal de cambio a tendencia bajista (análisis de Stan Weinstein).">S&P 500 vs media 40 sem</span>
+          <span style="font-weight:700;color:${m.pctVsSma40>=0?'var(--green)':'var(--red)'};">${m.pctVsSma40>=0?'+':''}${m.pctVsSma40.toFixed(1)}%${m.pctVsSma40<0?' · por debajo':''}</span>
         </div>
-        <div>
-          <div style="color:var(--text-faint);font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Índice de volatilidad del S&amp;P 500. Por debajo de 15, mercado tranquilo; 15-20 normal; 20-30 nerviosismo; por encima de 30, estrés o pánico.">VIX</div>
-          <div style="font-weight:700;">${m.vixLevel.toFixed(1)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Índice de volatilidad del S&amp;P 500. Por debajo de 15, mercado tranquilo; 15-20 normal; 20-30 nerviosismo; por encima de 30, estrés o pánico.">VIX</span>
+          <span style="font-weight:700;">${m.vixLevel.toFixed(1)}</span>
         </div>
-      </div>
-    </div>`;
+      </div>`;
   } else {
     body = '';
   }
-  return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 20px;margin-bottom:20px;">${body}</div>`;
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Media simple de dos señales: distancia del S&amp;P 500 a su media de 40 semanas, y nivel del VIX. Es una heurística orientativa, no un modelo predictivo validado.">Índice de riesgo de mercado</div>
+    ${body}
+  </div>`;
+}
+
+function renderMarketIndicators(){
+  return `<div class="indicator-cards-row" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,300px));gap:14px;margin-bottom:20px;">
+    ${renderCrashIndexCard()}
+  </div>`;
 }
 
 let stockViewerQuery = '', stockViewerResults = [], stockViewerSearchToken = 0;
