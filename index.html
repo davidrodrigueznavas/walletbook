@@ -1472,7 +1472,6 @@ function wireAddPositionModal(app){
     const market = document.getElementById('addpos-market').value;
     const sector = document.getElementById('addpos-sector').value;
     const tier = document.getElementById('addpos-tier').value;
-    const cluster = document.getElementById('addpos-cluster').value.trim();
     const invested = num(document.getElementById('addpos-invested').value);
     const price = num(document.getElementById('addpos-price').value);
     const commission = num(document.getElementById('addpos-commission').value);
@@ -1496,7 +1495,6 @@ function wireAddPositionModal(app){
       ticker: ticker || null,
       market,
       sector,
-      cluster: cluster || null,
       tier: tier || null,
       invested,
       price,
@@ -1606,7 +1604,7 @@ function renderModal(){
             <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:500;font-size:20px;margin:0;">${p.name}</h2>
             <span style="font-family:'Calibri','Carlito',sans-serif;font-size:12px;color:var(--text-faint);">${p.ticker||''}</span>
           </div>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${p.sector} · ${p.cluster} ${p.tier?('· '+(TIER[p.tier]?.label||p.tier)):''}</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${p.sector}${p.cluster?' · '+p.cluster:''}${p.tier?(' · '+(TIER[p.tier]?.label||p.tier)):''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:14px;">
           <button id="modal-delete" style="cursor:pointer;background:none;border:none;color:var(--red);font-size:11px;padding:2px 0;">Eliminar posición</button>
@@ -1739,7 +1737,6 @@ function renderAddPositionModal(){
           <option value="">— Elegir —</option>
           ${Object.entries(TIER).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}
         </select></div>
-        <div class="field"><label>Cluster (opcional)</label><input id="addpos-cluster" placeholder="ej. IA / semis"/></div>
       </div>
 
       <div class="modal-fields-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:6px;">
