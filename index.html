@@ -827,6 +827,7 @@ let modalCompanyState = {loading:false, error:null, summary:null}, modalCompanyT
 let addPositionOpen = false, addPositionError = null, addPositionSelected = null, addPositionSearchToken = 0;
 let addPositionCompanyInfo = null;
 let mapaCarteraOpen = false;
+let stockFinderOpen = false, stockFinderPicked = null, stockFinderSearchToken = 0;
 
 const SUFFIX_CURRENCY = { '.T':'JPY', '.DE':'EUR', '.PA':'EUR', '.MI':'EUR', '.AS':'EUR', '.SW':'CHF', '.CO':'DKK' };
 function currencyForTicker(ticker){
@@ -1967,8 +1968,124 @@ function topNavBar(){
       ${walletbookIcon(46)}
       <span style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:29px;color:var(--text);letter-spacing:-.01em;">Walletbook</span>
     </button>
-    ${menuBlock()}
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button id="stock-finder-btn" class="theme-toggle" title="Explorar en Walletbook — buscar una acción y añadirla a una cartera">
+        <svg viewBox="0 0 20 20" style="width:16px;height:16px;display:block;"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="13" y1="13" x2="18" y2="18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      ${menuBlock()}
+    </div>
   </div>`;
+}
+
+function renderStockFinderModal(){
+  if(!stockFinderOpen) return '';
+  const picked = stockFinderPicked;
+  let body;
+  if(picked){
+    body = `<button id="stockfinder-back" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:12px;padding:0;margin-bottom:14px;">← Buscar otra acción</button>
+      <div style="font-size:13px;margin-bottom:4px;">Añadir <b>${picked.symbol}</b> — ${picked.name}</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:16px;">Elige a qué cartera la quieres añadir:</div>
+      ${!portfolios.length
+        ? `<div style="font-size:12px;color:var(--text-faint);">Todavía no tienes ninguna cartera. Crea una primero desde "Mis carteras".</div>`
+        : `<div style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;">
+            ${portfolios.map(pf=>`<button class="stockfinder-portfolio-btn" data-id="${pf.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--text);">${pf.name}</button>`).join('')}
+          </div>`}`;
+  } else {
+    body = `<div class="field" style="margin-bottom:4px;position:relative;">
+      <label>Buscar acción</label>
+      <input id="stockfinder-input" placeholder="ej. AAPL, SAP.DE, 7203.T" autocomplete="off"/>
+      <div id="stockfinder-suggestions" style="position:absolute;top:100%;left:0;right:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 12px 32px rgba(0,0,0,0.25);z-index:10;overflow:hidden;"></div>
+    </div>
+    <div style="font-size:10px;color:var(--text-faint);">Escribe al menos 2 letras para buscar en Yahoo Finance.</div>`;
+  }
+  return `<div class="modal-backdrop" id="stockfinder-backdrop" style="z-index:70;">
+    <div class="modal-card" style="max-width:420px;padding:22px 26px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <h3 style="font-family:'Calibri','Carlito',sans-serif;font-size:16px;font-weight:600;margin:0;">Explorar en Walletbook</h3>
+        <button id="stockfinder-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
+      </div>
+      ${body}
+    </div>
+  </div>`;
+}
+
+function wireStockFinderModal(app){
+  const btn = document.getElementById('stock-finder-btn');
+  if(btn) btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    stockFinderOpen = true; stockFinderPicked = null;
+    await loadPortfolios();
+    render(currentScenario);
+  });
+
+  if(!stockFinderOpen) return;
+  const closeIt = () => { stockFinderOpen = false; stockFinderPicked = null; render(currentScenario); };
+  const closeBtn = document.getElementById('stockfinder-close');
+  if(closeBtn) closeBtn.addEventListener('click', closeIt);
+  const backdrop = document.getElementById('stockfinder-backdrop');
+  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop) closeIt(); });
+  const backBtn = document.getElementById('stockfinder-back');
+  if(backBtn) backBtn.addEventListener('click', () => { stockFinderPicked = null; render(currentScenario); });
+
+  const input = document.getElementById('stockfinder-input');
+  if(input){
+    const suggestionsBox = document.getElementById('stockfinder-suggestions');
+    let searchTimer = null;
+    input.addEventListener('input', () => {
+      const q = input.value.trim();
+      if(searchTimer) clearTimeout(searchTimer);
+      if(q.length < 2){ suggestionsBox.innerHTML = ''; return; }
+      searchTimer = setTimeout(async () => {
+        const token = ++stockFinderSearchToken;
+        suggestionsBox.innerHTML = `<div style="padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Buscando…</div>`;
+        let results = [];
+        try {
+          const res = await callEdgeFunction('ticker-search', {q});
+          results = (res && res.ok) ? res.results : [];
+        } catch(e){ results = null; }
+        if(token !== stockFinderSearchToken) return;
+        if(results === null){ suggestionsBox.innerHTML = `<div style="padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Error al buscar.</div>`; return; }
+        if(!results.length){ suggestionsBox.innerHTML = `<div style="padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Sin resultados.</div>`; return; }
+        suggestionsBox.innerHTML = results.map((r,i) => `<button type="button" class="ticker-suggestion" data-idx="${i}">
+          <b>${r.symbol}</b> — ${r.name}${r.exchange?` <span style="color:var(--text-faint);">(${r.exchange})</span>`:''}
+        </button>`).join('');
+        suggestionsBox.querySelectorAll('.ticker-suggestion').forEach(sbtn => sbtn.addEventListener('mousedown', async (e) => {
+          e.preventDefault();
+          const r = results[Number(sbtn.getAttribute('data-idx'))];
+          stockFinderPicked = r;
+          await loadPortfolios();
+          render(currentScenario);
+        }));
+      }, 300);
+    });
+  }
+
+  app.querySelectorAll('.stockfinder-portfolio-btn').forEach(pbtn => pbtn.addEventListener('click', async () => {
+    const pf = portfolios.find(x=>x.id === pbtn.getAttribute('data-id'));
+    if(!pf) return;
+    const r = stockFinderPicked;
+    portfolioId = pf.id;
+    activePortfolioName = pf.name;
+    currentScreen = 'portfolio';
+    stockFinderOpen = false;
+    stockFinderPicked = null;
+    await loadAll();
+    addPositionOpen = true; addPositionError = null; addPositionCompanyInfo = null;
+    addPositionSelected = r;
+    render(null);
+    const marketSelect = document.getElementById('addpos-market');
+    if(marketSelect){ const m = marketForTicker(r.symbol, r.exchange); if(m) marketSelect.value = m; }
+    callEdgeFunction('company-info', {ticker: r.symbol}).then(info => {
+      if(addPositionSelected !== r) return;
+      if(!info || !info.ok) return;
+      addPositionCompanyInfo = info;
+      const sectorSelect = document.getElementById('addpos-sector');
+      if(sectorSelect && !sectorSelect.value){
+        const guess = sectorForCompany(info.sector, info.industry);
+        if(guess) sectorSelect.value = guess;
+      }
+    }).catch(() => {});
+  }));
 }
 
 async function goHome(){
@@ -2060,11 +2177,13 @@ function renderHomeScreen(){
     </div>
     ${renderViewOverlay()}
     ${renderDialog()}
+    ${renderStockFinderModal()}
     ${renderStatusToast()}
   </div>`;
 
   wireMenu(app);
   wireDialog(app);
+  wireStockFinderModal(app);
 
   const discoverSeeAllBtn = document.getElementById('discover-see-all-btn');
   if(discoverSeeAllBtn) discoverSeeAllBtn.addEventListener('click', async () => {
@@ -2257,11 +2376,13 @@ function renderExploreScreen(){
     </div>
     ${renderViewOverlay()}
     ${renderDialog()}
+    ${renderStockFinderModal()}
     ${renderStatusToast()}
   </div>`;
 
   wireMenu(app);
   wireDialog(app);
+  wireStockFinderModal(app);
   wireViewOverlay(app);
 
   app.querySelectorAll('.explore-filter-pill').forEach(btn=>btn.addEventListener('click', () => {
@@ -2332,11 +2453,13 @@ function renderRulesScreen(){
     </div>
     ${renderViewOverlay()}
     ${renderDialog()}
+    ${renderStockFinderModal()}
     ${renderStatusToast()}
   </div>`;
 
   wireMenu(app);
   wireDialog(app);
+  wireStockFinderModal(app);
   wireViewOverlay(app);
 
   app.querySelectorAll('.global-rule-delete-btn').forEach(btn=>btn.addEventListener('click', async () => {
@@ -2589,11 +2712,13 @@ function renderStockViewerScreen(){
     </div>
     ${renderViewOverlay()}
     ${renderDialog()}
+    ${renderStockFinderModal()}
     ${renderStatusToast()}
   </div>`;
 
   wireMenu(app);
   wireDialog(app);
+  wireStockFinderModal(app);
   wireViewOverlay(app);
 
   const input = document.getElementById('stockviewer-input');
@@ -2730,6 +2855,7 @@ function render(scenario){
   ${renderMapaCarteraModal()}
   ${renderViewOverlay()}
   ${renderDialog()}
+  ${renderStockFinderModal()}
   ${renderStatusToast()}`;
 
   app.innerHTML = html;
@@ -2876,6 +3002,7 @@ function render(scenario){
 
   wireMenu(app);
   wireDialog(app);
+  wireStockFinderModal(app);
 
   wireViewOverlay(app);
 }
