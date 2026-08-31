@@ -101,7 +101,7 @@
     .home-wrap { height: auto !important; overflow-y: visible !important; padding: 12px 16px 28px !important; }
     .pf-wrap { padding: 0 14px !important; }
     .stockviewer-metrics-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
-    .mapa-cartera-box { height: 420px !important; }
+    .mapa-cartera-box { max-height: 60vh !important; }
 
     .pf-header { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
     .pf-kpis { flex-wrap: wrap !important; row-gap: 10px !important; column-gap: 18px !important; }
@@ -1853,11 +1853,11 @@ function drawPositionCell(item){
 }
 
 function drawPortfolioTreemap(positions){
-  const w=960, h=560;
+  const w=960;
   const items = positions
     .map(p => ({ p, value: pendingInvestmentFor(p) }))
     .filter(it => it.value>0);
-  if(!items.length) return `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12.5px;color:var(--text-faint);">Sin posiciones para representar.</div>`;
+  if(!items.length) return { svg:`<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12.5px;color:var(--text-faint);">Sin posiciones para representar.</div>`, height:200 };
 
   const groupsMap = {};
   items.forEach(it => {
@@ -1870,7 +1870,27 @@ function drawPortfolioTreemap(positions){
   groups.forEach(g => g.items.sort((a,b)=>b.value-a.value));
 
   const headerH = 24;
-  const laidGroups = computeTreemap(groups, 0, 0, w, h);
+  // La altura del lienzo crece con el contenido (nº de sectores y de
+  // posiciones) en vez de forzar todo en una caja fija — con muchas
+  // posiciones eso comprimía las celdas hasta solaparse e ilegibles. El
+  // contenedor hace scroll si el resultado no cabe en pantalla.
+  const minRowH = 34;
+  const h = Math.max(420, groups.length*headerH*1.6 + items.length*minRowH);
+
+  // Los sectores se apilan en bandas horizontales a todo el ancho (altura
+  // proporcional a su peso), no en un empaquetado 2D — con muchos sectores
+  // el squarify normal los convertía en columnas verticales estrechísimas,
+  // sin sitio para mostrar ninguna etiqueta. Dentro de cada banda, las
+  // posiciones sí usan el empaquetado 2D, porque ahí cada banda ya tiene
+  // ancho de sobra.
+  const totalGroupValue = groups.reduce((a,g)=>a+g.value,0);
+  let cursorY = 0;
+  const laidGroups = groups.map(g => {
+    const bandH = totalGroupValue>0 ? (g.value/totalGroupValue)*h : h/groups.length;
+    const band = Object.assign({}, g, { _x:0, _y:cursorY, _w:w, _h:bandH });
+    cursorY += bandH;
+    return band;
+  });
   const cells = laidGroups.map(g => {
     const showHeader = g._h > 46 && g._w > 55;
     const innerY = g._y + (showHeader ? headerH : 0);
@@ -1886,7 +1906,8 @@ function drawPortfolioTreemap(positions){
       ${positionCells}
     </g>`;
   }).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:100%;display:block;">${cells}</svg>`;
+  const svg = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block;">${cells}</svg>`;
+  return { svg, height:h };
 }
 
 function renderMapaCarteraModal(){
@@ -1911,8 +1932,8 @@ function renderMapaCarteraModal(){
           <span>Punto = mercado (mismo color que la tabla)</span>
         </div>
       </div>
-      <div class="mapa-cartera-box" style="height:560px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;overflow:hidden;">
-        ${drawPortfolioTreemap(portfolio.positions)}
+      <div class="mapa-cartera-box" style="max-height:65vh;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;overflow-y:auto;overflow-x:hidden;">
+        ${drawPortfolioTreemap(portfolio.positions).svg}
       </div>
     </div>
   </div>`;
