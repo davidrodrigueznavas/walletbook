@@ -72,15 +72,7 @@
   table.postable tr.sector-head { cursor:default; }
   table.postable tr.sector-head:hover { background:none; }
   table.postable tr.sector-head td { padding:clamp(2px,0.4vh,4px) 6px; font-size:clamp(12px,1.6vh,14px); letter-spacing:.05em; color:var(--accent-text); text-transform:uppercase; font-weight:600; border-bottom:1px solid var(--border-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .pf-flow-header, .pf-flow-row { display:grid; grid-template-columns:14px 70px 1fr 64px 56px 52px; column-gap:8px; align-items:center; }
-  .pf-flow-header { font-size:11px; letter-spacing:.05em; color:var(--text-faint); text-transform:uppercase; font-weight:500; padding:2px 6px 8px; border-bottom:1px solid var(--border); flex-shrink:0; }
-  .pf-flow-header > span:not(:first-child) { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .pf-flow-list { column-count:3; column-gap:24px; }
-  .pf-flow-row { font-size:clamp(12px,1.6vh,14px); padding:4px 6px; border-bottom:1px solid var(--border-soft); cursor:pointer; break-inside:avoid; }
-  .pf-flow-row > span:not(:first-child) { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .pf-flow-row:hover { background:var(--row-hover); }
-  .pf-flow-row.sector-head { display:block; cursor:default; font-size:clamp(12px,1.6vh,14px); letter-spacing:.05em; color:var(--accent-text); text-transform:uppercase; font-weight:600; padding:8px 6px 3px; border-bottom:1px solid var(--border-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; break-after:avoid; }
-  .pf-flow-row.sector-head:hover { background:none; }
+  .pf-card:hover { filter:brightness(1.08); }
   .modal-backdrop { position:fixed; inset:0; background:var(--backdrop); display:flex; align-items:center; justify-content:center; z-index:50; padding:24px; box-sizing:border-box; }
   .modal-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; width:100%; max-width:1020px; max-height:90vh; overflow-y:auto; padding:24px 28px; box-sizing:border-box; }
   .field label { font-size:9.5px; color:var(--text-faint); display:block; margin-bottom:3px; }
@@ -113,9 +105,7 @@
     .pf-chart { height: 160px !important; flex: none !important; }
     .pf-donut { height: 190px !important; flex: none !important; }
 
-    .pf-table-chunks { overflow-y: visible !important; }
-    .pf-flow-list { column-count: 1 !important; }
-    .pf-flow-header, .pf-flow-row { grid-template-columns: 12px 60px 1fr 56px 50px 44px !important; font-size: 12.5px !important; }
+    .pf-cards { overflow-y: visible !important; }
     table.postable { font-size: 12.5px !important; }
 
     .modal-two-col { grid-template-columns: 1fr !important; gap: 16px !important; }
@@ -938,8 +928,6 @@ function sectorForCompany(sector, industry){
 }
 
 let diversificationFilter = null; // {type:'market'|'sector', key}
-let positionsPage = 0;
-const POSITIONS_PAGE_SIZE = 30;
 
 function sectorResponse(sens, factors){
   let score = 0;
@@ -1350,7 +1338,7 @@ function kpiBlock(label, value, color, title){
   </div>`;
 }
 
-function renderPositionRow(p, sc){
+function renderPositionCard(p, sc){
   const gp = gainPctOf(p);
   const inv = investedOf(p);
   const wk = num(p.week_change_pct);
@@ -1358,30 +1346,28 @@ function renderPositionRow(p, sc){
   const resp = sc ? sectorResponse(sens, sc.f) : null;
   const gainCell = resp
     ? `<span style="display:inline-block;min-width:18px;padding:1px 7px;border-radius:9px;background:${RESP[resp].color};color:#14151A;font-family:'Calibri','Carlito',sans-serif;font-weight:700;font-size:10.5px;" title="${RESP[resp].label}">${RESP[resp].sign}</span>`
-    : (gp===null ? `<span style="color:var(--text-faint);">—</span>` : `<span style="color:${gp>=0?'var(--green)':'var(--red)'};font-family:'Calibri','Carlito',sans-serif;">${gp>=0?'+':''}${fmtPct(gp)}</span>`);
-  const weekCell = wk===null ? `<span style="color:var(--text-faint);">—</span>` : `<span style="color:${wk>=0?'var(--green)':'var(--red)'};font-family:'Calibri','Carlito',sans-serif;">${wk>=0?'+':''}${wk}%</span>`;
-  const rowBg = resp==='pos' ? 'var(--green-soft)' : resp==='neg' ? 'var(--red-soft)' : '';
-  const rowBorderLeft = resp==='pos' ? '3px solid var(--green)' : resp==='neg' ? '3px solid var(--red)' : '3px solid transparent';
-  return `<div class="pf-flow-row" data-id="${p.id}" style="${rowBg?`background:${rowBg};`:''}border-left:${rowBorderLeft};">
-    <span style="width:6px;height:6px;border-radius:50%;background:${MARKET[p.market]?.color||'#6E7177'};display:inline-block;"></span>
-    <span style="font-family:'Calibri','Carlito',sans-serif;color:var(--text-dim);">${esc(p.ticker)}</span>
-    <span>${esc(p.name)}</span>
-    <span style="text-align:right;font-family:'Calibri','Carlito',sans-serif;color:${inv>0?'var(--text)':'var(--text-faint)'};">${inv>0?fmtEUR(inv):'—'}</span>
-    <span style="text-align:right;">${weekCell}</span>
-    <span style="text-align:${resp?'center':'right'};">${gainCell}</span>
+    : (gp===null ? `<span style="color:var(--text-faint);">—</span>` : `<span style="color:${gp>=0?'var(--green)':'var(--red)'};font-family:'Calibri','Carlito',sans-serif;font-weight:700;">${gp>=0?'+':''}${fmtPct(gp)}</span>`);
+  const weekLabel = wk===null ? `<span style="color:var(--text-faint);">7d —</span>` : `<span style="color:${wk>=0?'var(--green)':'var(--red)'};">7d ${wk>=0?'+':''}${wk}%</span>`;
+  const cardBg = resp==='pos' ? 'var(--green-soft)' : resp==='neg' ? 'var(--red-soft)' : 'var(--panel-2)';
+  const cardBorder = resp==='pos' ? 'var(--green-border)' : resp==='neg' ? 'var(--red-border)' : 'var(--border)';
+  return `<div class="pf-card" data-id="${p.id}" style="background:${cardBg};border:1px solid ${cardBorder};border-radius:10px;padding:9px 11px;cursor:pointer;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+      <div style="display:flex;align-items:center;gap:6px;min-width:0;">
+        <span style="width:6px;height:6px;border-radius:50%;background:${MARKET[p.market]?.color||'#6E7177'};display:inline-block;flex-shrink:0;"></span>
+        <span style="font-family:'Calibri','Carlito',sans-serif;font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.ticker)||esc(p.name)}</span>
+      </div>
+      ${gainCell}
+    </div>
+    <div style="font-size:11.5px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:2px 0 6px;">${esc(p.name)}</div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-faint);font-family:'Calibri','Carlito',sans-serif;">
+      <span>${inv>0?fmtEUR(inv):'—'}</span>
+      ${weekLabel}
+    </div>
   </div>`;
 }
 
-function renderSectorFlowHead(sector){
-  return `<div class="pf-flow-row sector-head">${esc(sector)}</div>`;
-}
-
-function renderPositionsPager(totalPages){
-  const items = [];
-  for(let i=0;i<totalPages;i++) items.push(i);
-  return `<div class="pf-pager" style="display:flex;justify-content:center;align-items:center;gap:6px;padding-top:12px;flex-shrink:0;flex-wrap:wrap;">
-    ${items.map(i=>`<button class="pf-pager-btn" data-page="${i}" style="cursor:pointer;min-width:30px;padding:6px 10px;border-radius:8px;border:1px solid ${i===positionsPage?'var(--accent-border)':'var(--border)'};background:${i===positionsPage?'var(--accent-soft)':'var(--panel-2)'};color:${i===positionsPage?'var(--accent-text)':'var(--text-dim)'};font-size:11.5px;font-weight:600;">${i+1}</button>`).join('')}
-  </div>`;
+function renderSectorCardHead(sector){
+  return `<div style="grid-column:1 / -1;font-size:11px;letter-spacing:.05em;color:var(--accent-text);text-transform:uppercase;font-weight:700;padding:10px 2px 2px;">${esc(sector)}</div>`;
 }
 
 function renderPositionsTable(scenario){
@@ -1390,31 +1376,15 @@ function renderPositionsTable(scenario){
     positions = positions.filter(p => diversificationFilter.type==='market' ? p.market===diversificationFilter.key : p.sector===diversificationFilter.key);
   }
   const sorted = [...positions].sort((a,b)=> a.sector.localeCompare(b.sector,'es') || a.name.localeCompare(b.name,'es'));
-  const totalPages = Math.max(1, Math.ceil(sorted.length/POSITIONS_PAGE_SIZE));
-  if(positionsPage >= totalPages) positionsPage = totalPages-1;
-  if(positionsPage < 0) positionsPage = 0;
-  const pageRows = sorted.slice(positionsPage*POSITIONS_PAGE_SIZE, (positionsPage+1)*POSITIONS_PAGE_SIZE);
-  // Una sola lista que fluye en 3 columnas tipo periódico (CSS column-count),
-  // en vez de 3 tablas independientes repartidas a mano. El navegador decide
-  // dónde cortar cada columna; como cada sector solo aparece una vez en el
-  // HTML (no una tabla por columna), no hay forma de que se duplique su
-  // cabecera, y el propio algoritmo de "balance" del navegador reparte el
-  // contenido de forma pareja sin necesitar lógica propia para igualar alturas.
   const sc = SCENARIOS.find(s=>s.key===scenario);
   let lastSector = null;
-  const rowsHtml = pageRows.map(p => {
+  const cardsHtml = sorted.map(p => {
     let head = '';
-    if(p.sector !== lastSector){ lastSector = p.sector; head = renderSectorFlowHead(p.sector); }
-    return head + renderPositionRow(p, sc);
+    if(p.sector !== lastSector){ lastSector = p.sector; head = renderSectorCardHead(p.sector); }
+    return head + renderPositionCard(p, sc);
   }).join('');
-  return `<div style="flex:1;min-height:0;display:flex;flex-direction:column;">
-    <div class="pf-flow-header">
-      <span></span><span>Ticker</span><span>Nombre</span><span style="text-align:right;">Invertido</span><span style="text-align:right;">7 días</span><span style="text-align:${scenario?'center':'right'};">${scenario?'Impacto':'%'}</span>
-    </div>
-    <div class="pf-table-chunks pf-flow-list" style="flex:1;min-height:0;overflow-y:auto;">
-      ${rowsHtml}
-    </div>
-    ${totalPages>1 ? renderPositionsPager(totalPages) : ''}
+  return `<div class="pf-cards" style="flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start;overflow-y:auto;">
+    ${cardsHtml}
   </div>`;
 }
 
@@ -2104,7 +2074,6 @@ function renderHomeScreen(){
     currentScreen = 'portfolio';
     selectedId = null;
     diversificationFilter = null;
-    positionsPage = 0;
     document.getElementById('app').innerHTML = 'Cargando…';
     await loadAll();
     render(null);
@@ -2821,7 +2790,7 @@ function render(scenario){
 
   app.innerHTML = html;
 
-  app.querySelectorAll('.pf-flow-row[data-id]').forEach(t=>t.addEventListener('click',()=>{
+  app.querySelectorAll('.pf-card[data-id]').forEach(t=>t.addEventListener('click',()=>{
     selectedId = t.getAttribute('data-id');
     modalRange = 'mes';
     modalChartState = {loading:true, error:null, points:null};
@@ -2851,17 +2820,11 @@ function render(scenario){
     } else {
       diversificationFilter = {type, key};
     }
-    positionsPage = 0;
     render(currentScenario);
   }));
 
   const clearFilterBtn = document.getElementById('clear-filter-btn');
-  if(clearFilterBtn) clearFilterBtn.addEventListener('click', () => { diversificationFilter = null; positionsPage = 0; render(currentScenario); });
-
-  app.querySelectorAll('.pf-pager-btn').forEach(btn => btn.addEventListener('click', () => {
-    positionsPage = Number(btn.getAttribute('data-page'));
-    render(currentScenario);
-  }));
+  if(clearFilterBtn) clearFilterBtn.addEventListener('click', () => { diversificationFilter = null; render(currentScenario); });
 
   app.querySelectorAll('.range-btn').forEach(b=>b.addEventListener('click',()=>{
     modalRange = b.getAttribute('data-range');
