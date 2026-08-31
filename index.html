@@ -512,6 +512,40 @@ async function loadExploreDetail(portfolioId){
   exploreDetailPositions = data || [];
   exploreLoading = false;
 }
+function renderDiscoverPreview(){
+  if(exploreList === null && !exploreLoading){
+    loadExploreList().then(() => render(null));
+  }
+  const preview = (exploreList || []).slice(0, 6);
+  let body;
+  if(exploreLoading && exploreList === null){
+    body = `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Cargando carteras compartidas…</div>`;
+  } else if(!preview.length){
+    body = `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Todavía no hay carteras compartidas por la comunidad. En cuanto alguien active "Compartir con otros" en una tarjeta, aparecerá aquí.</div>`;
+  } else {
+    body = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">
+      ${preview.map(p=>`<button class="discover-preview-card" data-id="${p.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;color:var(--text);font-family:inherit;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div style="width:32px;height:32px;border-radius:10px;background:var(--accent-soft);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:900;font-size:14px;color:var(--accent-text);flex-shrink:0;">${(p.name||'?').trim().charAt(0).toUpperCase()}</div>
+          ${gainChip(p.overall_gain_pct, 12)}
+        </div>
+        <div style="font-size:13px;font-weight:700;">${p.name}</div>
+        <div style="font-size:10px;color:var(--text-faint);padding-top:8px;border-top:1px solid var(--border-soft);">${p.category && PORTFOLIO_CATEGORY[p.category] ? PORTFOLIO_CATEGORY[p.category].label+' · ' : ''}${p.position_count===1?'1 posición':p.position_count+' posiciones'}</div>
+      </button>`).join('')}
+    </div>`;
+  }
+  return `<div style="margin-top:34px;">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Descubre</h2>
+        <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Otras carteras publicadas por la comunidad</div>
+      </div>
+      <button id="discover-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Explorar todas →</button>
+    </div>
+    ${body}
+  </div>`;
+}
+
 const COUNTRIES = ['España','Andorra','Portugal','Francia','Alemania','Italia','Reino Unido','Irlanda','Países Bajos','Bélgica','Suiza','Austria','Suecia','Noruega','Dinamarca','Finlandia','Polonia','República Checa','Grecia','Estados Unidos','Canadá','México','Argentina','Chile','Colombia','Perú','Uruguay','Paraguay','Bolivia','Venezuela','Ecuador','Costa Rica','Panamá','República Dominicana','Cuba','Brasil','Japón','China','Corea del Sur','Taiwán','India','Australia','Nueva Zelanda','Marruecos','Sudáfrica','Israel','Emiratos Árabes Unidos'];
 let currentScreen = null; // null (cargando) | 'home' | 'portfolio'
 let openCardMenu = null; // id de la cartera cuyo menú de tres puntos está abierto
@@ -1738,6 +1772,7 @@ function renderHomeScreen(){
           <div style="font-size:13px;color:var(--accent-text);font-weight:600;">${portfolios.length===0 ? 'Crear mi primera cartera' : 'Crear cartera'}</div>
         </div>
       </div>
+      ${renderDiscoverPreview()}
     </div>
     ${renderViewOverlay()}
     ${renderDialog()}
@@ -1746,6 +1781,22 @@ function renderHomeScreen(){
 
   wireMenu(app);
   wireDialog(app);
+
+  const discoverSeeAllBtn = document.getElementById('discover-see-all-btn');
+  if(discoverSeeAllBtn) discoverSeeAllBtn.addEventListener('click', async () => {
+    currentScreen = 'explorar';
+    exploreDetailId = null; exploreDetailPositions = null; exploreCategoryFilter = null;
+    render(null);
+  });
+  app.querySelectorAll('.discover-preview-card').forEach(card => card.addEventListener('click', async () => {
+    const id = card.getAttribute('data-id');
+    currentScreen = 'explorar';
+    exploreCategoryFilter = null;
+    exploreLoading = true;
+    render(null);
+    await loadExploreDetail(id);
+    render(null);
+  }));
 
   app.querySelectorAll('.home-portfolio-card').forEach(card=>card.addEventListener('click', async (e) => {
     if(e.target.closest('.home-portfolio-menu-btn, .home-portfolio-menu, .home-portfolio-share-btn, .home-portfolio-category-select')) return;
