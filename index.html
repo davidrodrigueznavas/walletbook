@@ -1373,7 +1373,7 @@ function renderPositionsTable(scenario){
   const sorted = [...positions].sort((a,b)=> a.sector.localeCompare(b.sector,'es') || a.name.localeCompare(b.name,'es'));
   const sc = SCENARIOS.find(s=>s.key===scenario);
   const cardsHtml = sorted.map(p => renderPositionCard(p, sc)).join('');
-  return `<div class="pf-cards" style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,1fr);gap:5px;align-content:start;overflow-y:auto;">
+  return `<div class="pf-cards" style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(5,1fr);gap:5px;align-content:start;overflow-y:auto;">
     ${cardsHtml}
   </div>`;
 }
