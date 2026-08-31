@@ -1312,7 +1312,7 @@ function renderTableChunk(rows, scenario){
         const resp = sc ? sectorResponse(sens, sc.f) : null;
         const gainCell = resp
           ? `<span style="display:inline-block;min-width:18px;padding:1px 7px;border-radius:9px;background:${RESP[resp].color};color:#14151A;font-family:'Calibri','Carlito',sans-serif;font-weight:700;font-size:10.5px;" title="${RESP[resp].label}">${RESP[resp].sign}</span>`
-          : (gp===null ? `<span style="color:var(--text-faint);">—</span>` : `<span style="color:${gp>=0?'var(--green)':'var(--red)'};font-family:'Calibri','Carlito',sans-serif;">${gp>=0?'+':''}${Math.round(gp)}%</span>`);
+          : (gp===null ? `<span style="color:var(--text-faint);">—</span>` : `<span style="color:${gp>=0?'var(--green)':'var(--red)'};font-family:'Calibri','Carlito',sans-serif;">${gp>=0?'+':''}${fmtPct(gp)}</span>`);
         let sectorHead = '';
         if(p.sector !== lastSector){
           lastSector = p.sector;
