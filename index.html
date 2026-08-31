@@ -103,7 +103,7 @@
     .stockviewer-metrics-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
     .mapa-cartera-box { max-height: 60vh !important; }
 
-    .pf-header { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
+    .pf-header { flex-direction: column !important; align-items: stretch !important; gap: 16px !important; }
     .pf-kpis { flex-wrap: wrap !important; row-gap: 10px !important; column-gap: 18px !important; }
     .pf-controls { align-items: stretch !important; }
     .pf-controls > div { flex-wrap: wrap !important; }
@@ -649,7 +649,6 @@ function renderMarketIndicators(){
 let stockViewerQuery = '', stockViewerResults = [], stockViewerSearchToken = 0;
 let stockViewerTicker = null, stockViewerQuoteLoading = false, stockViewerQuoteError = null, stockViewerQuote = null;
 let stockViewerDividends = [], stockViewerEstimates = null;
-let stockViewerNews = [], stockViewerNewsLoading = false, stockViewerNewsError = null;
 let stockViewerChartLoading = false, stockViewerChartError = null, stockViewerChartPoints = null;
 let stockViewerWeeklyPoints = null;
 let stockViewerMASelection = { w10:false, w50:true, w200:true };
@@ -718,24 +717,12 @@ async function loadStockViewerChart(ticker){
   stockViewerChartLoading = false;
 }
 
-async function loadStockViewerNews(ticker){
-  stockViewerNewsLoading = true; stockViewerNewsError = null; stockViewerNews = [];
-  try{
-    const res = await callEdgeFunction('ticker-news', {q: ticker});
-    if(res.ok) stockViewerNews = res.news || [];
-    else stockViewerNewsError = res.error || 'Error al consultar noticias.';
-  } catch(e){
-    stockViewerNewsError = 'Error de conexión.';
-  }
-  stockViewerNewsLoading = false;
-}
-
 async function selectStockViewerTicker(symbol){
   stockViewerTicker = symbol;
   stockViewerResults = [];
   stockViewerQuery = symbol;
   render(null);
-  await Promise.all([loadStockViewerQuote(symbol), loadStockViewerChart(symbol), loadStockViewerNews(symbol)]);
+  await Promise.all([loadStockViewerQuote(symbol), loadStockViewerChart(symbol)]);
   render(null);
 }
 
@@ -747,6 +734,39 @@ function fmtNewsDate(iso){
   if(diffH < 24) return 'hace ' + Math.round(diffH) + ' h';
   if(diffH < 24*7) return 'hace ' + Math.round(diffH/24) + ' d';
   return d.toLocaleDateString('es-ES', {day:'numeric', month:'short'});
+}
+
+async function loadPortfolioNews(){
+  const token = ++portfolioNewsToken;
+  portfolioNewsLoading = true; portfolioNewsError = null; portfolioNews = null;
+  const withTicker = portfolio.positions.filter(p => p.ticker);
+  if(!withTicker.length){
+    portfolioNews = [];
+    portfolioNewsLoading = false;
+    return;
+  }
+  try{
+    const results = await Promise.all(withTicker.map(p =>
+      callEdgeFunction('ticker-news', {q: p.ticker}).catch(() => null)
+    ));
+    if(token !== portfolioNewsToken) return;
+    const seen = new Set();
+    const merged = [];
+    results.forEach((res, i) => {
+      if(!res || !res.ok) return;
+      (res.news || []).forEach(n => {
+        if(!n.link || seen.has(n.link)) return;
+        seen.add(n.link);
+        merged.push({ ...n, ticker: withTicker[i].ticker, positionName: withTicker[i].name });
+      });
+    });
+    merged.sort((a,b) => new Date(b.publishedAt||0) - new Date(a.publishedAt||0));
+    portfolioNews = merged.slice(0, 40);
+  } catch(e){
+    if(token !== portfolioNewsToken) return;
+    portfolioNewsError = 'Error de conexión.';
+  }
+  if(token === portfolioNewsToken) portfolioNewsLoading = false;
 }
 
 async function loadPositionRules(positionId){
@@ -850,6 +870,7 @@ let modalCompanyState = {loading:false, error:null, summary:null}, modalCompanyT
 let addPositionOpen = false, addPositionError = null, addPositionSelected = null, addPositionSearchToken = 0;
 let addPositionCompanyInfo = null;
 let mapaCarteraOpen = false;
+let portfolioNewsOpen = false, portfolioNewsLoading = false, portfolioNewsError = null, portfolioNews = null, portfolioNewsToken = 0;
 let stockFinderOpen = false, stockFinderSearchToken = 0, stockFinderOutsideCloseHandler = null;
 let visorAddPickerOpen = false, visorAddPickerOutsideCloseHandler = null;
 
@@ -1964,6 +1985,42 @@ function renderMapaCarteraModal(){
   </div>`;
 }
 
+function renderPortfolioNewsModal(){
+  if(!portfolioNewsOpen) return '';
+  let body;
+  if(portfolioNewsLoading){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:24px 0;text-align:center;">Cargando noticias de ${portfolio.positions.filter(p=>p.ticker).length} posiciones…</div>`;
+  } else if(portfolioNewsError){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:24px 0;text-align:center;">${portfolioNewsError}</div>`;
+  } else if(!portfolioNews || !portfolioNews.length){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:24px 0;text-align:center;">Sin noticias recientes para las posiciones de esta cartera.</div>`;
+  } else {
+    body = `<div style="display:flex;flex-direction:column;gap:2px;">
+      ${portfolioNews.map(n => `<a href="${n.link}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:12px;padding:9px 4px;border-radius:8px;text-decoration:none;color:inherit;border-bottom:1px solid var(--border-soft);">
+        ${n.thumbnail ? `<img src="${n.thumbnail}" alt="" style="width:52px;height:52px;object-fit:cover;border-radius:6px;flex-shrink:0;"/>` : `<div style="width:52px;height:52px;border-radius:6px;flex-shrink:0;background:var(--panel-2);"></div>`}
+        <div style="min-width:0;">
+          <div style="font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${n.title}</div>
+          <div style="font-size:10.5px;color:var(--text-faint);margin-top:3px;"><span style="color:var(--accent-text);font-weight:600;">${n.ticker}</span> · ${n.publisher||''}${n.publisher&&n.publishedAt?' · ':''}${fmtNewsDate(n.publishedAt)}</div>
+        </div>
+      </a>`).join('')}
+    </div>`;
+  }
+  return `<div class="modal-backdrop" id="portfolio-news-backdrop">
+    <div class="modal-card" style="max-width:640px;padding:22px 26px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:16px;">
+        <div>
+          <h3 style="font-family:'Calibri','Carlito',sans-serif;font-size:16px;font-weight:600;margin:0;">Noticias de mi cartera</h3>
+          <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Últimas noticias de las posiciones de ${activePortfolioName}, ordenadas por fecha.</div>
+        </div>
+        <button id="portfolio-news-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;flex-shrink:0;">×</button>
+      </div>
+      <div style="max-height:65vh;overflow-y:auto;">
+        ${body}
+      </div>
+    </div>
+  </div>`;
+}
+
 function menuBlock(){
   return `<div style="position:relative;">
     <button id="menu-btn" class="theme-toggle" title="Menú">☰</button>
@@ -2671,22 +2728,6 @@ function renderStockViewerScreen(){
         <div style="height:260px;">${chartBody}</div>
       </div>
 
-      <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-top:20px;">
-        <div style="font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;">Noticias recientes</div>
-        ${stockViewerNewsLoading ? `<div style="font-size:12px;color:var(--text-faint);padding:6px 0;">Cargando noticias…</div>`
-          : stockViewerNewsError ? `<div style="font-size:12px;color:var(--text-faint);padding:6px 0;">${stockViewerNewsError}</div>`
-          : !stockViewerNews.length ? `<div style="font-size:12px;color:var(--text-faint);padding:6px 0;">Sin noticias recientes para ${stockViewerTicker}.</div>`
-          : `<div style="display:flex;flex-direction:column;gap:2px;">
-              ${stockViewerNews.map(n => `<a href="${n.link}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:12px;padding:9px 4px;border-radius:8px;text-decoration:none;color:inherit;border-bottom:1px solid var(--border-soft);">
-                ${n.thumbnail ? `<img src="${n.thumbnail}" alt="" style="width:52px;height:52px;object-fit:cover;border-radius:6px;flex-shrink:0;"/>` : `<div style="width:52px;height:52px;border-radius:6px;flex-shrink:0;background:var(--panel-2);"></div>`}
-                <div style="min-width:0;">
-                  <div style="font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${n.title}</div>
-                  <div style="font-size:10.5px;color:var(--text-faint);margin-top:3px;">${n.publisher||''}${n.publisher&&n.publishedAt?' · ':''}${fmtNewsDate(n.publishedAt)}</div>
-                </div>
-              </a>`).join('')}
-            </div>`}
-      </div>
-
       ${stockViewerEstimates && (stockViewerEstimates.fiscalYears.length || stockViewerEstimates.fiscalQuarters.length) ? `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-top:20px;">
         <div style="font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Consenso de estimaciones de analistas para próximos periodos — no es una predicción propia, son las expectativas ya publicadas por analistas que cubren la acción.">Crecimiento futuro (consenso de analistas)</div>
         ${stockViewerEstimates.epsGrowthNextYear!=null ? `<div style="font-size:12.5px;margin-bottom:12px;">Crecimiento de BPA estimado próximo año fiscal: <b style="color:${stockViewerEstimates.epsGrowthNextYear>=0?'var(--green)':'var(--red)'};">${avPct(stockViewerEstimates.epsGrowthNextYear)}</b></div>` : ''}
@@ -2875,7 +2916,7 @@ function render(scenario){
 
   html += topNavBar();
 
-  html += `<div class="pf-header" style="display:flex;flex-direction:column;gap:10px;flex-shrink:0;margin-bottom:12px;">
+  html += `<div class="pf-header" style="display:flex;flex-direction:column;gap:22px;flex-shrink:0;margin-bottom:16px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
       <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:20px;margin:0;white-space:nowrap;flex-shrink:0;">${activePortfolioName}</h1>
       <div class="pf-controls" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
@@ -2884,6 +2925,7 @@ function render(scenario){
           ${SCENARIOS.map(sc=>`<option value="${sc.key}" ${scenario===sc.key?'selected':''}>${sc.label}</option>`).join('')}
         </select>
         <button id="mapa-cartera-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);white-space:nowrap;">Mapa de cartera</button>
+        <button id="portfolio-news-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);white-space:nowrap;">Noticias de mi cartera</button>
         <button id="addpos-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);white-space:nowrap;">+ Añadir posición</button>
       </div>
     </div>
@@ -2927,6 +2969,7 @@ function render(scenario){
   ${renderModal()}
   ${renderAddPositionModal()}
   ${renderMapaCarteraModal()}
+  ${renderPortfolioNewsModal()}
   ${renderViewOverlay()}
   ${renderDialog()}
   ${renderStatusToast()}`;
@@ -3055,6 +3098,18 @@ function render(scenario){
   if(mapaClose) mapaClose.addEventListener('click', () => { mapaCarteraOpen = false; render(currentScenario); });
   const mapaBackdrop = document.getElementById('mapa-cartera-backdrop');
   if(mapaBackdrop) mapaBackdrop.addEventListener('click', (e) => { if(e.target===mapaBackdrop){ mapaCarteraOpen = false; render(currentScenario); } });
+
+  const portfolioNewsBtn = document.getElementById('portfolio-news-btn');
+  if(portfolioNewsBtn) portfolioNewsBtn.addEventListener('click', async () => {
+    portfolioNewsOpen = true;
+    render(currentScenario);
+    await loadPortfolioNews();
+    render(currentScenario);
+  });
+  const portfolioNewsClose = document.getElementById('portfolio-news-close');
+  if(portfolioNewsClose) portfolioNewsClose.addEventListener('click', () => { portfolioNewsOpen = false; render(currentScenario); });
+  const portfolioNewsBackdrop = document.getElementById('portfolio-news-backdrop');
+  if(portfolioNewsBackdrop) portfolioNewsBackdrop.addEventListener('click', (e) => { if(e.target===portfolioNewsBackdrop){ portfolioNewsOpen = false; render(currentScenario); } });
   app.querySelectorAll('.treemap-cell').forEach(cell => cell.addEventListener('click', () => {
     const id = cell.getAttribute('data-id');
     const pos = portfolio.positions.find(p=>p.id===id);
