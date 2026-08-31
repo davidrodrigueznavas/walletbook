@@ -1344,7 +1344,7 @@ function renderTableChunk(rows, scenario, continueSector){
   let lastSector = continueSector || null;
   return `<table class="postable">
     <colgroup><col style="width:12px;"><col style="width:84px;"><col><col style="width:62px;"><col style="width:54px;"></colgroup>
-    <thead><tr><th></th><th>Ticker</th><th>Nombre</th><th style="text-align:right;">Invertido</th><th style="text-align:${scenario?'center':'right'};">${scenario?'Impacto':'Gan. %'}</th></tr></thead>
+    <thead><tr><th></th><th>Ticker</th><th>Nombre</th><th style="text-align:right;">Invertido</th><th style="text-align:${scenario?'center':'right'};">${scenario?'Impacto':'%'}</th></tr></thead>
     <tbody>
       ${rows.map(p=>{
         const gp = gainPctOf(p);
