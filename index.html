@@ -1358,16 +1358,13 @@ function renderPositionCard(p, sc){
       </div>
       ${gainCell}
     </div>
-    <div style="font-size:11.5px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:2px 0 6px;">${esc(p.name)}</div>
+    <div style="font-size:11.5px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;">${esc(p.name)}</div>
+    <div style="font-size:9.5px;letter-spacing:.03em;color:var(--accent-text);text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:2px 0 6px;">${esc(p.sector)}</div>
     <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-faint);font-family:'Calibri','Carlito',sans-serif;">
       <span>${inv>0?fmtEUR(inv):'—'}</span>
       ${weekLabel}
     </div>
   </div>`;
-}
-
-function renderSectorCardHead(sector){
-  return `<div style="grid-column:1 / -1;font-size:11px;letter-spacing:.05em;color:var(--accent-text);text-transform:uppercase;font-weight:700;padding:10px 2px 2px;">${esc(sector)}</div>`;
 }
 
 function renderPositionsTable(scenario){
@@ -1377,12 +1374,7 @@ function renderPositionsTable(scenario){
   }
   const sorted = [...positions].sort((a,b)=> a.sector.localeCompare(b.sector,'es') || a.name.localeCompare(b.name,'es'));
   const sc = SCENARIOS.find(s=>s.key===scenario);
-  let lastSector = null;
-  const cardsHtml = sorted.map(p => {
-    let head = '';
-    if(p.sector !== lastSector){ lastSector = p.sector; head = renderSectorCardHead(p.sector); }
-    return head + renderPositionCard(p, sc);
-  }).join('');
+  const cardsHtml = sorted.map(p => renderPositionCard(p, sc)).join('');
   return `<div class="pf-cards" style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;align-content:start;overflow-y:auto;">
     ${cardsHtml}
   </div>`;
@@ -3075,4 +3067,3 @@ supabase.auth.onAuthStateChange(async (event, s) => {
 </script>
 </body>
 </html>
-
