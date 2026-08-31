@@ -1391,14 +1391,22 @@ function renderPositionsTable(scenario){
   if(positionsPage >= totalPages) positionsPage = totalPages-1;
   if(positionsPage < 0) positionsPage = 0;
   const pageRows = sorted.slice(positionsPage*POSITIONS_PAGE_SIZE, (positionsPage+1)*POSITIONS_PAGE_SIZE);
-  // Siempre 3 columnas de ancho fijo (flex:1 en cada tabla), tenga la página
-  // o el filtro 1 fila o 30 -- así el formato (número de columnas y ancho)
-  // es siempre el mismo, cambia solo cuántas filas hay dentro.
-  const chunkSize = Math.max(1, Math.ceil(pageRows.length/3));
-  const chunks = [pageRows.slice(0,chunkSize), pageRows.slice(chunkSize,chunkSize*2), pageRows.slice(chunkSize*2)];
+  // Altura de fila estática: cada columna lleva siempre como máximo
+  // ROWS_PER_COLUMN filas (10, el mismo reparto que una página llena de 30
+  // en 3 columnas), en vez de repartir el total entre 3 -- así una columna
+  // con pocas filas (página 2, o al filtrar por sector/mercado) tiene
+  // exactamente la misma altura de fila y el mismo ancho que una columna de
+  // la página 1, solo que hacen falta menos columnas para caber. El número
+  // de columnas es lo único que cambia (1, 2 o 3), nunca el tamaño de cada una.
+  const ROWS_PER_COLUMN = 10;
+  const numCols = Math.max(1, Math.min(3, Math.ceil(pageRows.length / ROWS_PER_COLUMN)));
+  const chunks = [];
+  for(let i=0; i<numCols; i++){
+    chunks.push(pageRows.slice(i*ROWS_PER_COLUMN, (i+1)*ROWS_PER_COLUMN));
+  }
   return `<div style="flex:1;min-height:0;display:flex;flex-direction:column;">
     <div class="pf-table-chunks" style="flex:1;min-height:0;display:flex;gap:18px;overflow-y:auto;">
-      ${chunks.map(chunk=>`<div style="flex:1;min-width:0;">${renderTableChunk(chunk, scenario)}</div>`).join('')}
+      ${chunks.map(chunk=>`<div style="flex:0 0 calc((100% - 36px)/3);min-width:0;">${renderTableChunk(chunk, scenario)}</div>`).join('')}
     </div>
     ${totalPages>1 ? renderPositionsPager(totalPages) : ''}
   </div>`;
