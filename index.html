@@ -383,9 +383,83 @@ function renderCrashIndexCard(){
   </div>`;
 }
 
+let liquidityIndicator = null, liquidityIndicatorLoading = false, liquidityIndicatorError = null;
+
+async function loadLiquidityIndicator(){
+  if(liquidityIndicatorLoading) return;
+  liquidityIndicatorLoading = true; liquidityIndicatorError = null;
+  try{
+    const [hygRes, iefRes] = await Promise.all([
+      callEdgeFunction('ticker-history', {ticker:'HYG', range:'tecnico'}),
+      callEdgeFunction('ticker-history', {ticker:'IEF', range:'tecnico'}),
+    ]);
+    if(!hygRes.ok || !hygRes.points || hygRes.points.length<51) throw new Error((hygRes&&hygRes.error) || 'Sin datos de HYG.');
+    if(!iefRes.ok || !iefRes.points || iefRes.points.length<51) throw new Error((iefRes&&iefRes.error) || 'Sin datos de IEF.');
+
+    // HYG (bonos high-yield) / IEF (Tesoro EEUU medio plazo): proxy de mercado
+    // de apetito por el riesgo / liquidez — cuando el ratio sube, el mercado
+    // absorbe deuda de más riesgo con facilidad (liquidez amplia); cuando cae
+    // por debajo de su propia media, se suele leer como estrés de crédito.
+    const n = Math.min(hygRes.points.length, iefRes.points.length);
+    const hygCloses = hygRes.points.slice(hygRes.points.length-n).map(p=>p.c);
+    const iefCloses = iefRes.points.slice(iefRes.points.length-n).map(p=>p.c);
+    const ratio = hygCloses.map((v,i) => v/iefCloses[i]);
+    const sma50Arr = computeSMA(ratio, 50);
+    const lastSma = sma50Arr[sma50Arr.length-1];
+    const lastRatio = ratio[ratio.length-1];
+    const pctVsSma = lastSma ? ((lastRatio-lastSma)/lastSma)*100 : null;
+    const score = pctVsSma==null ? null : Math.max(0, Math.min(100, 50 - pctVsSma*12));
+
+    liquidityIndicator = { ratio:lastRatio, sma50:lastSma, pctVsSma, score };
+  } catch(e){
+    liquidityIndicatorError = (e && e.message) || 'Error al consultar el indicador de liquidez.';
+  }
+  liquidityIndicatorLoading = false;
+  render(null);
+}
+
+function renderLiquidityCard(){
+  if(!liquidityIndicator && !liquidityIndicatorLoading && !liquidityIndicatorError){
+    loadLiquidityIndicator();
+  }
+  let body;
+  if(liquidityIndicatorLoading && !liquidityIndicator){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">Consultando…</div>`;
+  } else if(liquidityIndicatorError && !liquidityIndicator){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">${liquidityIndicatorError}</div>`;
+  } else if(liquidityIndicator){
+    const l = liquidityIndicator;
+    // Aquí un score alto significa MÁS liquidez (al contrario que el índice
+    // de crash, donde alto = más riesgo) — se colorea con la misma paleta
+    // pero invirtiendo qué extremo es "bueno".
+    const liqBand = l.score>=65 ? {label:'Liquidez amplia', color:'#4ADE80'} : l.score>=35 ? {label:'Liquidez normal', color:'#FBBF24'} : {label:'Estrés de crédito/liquidez', color:'#DC2626'};
+    body = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+        <div style="width:56px;height:56px;border-radius:50%;border:4px solid ${liqBand.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:${liqBand.color};flex-shrink:0;">${Math.round(l.score)}</div>
+        <div style="font-size:14px;font-weight:700;color:${liqBand.color};">${liqBand.label}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Ratio HYG (bonos high-yield) / IEF (Tesoro EEUU medio plazo) frente a su propia media de 50 días. Por encima de su media, el mercado absorbe bien el riesgo (liquidez amplia); por debajo, estrés de crédito.">HYG/IEF vs media 50d</span>
+          <span style="font-weight:700;color:${l.pctVsSma>=0?'var(--green)':'var(--red)'};">${l.pctVsSma>=0?'+':''}${l.pctVsSma.toFixed(1)}%</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);">Ratio actual</span>
+          <span style="font-weight:700;">${l.ratio.toFixed(3)}</span>
+        </div>
+      </div>`;
+  } else {
+    body = '';
+  }
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Proxy de liquidez de mercado usando el ratio entre bonos high-yield (HYG) y Tesoro EEUU (IEF), vía Yahoo Finance. No es la liquidez real de la Fed, es una aproximación de mercado.">Liquidez de mercado</div>
+    ${body}
+  </div>`;
+}
+
 function renderMarketIndicators(){
   return `<div class="indicator-cards-row" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,300px));gap:14px;margin-bottom:20px;">
     ${renderCrashIndexCard()}
+    ${renderLiquidityCard()}
   </div>`;
 }
 
