@@ -1999,8 +1999,9 @@ function renderPortfolioNewsModal(){
       ${portfolioNews.map(n => `<a href="${n.link}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:12px;padding:9px 4px;border-radius:8px;text-decoration:none;color:inherit;border-bottom:1px solid var(--border-soft);">
         ${n.thumbnail ? `<img src="${n.thumbnail}" alt="" style="width:52px;height:52px;object-fit:cover;border-radius:6px;flex-shrink:0;"/>` : `<div style="width:52px;height:52px;border-radius:6px;flex-shrink:0;background:var(--panel-2);"></div>`}
         <div style="min-width:0;">
+          <div style="font-size:10px;color:var(--accent-text);font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${n.positionName} · ${n.ticker}</div>
           <div style="font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${n.title}</div>
-          <div style="font-size:10.5px;color:var(--text-faint);margin-top:3px;"><span style="color:var(--accent-text);font-weight:600;">${n.ticker}</span> · ${n.publisher||''}${n.publisher&&n.publishedAt?' · ':''}${fmtNewsDate(n.publishedAt)}</div>
+          <div style="font-size:10.5px;color:var(--text-faint);margin-top:3px;">${n.publisher||''}${n.publisher&&n.publishedAt?' · ':''}${fmtNewsDate(n.publishedAt)}</div>
         </div>
       </a>`).join('')}
     </div>`;
