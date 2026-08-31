@@ -456,10 +456,246 @@ function renderLiquidityCard(){
   </div>`;
 }
 
+let yieldCurveIndicator = null, yieldCurveLoading = false, yieldCurveError = null;
+async function loadYieldCurveIndicator(){
+  if(yieldCurveLoading) return;
+  yieldCurveLoading = true; yieldCurveError = null;
+  try{
+    const [tnxRes, irxRes] = await Promise.all([
+      callEdgeFunction('ticker-history', {ticker:'^TNX', range:'mes'}),
+      callEdgeFunction('ticker-history', {ticker:'^IRX', range:'mes'}),
+    ]);
+    if(!tnxRes.ok || !tnxRes.points || !tnxRes.points.length) throw new Error((tnxRes&&tnxRes.error)||'Sin datos del bono a 10 años.');
+    if(!irxRes.ok || !irxRes.points || !irxRes.points.length) throw new Error((irxRes&&irxRes.error)||'Sin datos de la letra a 3 meses.');
+    const tnx = tnxRes.points[tnxRes.points.length-1].c;
+    const irx = irxRes.points[irxRes.points.length-1].c;
+    const spread = tnx - irx;
+    const score = Math.max(0, Math.min(100, 50 - spread*25));
+    yieldCurveIndicator = { tnx, irx, spread, score };
+  } catch(e){
+    yieldCurveError = (e && e.message) || 'Error al consultar la curva de tipos.';
+  }
+  yieldCurveLoading = false;
+  render(null);
+}
+function renderYieldCurveCard(){
+  if(!yieldCurveIndicator && !yieldCurveLoading && !yieldCurveError){
+    loadYieldCurveIndicator();
+  }
+  let body;
+  if(yieldCurveLoading && !yieldCurveIndicator){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">Consultando…</div>`;
+  } else if(yieldCurveError && !yieldCurveIndicator){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">${yieldCurveError}</div>`;
+  } else if(yieldCurveIndicator){
+    const y = yieldCurveIndicator;
+    const band = y.spread<0 ? {label:'Curva invertida', color:'#DC2626'} : y.spread<0.5 ? {label:'Curva plana', color:'#FBBF24'} : {label:'Curva normal', color:'#4ADE80'};
+    body = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+        <div style="width:56px;height:56px;border-radius:50%;border:4px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:${band.color};flex-shrink:0;">${Math.round(y.score)}</div>
+        <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Rendimiento del bono a 10 años menos la letra a 3 meses. Por debajo de 0 (invertida), ha precedido a casi todas las recesiones de EEUU desde los 60 — según la Fed de Nueva York, incluso más fiable que el clásico spread 2-10 años.">10 años − 3 meses</span>
+          <span style="font-weight:700;color:${y.spread>=0?'var(--green)':'var(--red)'};">${y.spread>=0?'+':''}${y.spread.toFixed(2)} pp</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);">10 años / 3 meses</span>
+          <span style="font-weight:700;">${y.tnx.toFixed(2)}% / ${y.irx.toFixed(2)}%</span>
+        </div>
+      </div>`;
+  } else {
+    body = '';
+  }
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Spread entre el bono del Tesoro a 10 años y la letra a 3 meses, vía Yahoo Finance.">Curva de tipos (EEUU)</div>
+    ${body}
+  </div>`;
+}
+
+let goldenCrossIndicator = null, goldenCrossLoading = false, goldenCrossError = null;
+async function loadGoldenCrossIndicator(){
+  if(goldenCrossLoading) return;
+  goldenCrossLoading = true; goldenCrossError = null;
+  try{
+    const res = await callEdgeFunction('ticker-history', {ticker:'^GSPC', range:'tecnico'});
+    if(!res.ok || !res.points || res.points.length<201) throw new Error((res&&res.error)||'Sin datos suficientes del S&P 500.');
+    const closes = res.points.map(p=>p.c);
+    const sma50Arr = computeSMA(closes, 50);
+    const sma200Arr = computeSMA(closes, 200);
+    const sma50 = sma50Arr[sma50Arr.length-1];
+    const sma200 = sma200Arr[sma200Arr.length-1];
+    const pctDiff = sma200 ? ((sma50-sma200)/sma200)*100 : null;
+    const score = pctDiff==null ? null : Math.max(0, Math.min(100, 50 - pctDiff*10));
+    goldenCrossIndicator = { sma50, sma200, pctDiff, score };
+  } catch(e){
+    goldenCrossError = (e && e.message) || 'Error al consultar el cruce de medias.';
+  }
+  goldenCrossLoading = false;
+  render(null);
+}
+function renderGoldenCrossCard(){
+  if(!goldenCrossIndicator && !goldenCrossLoading && !goldenCrossError){
+    loadGoldenCrossIndicator();
+  }
+  let body;
+  if(goldenCrossLoading && !goldenCrossIndicator){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">Consultando…</div>`;
+  } else if(goldenCrossError && !goldenCrossIndicator){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">${goldenCrossError}</div>`;
+  } else if(goldenCrossIndicator){
+    const g = goldenCrossIndicator;
+    const band = g.pctDiff>=0 ? {label:'Cruce dorado', color:'#4ADE80'} : {label:'Cruce mortal', color:'#DC2626'};
+    body = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+        <div style="width:56px;height:56px;border-radius:50%;border:4px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:${band.color};flex-shrink:0;">${Math.round(g.score)}</div>
+        <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Media de 50 días frente a la de 200 días del S&amp;P 500. Cuando la de 50 cruza por encima de la de 200 se llama 'cruce dorado' (alcista); por debajo, 'cruce mortal' (bajista).">Media 50d vs 200d</span>
+          <span style="font-weight:700;color:${g.pctDiff>=0?'var(--green)':'var(--red)'};">${g.pctDiff>=0?'+':''}${g.pctDiff.toFixed(2)}%</span>
+        </div>
+      </div>`;
+  } else {
+    body = '';
+  }
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Cruce de medias móviles de 50 y 200 días del S&amp;P 500, vía Yahoo Finance.">Cruce dorado/mortal (S&amp;P 500)</div>
+    ${body}
+  </div>`;
+}
+
+let breadthIndicator = null, breadthLoading = false, breadthError = null;
+async function loadBreadthIndicator(){
+  if(breadthLoading) return;
+  breadthLoading = true; breadthError = null;
+  try{
+    const [rutRes, gspcRes] = await Promise.all([
+      callEdgeFunction('ticker-history', {ticker:'^RUT', range:'tecnico'}),
+      callEdgeFunction('ticker-history', {ticker:'^GSPC', range:'tecnico'}),
+    ]);
+    if(!rutRes.ok || !rutRes.points || rutRes.points.length<51) throw new Error((rutRes&&rutRes.error)||'Sin datos del Russell 2000.');
+    if(!gspcRes.ok || !gspcRes.points || gspcRes.points.length<51) throw new Error((gspcRes&&gspcRes.error)||'Sin datos del S&P 500.');
+    const n = Math.min(rutRes.points.length, gspcRes.points.length);
+    const rutCloses = rutRes.points.slice(rutRes.points.length-n).map(p=>p.c);
+    const gspcCloses = gspcRes.points.slice(gspcRes.points.length-n).map(p=>p.c);
+    const ratio = rutCloses.map((v,i)=>v/gspcCloses[i]);
+    const sma50Arr = computeSMA(ratio, 50);
+    const lastSma = sma50Arr[sma50Arr.length-1];
+    const lastRatio = ratio[ratio.length-1];
+    const pctVsSma = lastSma ? ((lastRatio-lastSma)/lastSma)*100 : null;
+    const score = pctVsSma==null ? null : Math.max(0, Math.min(100, 50 - pctVsSma*5));
+    breadthIndicator = { ratio:lastRatio, pctVsSma, score };
+  } catch(e){
+    breadthError = (e && e.message) || 'Error al consultar small vs large caps.';
+  }
+  breadthLoading = false;
+  render(null);
+}
+function renderBreadthCard(){
+  if(!breadthIndicator && !breadthLoading && !breadthError){
+    loadBreadthIndicator();
+  }
+  let body;
+  if(breadthLoading && !breadthIndicator){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">Consultando…</div>`;
+  } else if(breadthError && !breadthIndicator){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">${breadthError}</div>`;
+  } else if(breadthIndicator){
+    const b = breadthIndicator;
+    const band = riskBand(b.score);
+    body = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+        <div style="width:56px;height:56px;border-radius:50%;border:4px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:${band.color};flex-shrink:0;">${Math.round(b.score)}</div>
+        <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Ratio Russell 2000 (small caps) / S&amp;P 500 (large caps) frente a su media de 50 días. Cuando las small caps quedan muy por debajo de su media relativa, suele leerse como mercado defensivo, con menos apetito por el riesgo.">Small vs Large caps</span>
+          <span style="font-weight:700;color:${b.pctVsSma>=0?'var(--green)':'var(--red)'};">${b.pctVsSma>=0?'+':''}${b.pctVsSma.toFixed(1)}%</span>
+        </div>
+      </div>`;
+  } else {
+    body = '';
+  }
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Ratio Russell 2000 / S&amp;P 500 vía Yahoo Finance, como proxy sencillo de amplitud de mercado.">Amplitud (small vs large caps)</div>
+    ${body}
+  </div>`;
+}
+
+let concentrationIndicator = null, concentrationLoading = false, concentrationError = null;
+async function loadConcentrationIndicator(){
+  if(concentrationLoading) return;
+  concentrationLoading = true; concentrationError = null;
+  try{
+    const [spyRes, rspRes] = await Promise.all([
+      callEdgeFunction('ticker-history', {ticker:'SPY', range:'tecnico'}),
+      callEdgeFunction('ticker-history', {ticker:'RSP', range:'tecnico'}),
+    ]);
+    if(!spyRes.ok || !spyRes.points || spyRes.points.length<51) throw new Error((spyRes&&spyRes.error)||'Sin datos de SPY.');
+    if(!rspRes.ok || !rspRes.points || rspRes.points.length<51) throw new Error((rspRes&&rspRes.error)||'Sin datos de RSP.');
+    const n = Math.min(spyRes.points.length, rspRes.points.length);
+    const spyCloses = spyRes.points.slice(spyRes.points.length-n).map(p=>p.c);
+    const rspCloses = rspRes.points.slice(rspRes.points.length-n).map(p=>p.c);
+    const ratio = spyCloses.map((v,i)=>v/rspCloses[i]);
+    const sma50Arr = computeSMA(ratio, 50);
+    const lastSma = sma50Arr[sma50Arr.length-1];
+    const lastRatio = ratio[ratio.length-1];
+    const pctVsSma = lastSma ? ((lastRatio-lastSma)/lastSma)*100 : null;
+    // Aquí, al contrario que en los demás indicadores, que el ratio SUBA
+    // (ponderado ganando al equiponderado) es la señal de riesgo
+    // (concentración en pocas megacaps), no la de seguridad.
+    const score = pctVsSma==null ? null : Math.max(0, Math.min(100, 50 + pctVsSma*5));
+    concentrationIndicator = { ratio:lastRatio, pctVsSma, score };
+  } catch(e){
+    concentrationError = (e && e.message) || 'Error al consultar la concentración del mercado.';
+  }
+  concentrationLoading = false;
+  render(null);
+}
+function renderConcentrationCard(){
+  if(!concentrationIndicator && !concentrationLoading && !concentrationError){
+    loadConcentrationIndicator();
+  }
+  let body;
+  if(concentrationLoading && !concentrationIndicator){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">Consultando…</div>`;
+  } else if(concentrationError && !concentrationIndicator){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">${concentrationError}</div>`;
+  } else if(concentrationIndicator){
+    const c = concentrationIndicator;
+    const band = c.score>=65 ? {label:'Mercado muy concentrado', color:'#DC2626'} : c.score>=35 ? {label:'Concentración normal', color:'#FBBF24'} : {label:'Participación amplia', color:'#4ADE80'};
+    body = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+        <div style="width:56px;height:56px;border-radius:50%;border:4px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:${band.color};flex-shrink:0;">${Math.round(c.score)}</div>
+        <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Ratio S&amp;P 500 ponderado por capitalización (SPY) / S&amp;P 500 equiponderado (RSP), frente a su media de 50 días. Cuando sube, unas pocas megacaps están tirando del índice mientras la mayoría de valores se quedan atrás — mercado más frágil y concentrado.">S&P 500 vs equiponderado</span>
+          <span style="font-weight:700;color:${c.pctVsSma>=0?'var(--red)':'var(--green)'};">${c.pctVsSma>=0?'+':''}${c.pctVsSma.toFixed(1)}%</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);">Ratio SPY/RSP</span>
+          <span style="font-weight:700;">${c.ratio.toFixed(3)}</span>
+        </div>
+      </div>`;
+  } else {
+    body = '';
+  }
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="S&amp;P 500 ponderado por capitalización (SPY) frente al mismo índice equiponderado (RSP), vía Yahoo Finance.">Concentración del S&amp;P 500</div>
+    ${body}
+  </div>`;
+}
+
 function renderMarketIndicators(){
   return `<div class="indicator-cards-row" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,300px));gap:14px;margin-bottom:20px;">
     ${renderCrashIndexCard()}
     ${renderLiquidityCard()}
+    ${renderYieldCurveCard()}
+    ${renderGoldenCrossCard()}
+    ${renderBreadthCard()}
+    ${renderConcentrationCard()}
   </div>`;
 }
 
