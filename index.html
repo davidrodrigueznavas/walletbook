@@ -1391,21 +1391,14 @@ function renderPositionsTable(scenario){
   if(positionsPage >= totalPages) positionsPage = totalPages-1;
   if(positionsPage < 0) positionsPage = 0;
   const pageRows = sorted.slice(positionsPage*POSITIONS_PAGE_SIZE, (positionsPage+1)*POSITIONS_PAGE_SIZE);
-  // Con pocas filas (p.ej. al filtrar por sector desde el quesito), forzar
-  // siempre 3 columnas dejaba cada una con 1-2 filas y la cabecera de sector
-  // repetida 3 veces -- muy fragmentado frente a la vista sin filtrar. El
-  // número de columnas se adapta a cuántas filas hay, para que se vea como
-  // una versión más corta de la misma tabla, no como una distinta.
-  const numCols = pageRows.length > 20 ? 3 : pageRows.length > 10 ? 2 : 1;
-  const chunkSize = Math.max(1, Math.ceil(pageRows.length/numCols));
-  const chunks = [];
-  for(let i=0; i<numCols; i++){
-    const chunk = pageRows.slice(i*chunkSize, (i+1)*chunkSize);
-    if(chunk.length) chunks.push(chunk);
-  }
+  // Siempre 3 columnas de ancho fijo (flex:1 en cada tabla), tenga la página
+  // o el filtro 1 fila o 30 -- así el formato (número de columnas y ancho)
+  // es siempre el mismo, cambia solo cuántas filas hay dentro.
+  const chunkSize = Math.max(1, Math.ceil(pageRows.length/3));
+  const chunks = [pageRows.slice(0,chunkSize), pageRows.slice(chunkSize,chunkSize*2), pageRows.slice(chunkSize*2)];
   return `<div style="flex:1;min-height:0;display:flex;flex-direction:column;">
     <div class="pf-table-chunks" style="flex:1;min-height:0;display:flex;gap:18px;overflow-y:auto;">
-      ${chunks.map(chunk=>renderTableChunk(chunk, scenario)).join('')}
+      ${chunks.map(chunk=>`<div style="flex:1;min-width:0;">${renderTableChunk(chunk, scenario)}</div>`).join('')}
     </div>
     ${totalPages>1 ? renderPositionsPager(totalPages) : ''}
   </div>`;
