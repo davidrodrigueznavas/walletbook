@@ -827,7 +827,7 @@ let modalCompanyState = {loading:false, error:null, summary:null}, modalCompanyT
 let addPositionOpen = false, addPositionError = null, addPositionSelected = null, addPositionSearchToken = 0;
 let addPositionCompanyInfo = null;
 let mapaCarteraOpen = false;
-let stockFinderOpen = false, stockFinderPicked = null, stockFinderSearchToken = 0;
+let stockFinderOpen = false, stockFinderPicked = null, stockFinderSearchToken = 0, stockFinderOutsideCloseHandler = null;
 
 const SUFFIX_CURRENCY = { '.T':'JPY', '.DE':'EUR', '.PA':'EUR', '.MI':'EUR', '.AS':'EUR', '.SW':'CHF', '.CO':'DKK' };
 function currencyForTicker(ticker){
@@ -1969,66 +1969,76 @@ function topNavBar(){
       <span style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:29px;color:var(--text);letter-spacing:-.01em;">Walletbook</span>
     </button>
     <div style="display:flex;align-items:center;gap:8px;">
-      <button id="stock-finder-btn" class="theme-toggle" title="Explorar en Walletbook — buscar una acción y añadirla a una cartera">
-        <svg viewBox="0 0 20 20" style="width:16px;height:16px;display:block;"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="13" y1="13" x2="18" y2="18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      </button>
+      ${stockFinderBlock()}
       ${menuBlock()}
     </div>
   </div>`;
 }
 
-function renderStockFinderModal(){
-  if(!stockFinderOpen) return '';
+function lupaIcon(){
+  return `<svg viewBox="0 0 20 20" style="width:14px;height:14px;flex-shrink:0;"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="13" y1="13" x2="18" y2="18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+}
+
+function stockFinderBlock(){
+  if(!stockFinderOpen){
+    return `<button id="stock-finder-btn" class="theme-toggle" title="Buscar una acción y añadirla a una cartera">${lupaIcon()}</button>`;
+  }
   const picked = stockFinderPicked;
-  let body;
-  if(picked){
-    body = `<button id="stockfinder-back" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:12px;padding:0;margin-bottom:14px;">← Buscar otra acción</button>
-      <div style="font-size:13px;margin-bottom:4px;">Añadir <b>${picked.symbol}</b> — ${picked.name}</div>
-      <div style="font-size:11px;color:var(--text-faint);margin-bottom:16px;">Elige a qué cartera la quieres añadir:</div>
+  return `<div id="stockfinder-root" style="position:relative;">
+    <div style="display:flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--border);border-radius:18px;padding:0 6px 0 12px;height:36px;color:var(--text-faint);">
+      ${lupaIcon()}
+      ${picked ? `<button id="stockfinder-back" title="Buscar otra acción" style="cursor:pointer;background:none;border:none;color:var(--text);font-size:12.5px;padding:0;text-align:left;width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><b>${picked.symbol}</b> — ${picked.name}</button>`
+        : `<input id="stockfinder-input" placeholder="Buscar acción…" autocomplete="off" style="border:none;background:none;outline:none;color:var(--text);font-size:12.5px;width:190px;height:34px;"/>`}
+      <button id="stockfinder-close" title="Cerrar" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;line-height:1;padding:2px 4px;">×</button>
+    </div>
+    ${picked ? `<div id="stockfinder-panel" style="position:absolute;top:44px;right:0;width:260px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);z-index:60;padding:14px;box-sizing:border-box;">
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Añadir a una cartera:</div>
       ${!portfolios.length
         ? `<div style="font-size:12px;color:var(--text-faint);">Todavía no tienes ninguna cartera. Crea una primero desde "Mis carteras".</div>`
-        : `<div style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;">
-            ${portfolios.map(pf=>`<button class="stockfinder-portfolio-btn" data-id="${pf.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--text);">${pf.name}</button>`).join('')}
-          </div>`}`;
-  } else {
-    body = `<div class="field" style="margin-bottom:4px;position:relative;">
-      <label>Buscar acción</label>
-      <input id="stockfinder-input" placeholder="ej. AAPL, SAP.DE, 7203.T" autocomplete="off"/>
-      <div id="stockfinder-suggestions" style="position:absolute;top:100%;left:0;right:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 12px 32px rgba(0,0,0,0.25);z-index:10;overflow:hidden;"></div>
-    </div>
-    <div style="font-size:10px;color:var(--text-faint);">Escribe al menos 2 letras para buscar en Yahoo Finance.</div>`;
-  }
-  return `<div class="modal-backdrop" id="stockfinder-backdrop" style="z-index:70;">
-    <div class="modal-card" style="max-width:420px;padding:22px 26px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <h3 style="font-family:'Calibri','Carlito',sans-serif;font-size:16px;font-weight:600;margin:0;">Explorar en Walletbook</h3>
-        <button id="stockfinder-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
-      </div>
-      ${body}
-    </div>
+        : `<div style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;">
+            ${portfolios.map(pf=>`<button class="stockfinder-portfolio-btn" data-id="${pf.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:12.5px;color:var(--text);">${pf.name}</button>`).join('')}
+          </div>`}
+    </div>` : `<div id="stockfinder-suggestions" style="position:absolute;top:44px;right:0;width:280px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);z-index:60;overflow:hidden;"></div>`}
   </div>`;
+}
+
+function teardownStockFinderOutsideClose(){
+  if(stockFinderOutsideCloseHandler){
+    document.removeEventListener('click', stockFinderOutsideCloseHandler);
+    stockFinderOutsideCloseHandler = null;
+  }
 }
 
 function wireStockFinderModal(app){
   const btn = document.getElementById('stock-finder-btn');
-  if(btn) btn.addEventListener('click', async (e) => {
+  if(btn) btn.addEventListener('click', (e) => {
     e.stopPropagation();
     stockFinderOpen = true; stockFinderPicked = null;
-    await loadPortfolios();
     render(currentScenario);
+    loadPortfolios();
+    if(!stockFinderOutsideCloseHandler){
+      stockFinderOutsideCloseHandler = (ev) => {
+        const root = document.getElementById('stockfinder-root');
+        if(root && root.contains(ev.target)) return;
+        teardownStockFinderOutsideClose();
+        stockFinderOpen = false; stockFinderPicked = null;
+        render(currentScenario);
+      };
+      document.addEventListener('click', stockFinderOutsideCloseHandler);
+    }
   });
 
   if(!stockFinderOpen) return;
-  const closeIt = () => { stockFinderOpen = false; stockFinderPicked = null; render(currentScenario); };
+  const closeIt = () => { teardownStockFinderOutsideClose(); stockFinderOpen = false; stockFinderPicked = null; render(currentScenario); };
   const closeBtn = document.getElementById('stockfinder-close');
-  if(closeBtn) closeBtn.addEventListener('click', closeIt);
-  const backdrop = document.getElementById('stockfinder-backdrop');
-  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop) closeIt(); });
+  if(closeBtn) closeBtn.addEventListener('click', (e) => { e.stopPropagation(); closeIt(); });
   const backBtn = document.getElementById('stockfinder-back');
-  if(backBtn) backBtn.addEventListener('click', () => { stockFinderPicked = null; render(currentScenario); });
+  if(backBtn) backBtn.addEventListener('click', (e) => { e.stopPropagation(); stockFinderPicked = null; render(currentScenario); });
 
   const input = document.getElementById('stockfinder-input');
   if(input){
+    input.focus();
+    input.addEventListener('click', (e) => e.stopPropagation());
     const suggestionsBox = document.getElementById('stockfinder-suggestions');
     let searchTimer = null;
     input.addEventListener('input', () => {
@@ -2064,6 +2074,7 @@ function wireStockFinderModal(app){
     const pf = portfolios.find(x=>x.id === pbtn.getAttribute('data-id'));
     if(!pf) return;
     const r = stockFinderPicked;
+    teardownStockFinderOutsideClose();
     portfolioId = pf.id;
     activePortfolioName = pf.name;
     currentScreen = 'portfolio';
@@ -2177,7 +2188,6 @@ function renderHomeScreen(){
     </div>
     ${renderViewOverlay()}
     ${renderDialog()}
-    ${renderStockFinderModal()}
     ${renderStatusToast()}
   </div>`;
 
@@ -2376,7 +2386,6 @@ function renderExploreScreen(){
     </div>
     ${renderViewOverlay()}
     ${renderDialog()}
-    ${renderStockFinderModal()}
     ${renderStatusToast()}
   </div>`;
 
@@ -2453,7 +2462,6 @@ function renderRulesScreen(){
     </div>
     ${renderViewOverlay()}
     ${renderDialog()}
-    ${renderStockFinderModal()}
     ${renderStatusToast()}
   </div>`;
 
@@ -2712,7 +2720,6 @@ function renderStockViewerScreen(){
     </div>
     ${renderViewOverlay()}
     ${renderDialog()}
-    ${renderStockFinderModal()}
     ${renderStatusToast()}
   </div>`;
 
@@ -2855,7 +2862,6 @@ function render(scenario){
   ${renderMapaCarteraModal()}
   ${renderViewOverlay()}
   ${renderDialog()}
-  ${renderStockFinderModal()}
   ${renderStatusToast()}`;
 
   app.innerHTML = html;
