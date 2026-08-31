@@ -827,7 +827,8 @@ let modalCompanyState = {loading:false, error:null, summary:null}, modalCompanyT
 let addPositionOpen = false, addPositionError = null, addPositionSelected = null, addPositionSearchToken = 0;
 let addPositionCompanyInfo = null;
 let mapaCarteraOpen = false;
-let stockFinderOpen = false, stockFinderPicked = null, stockFinderSearchToken = 0, stockFinderOutsideCloseHandler = null;
+let stockFinderOpen = false, stockFinderSearchToken = 0, stockFinderOutsideCloseHandler = null;
+let visorAddPickerOpen = false, visorAddPickerOutsideCloseHandler = null;
 
 const SUFFIX_CURRENCY = { '.T':'JPY', '.DE':'EUR', '.PA':'EUR', '.MI':'EUR', '.AS':'EUR', '.SW':'CHF', '.CO':'DKK' };
 function currencyForTicker(ticker){
@@ -1947,7 +1948,6 @@ function menuBlock(){
       <button class="nav-item" data-view="carteras" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mis carteras</button>
       <button class="nav-item" data-view="explorar" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Explorar en Walletbook</button>
       <button class="nav-item" data-view="reglas" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mis reglas</button>
-      <button class="nav-item" data-view="visor" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Visor de acciones</button>
       <button class="nav-item" data-view="cuenta" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mi cuenta</button>
       <button id="menu-logout-btn" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;color:var(--red);padding:13px 18px;font-size:13.5px;">Cerrar sesión</button>
     </div>` : ''}
@@ -1981,24 +1981,15 @@ function lupaIcon(){
 
 function stockFinderBlock(){
   if(!stockFinderOpen){
-    return `<button id="stock-finder-btn" class="theme-toggle" title="Buscar una acción y añadirla a una cartera">${lupaIcon()}</button>`;
+    return `<button id="stock-finder-btn" class="theme-toggle" title="Buscar una acción">${lupaIcon()}</button>`;
   }
-  const picked = stockFinderPicked;
   return `<div id="stockfinder-root" style="position:relative;">
     <div style="display:flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--border);border-radius:18px;padding:0 6px 0 12px;height:36px;color:var(--text-faint);">
       ${lupaIcon()}
-      ${picked ? `<button id="stockfinder-back" title="Buscar otra acción" style="cursor:pointer;background:none;border:none;color:var(--text);font-size:12.5px;padding:0;text-align:left;width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><b>${picked.symbol}</b> — ${picked.name}</button>`
-        : `<input id="stockfinder-input" placeholder="Buscar acción…" autocomplete="off" style="border:none;background:none;outline:none;color:var(--text);font-size:12.5px;width:190px;height:34px;"/>`}
+      <input id="stockfinder-input" placeholder="Buscar acción…" autocomplete="off" style="border:none;background:none;outline:none;color:var(--text);font-size:12.5px;width:190px;height:34px;"/>
       <button id="stockfinder-close" title="Cerrar" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;line-height:1;padding:2px 4px;">×</button>
     </div>
-    ${picked ? `<div id="stockfinder-panel" style="position:absolute;top:44px;right:0;width:260px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);z-index:60;padding:14px;box-sizing:border-box;">
-      <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Añadir a una cartera:</div>
-      ${!portfolios.length
-        ? `<div style="font-size:12px;color:var(--text-faint);">Todavía no tienes ninguna cartera. Crea una primero desde "Mis carteras".</div>`
-        : `<div style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;">
-            ${portfolios.map(pf=>`<button class="stockfinder-portfolio-btn" data-id="${pf.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:12.5px;color:var(--text);">${pf.name}</button>`).join('')}
-          </div>`}
-    </div>` : `<div id="stockfinder-suggestions" style="position:absolute;top:44px;right:0;width:280px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);z-index:60;overflow:hidden;"></div>`}
+    <div id="stockfinder-suggestions" style="position:absolute;top:44px;right:0;width:280px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);z-index:60;overflow:hidden;"></div>
   </div>`;
 }
 
@@ -2013,15 +2004,14 @@ function wireStockFinderModal(app){
   const btn = document.getElementById('stock-finder-btn');
   if(btn) btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    stockFinderOpen = true; stockFinderPicked = null;
+    stockFinderOpen = true;
     render(currentScenario);
-    loadPortfolios();
     if(!stockFinderOutsideCloseHandler){
       stockFinderOutsideCloseHandler = (ev) => {
         const root = document.getElementById('stockfinder-root');
         if(root && root.contains(ev.target)) return;
         teardownStockFinderOutsideClose();
-        stockFinderOpen = false; stockFinderPicked = null;
+        stockFinderOpen = false;
         render(currentScenario);
       };
       document.addEventListener('click', stockFinderOutsideCloseHandler);
@@ -2029,11 +2019,9 @@ function wireStockFinderModal(app){
   });
 
   if(!stockFinderOpen) return;
-  const closeIt = () => { teardownStockFinderOutsideClose(); stockFinderOpen = false; stockFinderPicked = null; render(currentScenario); };
+  const closeIt = () => { teardownStockFinderOutsideClose(); stockFinderOpen = false; render(currentScenario); };
   const closeBtn = document.getElementById('stockfinder-close');
   if(closeBtn) closeBtn.addEventListener('click', (e) => { e.stopPropagation(); closeIt(); });
-  const backBtn = document.getElementById('stockfinder-back');
-  if(backBtn) backBtn.addEventListener('click', (e) => { e.stopPropagation(); stockFinderPicked = null; render(currentScenario); });
 
   const input = document.getElementById('stockfinder-input');
   if(input){
@@ -2059,44 +2047,17 @@ function wireStockFinderModal(app){
         suggestionsBox.innerHTML = results.map((r,i) => `<button type="button" class="ticker-suggestion" data-idx="${i}">
           <b>${r.symbol}</b> — ${r.name}${r.exchange?` <span style="color:var(--text-faint);">(${r.exchange})</span>`:''}
         </button>`).join('');
-        suggestionsBox.querySelectorAll('.ticker-suggestion').forEach(sbtn => sbtn.addEventListener('mousedown', async (e) => {
+        suggestionsBox.querySelectorAll('.ticker-suggestion').forEach(sbtn => sbtn.addEventListener('mousedown', (e) => {
           e.preventDefault();
           const r = results[Number(sbtn.getAttribute('data-idx'))];
-          stockFinderPicked = r;
-          await loadPortfolios();
-          render(currentScenario);
+          teardownStockFinderOutsideClose();
+          stockFinderOpen = false;
+          currentScreen = 'visor';
+          selectStockViewerTicker(r.symbol);
         }));
       }, 300);
     });
   }
-
-  app.querySelectorAll('.stockfinder-portfolio-btn').forEach(pbtn => pbtn.addEventListener('click', async () => {
-    const pf = portfolios.find(x=>x.id === pbtn.getAttribute('data-id'));
-    if(!pf) return;
-    const r = stockFinderPicked;
-    teardownStockFinderOutsideClose();
-    portfolioId = pf.id;
-    activePortfolioName = pf.name;
-    currentScreen = 'portfolio';
-    stockFinderOpen = false;
-    stockFinderPicked = null;
-    await loadAll();
-    addPositionOpen = true; addPositionError = null; addPositionCompanyInfo = null;
-    addPositionSelected = r;
-    render(null);
-    const marketSelect = document.getElementById('addpos-market');
-    if(marketSelect){ const m = marketForTicker(r.symbol, r.exchange); if(m) marketSelect.value = m; }
-    callEdgeFunction('company-info', {ticker: r.symbol}).then(info => {
-      if(addPositionSelected !== r) return;
-      if(!info || !info.ok) return;
-      addPositionCompanyInfo = info;
-      const sectorSelect = document.getElementById('addpos-sector');
-      if(sectorSelect && !sectorSelect.value){
-        const guess = sectorForCompany(info.sector, info.industry);
-        if(guess) sectorSelect.value = guess;
-      }
-    }).catch(() => {});
-  }));
 }
 
 async function goHome(){
@@ -2132,9 +2093,6 @@ function wireMenu(app){
       allRulesLoading = true;
       render(null);
       await loadAllRulesData();
-      render(null);
-    } else if(view === 'visor'){
-      currentScreen = 'visor';
       render(null);
     } else {
       activeView = view;
@@ -2660,6 +2618,17 @@ function renderStockViewerScreen(){
           </div>
           ${q&&q.sector ? `<div style="font-size:11.5px;color:var(--text-faint);margin-top:3px;">${q.sector}${q.industry?' · '+q.industry:''}</div>` : ''}
         </div>
+        <div style="position:relative;">
+          <button id="visor-addpos-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;">+ Añadir a cartera</button>
+          ${visorAddPickerOpen ? `<div id="visor-addpos-panel" style="position:absolute;top:44px;right:0;width:260px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);z-index:60;padding:14px;box-sizing:border-box;">
+            <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Añadir ${stockViewerTicker} a una cartera:</div>
+            ${!portfolios.length
+              ? `<div style="font-size:12px;color:var(--text-faint);">Todavía no tienes ninguna cartera. Crea una primero desde "Mis carteras".</div>`
+              : `<div style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;">
+                  ${portfolios.map(pf=>`<button class="visor-portfolio-btn" data-id="${pf.id}" style="cursor:pointer;text-align:left;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:12.5px;color:var(--text);">${pf.name}</button>`).join('')}
+                </div>`}
+          </div>` : ''}
+        </div>
       </div>
 
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px 22px;margin-bottom:20px;">
@@ -2773,6 +2742,65 @@ function renderStockViewerScreen(){
     const key = btn.getAttribute('data-key');
     stockViewerMASelection[key] = !stockViewerMASelection[key];
     render(null);
+  }));
+
+  const visorAddBtn = document.getElementById('visor-addpos-btn');
+  if(visorAddBtn) visorAddBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    visorAddPickerOpen = !visorAddPickerOpen;
+    if(visorAddPickerOpen){
+      render(null);
+      await loadPortfolios();
+      render(null);
+      if(!visorAddPickerOutsideCloseHandler){
+        visorAddPickerOutsideCloseHandler = (ev) => {
+          const panel = document.getElementById('visor-addpos-panel');
+          const btn2 = document.getElementById('visor-addpos-btn');
+          if((panel && panel.contains(ev.target)) || (btn2 && btn2.contains(ev.target))) return;
+          document.removeEventListener('click', visorAddPickerOutsideCloseHandler);
+          visorAddPickerOutsideCloseHandler = null;
+          visorAddPickerOpen = false;
+          render(null);
+        };
+        document.addEventListener('click', visorAddPickerOutsideCloseHandler);
+      }
+    } else {
+      if(visorAddPickerOutsideCloseHandler){
+        document.removeEventListener('click', visorAddPickerOutsideCloseHandler);
+        visorAddPickerOutsideCloseHandler = null;
+      }
+      render(null);
+    }
+  });
+
+  app.querySelectorAll('.visor-portfolio-btn').forEach(pbtn => pbtn.addEventListener('click', async () => {
+    const pf = portfolios.find(x=>x.id === pbtn.getAttribute('data-id'));
+    if(!pf) return;
+    if(visorAddPickerOutsideCloseHandler){
+      document.removeEventListener('click', visorAddPickerOutsideCloseHandler);
+      visorAddPickerOutsideCloseHandler = null;
+    }
+    visorAddPickerOpen = false;
+    const sel = { symbol: stockViewerTicker, name: q ? q.name : stockViewerTicker, exchange: q ? q.exchange : null };
+    portfolioId = pf.id;
+    activePortfolioName = pf.name;
+    currentScreen = 'portfolio';
+    await loadAll();
+    addPositionOpen = true; addPositionError = null; addPositionCompanyInfo = null;
+    addPositionSelected = sel;
+    render(null);
+    const marketSelect = document.getElementById('addpos-market');
+    if(marketSelect){ const m = marketForTicker(sel.symbol, sel.exchange); if(m) marketSelect.value = m; }
+    callEdgeFunction('company-info', {ticker: sel.symbol}).then(info => {
+      if(addPositionSelected !== sel) return;
+      if(!info || !info.ok) return;
+      addPositionCompanyInfo = info;
+      const sectorSelect = document.getElementById('addpos-sector');
+      if(sectorSelect && !sectorSelect.value){
+        const guess = sectorForCompany(info.sector, info.industry);
+        if(guess) sectorSelect.value = guess;
+      }
+    }).catch(() => {});
   }));
 }
 
