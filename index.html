@@ -1339,9 +1339,9 @@ function kpiBlock(label, value, color, title){
   </div>`;
 }
 
-function renderTableChunk(rows, scenario, continueSector){
+function renderTableChunk(rows, scenario){
   const sc = SCENARIOS.find(s=>s.key===scenario);
-  let lastSector = continueSector || null;
+  let lastSector = null;
   return `<table class="postable">
     <colgroup><col style="width:12px;"><col style="width:84px;"><col><col style="width:62px;"><col style="width:54px;"></colgroup>
     <thead><tr><th></th><th>Ticker</th><th>Nombre</th><th style="text-align:right;">Invertido</th><th style="text-align:${scenario?'center':'right'};">${scenario?'Impacto':'%'}</th></tr></thead>
@@ -1391,24 +1391,12 @@ function renderPositionsTable(scenario){
   if(positionsPage >= totalPages) positionsPage = totalPages-1;
   if(positionsPage < 0) positionsPage = 0;
   const pageRows = sorted.slice(positionsPage*POSITIONS_PAGE_SIZE, (positionsPage+1)*POSITIONS_PAGE_SIZE);
-  // Repartir siempre por índice a partes exactamente iguales (30 filas ->
-  // 10/10/10) es lo único que deja las 3 columnas a la misma altura pase lo
-  // que pase. El problema no era el reparto sino que, al caer un sector a
-  // caballo entre dos columnas, su cabecera se repetía en la segunda -- eso
-  // se arregla aquí sin dejar de repartir a partes iguales: cada columna
-  // sabe con qué sector terminó la anterior, y si empieza continuando ese
-  // mismo sector no vuelve a mostrar su cabecera.
-  const chunkSize = Math.max(1, Math.ceil(pageRows.length/3));
-  const chunks = [pageRows.slice(0,chunkSize), pageRows.slice(chunkSize,chunkSize*2), pageRows.slice(chunkSize*2)];
-  let prevLastSector = null;
-  const chunksHtml = chunks.map(chunk => {
-    const html = `<div style="flex:0 0 calc((100% - 36px)/3);min-width:0;">${renderTableChunk(chunk, scenario, prevLastSector)}</div>`;
-    if(chunk.length) prevLastSector = chunk[chunk.length-1].sector;
-    return html;
-  });
+  // Una sola tabla a todo el ancho, de arriba a abajo -- se acabó repartir
+  // en 3 columnas (y con ello, partir sectores, igualar alturas, etc.).
+  // Cabe menos sin hacer scroll, pero se lee como una lista normal.
   return `<div style="flex:1;min-height:0;display:flex;flex-direction:column;">
-    <div class="pf-table-chunks" style="flex:1;min-height:0;display:flex;gap:18px;overflow-y:auto;">
-      ${chunksHtml.join('')}
+    <div class="pf-table-chunks" style="flex:1;min-height:0;overflow-y:auto;">
+      ${renderTableChunk(pageRows, scenario)}
     </div>
     ${totalPages>1 ? renderPositionsPager(totalPages) : ''}
   </div>`;
