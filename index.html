@@ -927,6 +927,8 @@ function sectorForCompany(sector, industry){
 }
 
 let diversificationFilter = null; // {type:'market'|'sector', key}
+let positionsPage = 0;
+const POSITIONS_PAGE_SIZE = 30;
 
 function sectorResponse(sens, factors){
   let score = 0;
@@ -1371,16 +1373,41 @@ function renderTableChunk(rows, scenario){
   </table>`;
 }
 
+function renderPositionsPager(totalPages){
+  const items = [];
+  for(let i=0;i<totalPages;i++) items.push(i);
+  return `<div class="pf-pager" style="display:flex;justify-content:center;align-items:center;gap:6px;padding-top:12px;flex-shrink:0;flex-wrap:wrap;">
+    ${items.map(i=>`<button class="pf-pager-btn" data-page="${i}" style="cursor:pointer;min-width:30px;padding:6px 10px;border-radius:8px;border:1px solid ${i===positionsPage?'var(--accent-border)':'var(--border)'};background:${i===positionsPage?'var(--accent-soft)':'var(--panel-2)'};color:${i===positionsPage?'var(--accent-text)':'var(--text-dim)'};font-size:11.5px;font-weight:600;">${i+1}</button>`).join('')}
+  </div>`;
+}
+
 function renderPositionsTable(scenario){
   let positions = portfolio.positions;
   if(diversificationFilter){
     positions = positions.filter(p => diversificationFilter.type==='market' ? p.market===diversificationFilter.key : p.sector===diversificationFilter.key);
   }
   const sorted = [...positions].sort((a,b)=> a.sector.localeCompare(b.sector,'es') || a.name.localeCompare(b.name,'es'));
-  const chunkSize = Math.max(1, Math.ceil(sorted.length/3));
-  const chunks = [sorted.slice(0,chunkSize), sorted.slice(chunkSize,chunkSize*2), sorted.slice(chunkSize*2)];
-  return `<div class="pf-table-chunks" style="flex:1;min-height:0;display:flex;gap:18px;overflow-y:auto;">
-    ${chunks.map(chunk=>renderTableChunk(chunk, scenario)).join('')}
+  const totalPages = Math.max(1, Math.ceil(sorted.length/POSITIONS_PAGE_SIZE));
+  if(positionsPage >= totalPages) positionsPage = totalPages-1;
+  if(positionsPage < 0) positionsPage = 0;
+  const pageRows = sorted.slice(positionsPage*POSITIONS_PAGE_SIZE, (positionsPage+1)*POSITIONS_PAGE_SIZE);
+  // Con pocas filas (p.ej. al filtrar por sector desde el quesito), forzar
+  // siempre 3 columnas dejaba cada una con 1-2 filas y la cabecera de sector
+  // repetida 3 veces -- muy fragmentado frente a la vista sin filtrar. El
+  // número de columnas se adapta a cuántas filas hay, para que se vea como
+  // una versión más corta de la misma tabla, no como una distinta.
+  const numCols = pageRows.length > 20 ? 3 : pageRows.length > 10 ? 2 : 1;
+  const chunkSize = Math.max(1, Math.ceil(pageRows.length/numCols));
+  const chunks = [];
+  for(let i=0; i<numCols; i++){
+    const chunk = pageRows.slice(i*chunkSize, (i+1)*chunkSize);
+    if(chunk.length) chunks.push(chunk);
+  }
+  return `<div style="flex:1;min-height:0;display:flex;flex-direction:column;">
+    <div class="pf-table-chunks" style="flex:1;min-height:0;display:flex;gap:18px;overflow-y:auto;">
+      ${chunks.map(chunk=>renderTableChunk(chunk, scenario)).join('')}
+    </div>
+    ${totalPages>1 ? renderPositionsPager(totalPages) : ''}
   </div>`;
 }
 
@@ -2070,6 +2097,7 @@ function renderHomeScreen(){
     currentScreen = 'portfolio';
     selectedId = null;
     diversificationFilter = null;
+    positionsPage = 0;
     document.getElementById('app').innerHTML = 'Cargando…';
     await loadAll();
     render(null);
@@ -2816,11 +2844,17 @@ function render(scenario){
     } else {
       diversificationFilter = {type, key};
     }
+    positionsPage = 0;
     render(currentScenario);
   }));
 
   const clearFilterBtn = document.getElementById('clear-filter-btn');
-  if(clearFilterBtn) clearFilterBtn.addEventListener('click', () => { diversificationFilter = null; render(currentScenario); });
+  if(clearFilterBtn) clearFilterBtn.addEventListener('click', () => { diversificationFilter = null; positionsPage = 0; render(currentScenario); });
+
+  app.querySelectorAll('.pf-pager-btn').forEach(btn => btn.addEventListener('click', () => {
+    positionsPage = Number(btn.getAttribute('data-page'));
+    render(currentScenario);
+  }));
 
   app.querySelectorAll('.range-btn').forEach(b=>b.addEventListener('click',()=>{
     modalRange = b.getAttribute('data-range');
