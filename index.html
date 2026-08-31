@@ -105,7 +105,7 @@
     .pf-chart { height: 160px !important; flex: none !important; }
     .pf-donut { height: 190px !important; flex: none !important; }
 
-    .pf-cards { overflow-y: visible !important; }
+    .pf-cards { overflow-y: visible !important; grid-template-columns: 1fr 1fr !important; }
     table.postable { font-size: 12.5px !important; }
 
     .modal-two-col { grid-template-columns: 1fr !important; gap: 16px !important; }
@@ -1383,7 +1383,7 @@ function renderPositionsTable(scenario){
     if(p.sector !== lastSector){ lastSector = p.sector; head = renderSectorCardHead(p.sector); }
     return head + renderPositionCard(p, sc);
   }).join('');
-  return `<div class="pf-cards" style="flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start;overflow-y:auto;">
+  return `<div class="pf-cards" style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;align-content:start;overflow-y:auto;">
     ${cardsHtml}
   </div>`;
 }
