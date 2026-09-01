@@ -59,7 +59,7 @@
   }
   html, body { height:100%; margin:0; }
   body { background:var(--bg); color:var(--text); font-family:'Calibri','Carlito',sans-serif; overflow:hidden; }
-  #app { height:100vh; max-width:1360px; margin:0 auto; padding:14px 24px; box-sizing:border-box; display:flex; flex-direction:column; }
+  #app { height:100vh; max-width:1360px; margin:0 auto; padding:14px 0; box-sizing:border-box; display:flex; flex-direction:column; }
   input, textarea, select { font-family:'Calibri','Carlito',sans-serif; }
   ::-webkit-scrollbar { width:8px; height:8px; }
   ::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
@@ -2050,8 +2050,8 @@ function wireMenu(app){
 function renderHomeScreen(){
   if(!session) return; // una operación asíncrona pendiente terminó después de cerrar sesión; no repintar la app
   const app = document.getElementById('app');
-  app.innerHTML = `<div class="home-wrap" style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:16px 32px 32px;">
-    <div style="max-width:1200px;margin:0 auto;">
+  app.innerHTML = `<div class="home-wrap" style="flex:1;min-height:0;overflow-y:auto;box-sizing:border-box;padding:16px 0 32px;">
+    <div style="max-width:1200px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
       ${topNavBar()}
       ${renderMarketIndicators()}
       <div style="margin-bottom:26px;">
@@ -2297,8 +2297,8 @@ function renderExploreScreen(){
         </div>`}`;
   }
 
-  app.innerHTML = `<div class="home-wrap" style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:16px 32px 32px;">
-    <div style="max-width:1200px;margin:0 auto;">
+  app.innerHTML = `<div class="home-wrap" style="flex:1;min-height:0;overflow-y:auto;box-sizing:border-box;padding:16px 0 32px;">
+    <div style="max-width:1200px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
       ${topNavBar()}
       <div style="margin-bottom:26px;">
         <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:26px;margin:0;">Explorar en Walletbook</h1>
@@ -2394,8 +2394,8 @@ function renderAccountScreen(){
         </div>` : ''}
       </div>`;
 
-  app.innerHTML = `<div class="home-wrap" style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:16px 32px 32px;">
-    <div style="max-width:1200px;margin:0 auto;">
+  app.innerHTML = `<div class="home-wrap" style="flex:1;min-height:0;overflow-y:auto;box-sizing:border-box;padding:16px 0 32px;">
+    <div style="max-width:1200px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
       ${topNavBar()}
       <div style="margin-bottom:26px;">
         <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mi cuenta</h1>
@@ -2509,8 +2509,8 @@ function renderScreenersScreen(){
     </div>`;
   };
 
-  app.innerHTML = `<div class="home-wrap" style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:16px 32px 32px;">
-    <div style="max-width:1200px;margin:0 auto;">
+  app.innerHTML = `<div class="home-wrap" style="flex:1;min-height:0;overflow-y:auto;box-sizing:border-box;padding:16px 0 32px;">
+    <div style="max-width:1200px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
       ${topNavBar()}
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:26px;flex-wrap:wrap;">
         <div>
@@ -2850,8 +2850,8 @@ function renderStockViewerScreen(){
     </div>`;
   }
 
-  app.innerHTML = `<div class="home-wrap" style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:16px 32px 32px;">
-    <div style="max-width:1200px;margin:0 auto;">
+  app.innerHTML = `<div class="home-wrap" style="flex:1;min-height:0;overflow-y:auto;box-sizing:border-box;padding:16px 0 32px;">
+    <div style="max-width:1200px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
       ${topNavBar()}
       <div style="margin-bottom:22px;">
         <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:26px;margin:0 0 14px;">Visor de acciones</h1>
