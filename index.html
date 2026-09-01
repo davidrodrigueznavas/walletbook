@@ -200,6 +200,7 @@ const SCREENER_METRIC = {
   pe_ratio: {label:'PER', fmt:v=>v.toFixed(1), get:r=>r.pe_ratio},
   market_cap: {label:'Capitalización (miles de M$)', fmt:v=>v.toFixed(1), get:r=> r.market_cap ? r.market_cap/1e9 : null},
   revenue_growth: {label:'Crecimiento ingresos YoY (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=> r.revenue_growth!=null ? r.revenue_growth*100 : null},
+  eps_growth: {label:'Crecimiento beneficios (EPS) YoY (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=> r.eps_growth!=null ? r.eps_growth*100 : null},
   last_price: {label:'Precio ($)', fmt:v=>v.toFixed(2), get:r=>r.last_price},
 };
 const SCREENER_OPERATOR = { gt:'mayor que', lt:'menor que' };
@@ -838,6 +839,7 @@ async function loadScreenerUniverse(){
     pe_ratio: num(row.sp500_fundamentals?.pe_ratio),
     market_cap: num(row.sp500_fundamentals?.market_cap),
     revenue_growth: num(row.sp500_fundamentals?.revenue_growth),
+    eps_growth: num(row.sp500_fundamentals?.eps_growth),
     fundamentals_updated_at: row.sp500_fundamentals?.updated_at || null,
   }));
   screenerUniverseLoading = false;
