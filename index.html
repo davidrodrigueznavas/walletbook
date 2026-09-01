@@ -890,7 +890,7 @@ function renderScreenersHomeSection(){
       <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name)}</div>
       <div style="font-size:11px;color:var(--text-faint);">${numConditions} condición${numConditions===1?'':'es'}</div>
       <div style="display:flex;align-items:baseline;gap:6px;margin-top:6px;padding-top:10px;border-top:1px solid var(--border-soft);">
-        <span style="font-size:22px;font-weight:700;color:${matches.length?'var(--accent-text)':'var(--text-faint)'};">${screenerUniverseLoading?'…':matches.length}</span>
+        <span style="font-size:22px;font-weight:700;color:${(s.alerts_enabled && matches.length)?'var(--accent-text)':'var(--text-faint)'};">${screenerUniverseLoading?'…':matches.length}</span>
         <span style="font-size:11px;color:var(--text-faint);">coincidencia${matches.length===1?'':'s'} ahora</span>
       </div>
     </button>`;
@@ -950,6 +950,7 @@ function renderDiscoverPreview(){
 const COUNTRIES = ['España','Andorra','Portugal','Francia','Alemania','Italia','Reino Unido','Irlanda','Países Bajos','Bélgica','Suiza','Austria','Suecia','Noruega','Dinamarca','Finlandia','Polonia','República Checa','Grecia','Estados Unidos','Canadá','México','Argentina','Chile','Colombia','Perú','Uruguay','Paraguay','Bolivia','Venezuela','Ecuador','Costa Rica','Panamá','República Dominicana','Cuba','Brasil','Japón','China','Corea del Sur','Taiwán','India','Australia','Nueva Zelanda','Marruecos','Sudáfrica','Israel','Emiratos Árabes Unidos'];
 let currentScreen = null; // null (cargando) | 'home' | 'portfolio'
 let openCardMenu = null; // id de la cartera cuyo menú de tres puntos está abierto
+let openScreenerId = null; // id del screener desplegado en Mis Screeners
 let theme = localStorage.getItem('ps_theme') || 'dark';
 let statusMessage = '', statusMessageTimer = null;
 function showStatus(msg, ms=4000){
@@ -2540,20 +2541,30 @@ function renderScreenersScreen(){
   const screenerBlock = (s) => {
     const matches = matchesForScreener(s);
     const conditions = s.screener_conditions || [];
-    return `<div style="background:var(--panel-2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;">
-        <div>
-          <div style="font-size:14px;font-weight:700;">${esc(s.name)}</div>
-          <div style="font-size:10.5px;color:var(--text-faint);margin-top:3px;">${conditions.map(c=>`${SCREENER_METRIC[c.metric]?.label||c.metric} ${SCREENER_OPERATOR[c.operator]} ${c.value}`).join(' · ')}</div>
+    const isOpen = openScreenerId === s.id;
+    const countColor = (s.alerts_enabled && matches.length) ? 'var(--accent-text)' : 'var(--text-faint)';
+    return `<div style="background:var(--panel-2);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+      <button class="screener-row-toggle" data-id="${s.id}" style="cursor:pointer;width:100%;text-align:left;background:none;border:none;padding:14px 18px;display:flex;align-items:center;gap:14px;color:var(--text);font-family:inherit;">
+        <span style="font-size:11px;color:var(--text-faint);transform:rotate(${isOpen?'90deg':'0deg'});transition:transform .15s;flex-shrink:0;">▶</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name)}</div>
+          <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${conditions.length} condición${conditions.length===1?'':'es'}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-          <button class="screener-alerts-toggle" data-id="${s.id}" data-enabled="${s.alerts_enabled?'1':'0'}" title="${s.alerts_enabled?'Alertas activas':'Alertas desactivadas'}" style="cursor:pointer;font-size:10.5px;font-weight:700;padding:3px 11px;border-radius:10px;border:1px solid ${s.alerts_enabled?'var(--accent-border)':'var(--border)'};background:${s.alerts_enabled?'var(--accent-soft)':'var(--panel-2)'};color:${s.alerts_enabled?'var(--accent-text)':'var(--text-faint)'};white-space:nowrap;">Alertas: ${s.alerts_enabled?'Sí':'No'}</button>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:18px;font-weight:700;color:${countColor};">${screenerUniverseLoading?'…':matches.length}</div>
+          <div style="font-size:9.5px;color:var(--text-faint);">coincidencia${matches.length===1?'':'s'}</div>
+        </div>
+      </button>
+      ${isOpen ? `<div style="padding:0 18px 16px;">
+        <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:12px;padding-top:12px;border-top:1px solid var(--border-soft);">${conditions.map(c=>`${SCREENER_METRIC[c.metric]?.label||c.metric} ${SCREENER_OPERATOR[c.operator]} ${c.value}`).join(' · ')}</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+          <button class="screener-alerts-toggle" data-id="${s.id}" data-enabled="${s.alerts_enabled?'1':'0'}" style="cursor:pointer;font-size:10.5px;font-weight:700;padding:3px 11px;border-radius:10px;border:1px solid ${s.alerts_enabled?'var(--accent-border)':'var(--border)'};background:${s.alerts_enabled?'var(--accent-soft)':'var(--panel-2)'};color:${s.alerts_enabled?'var(--accent-text)':'var(--text-faint)'};white-space:nowrap;">${s.alerts_enabled?'Activo':'Desactivado'}</button>
           <button class="screener-delete-btn" data-id="${s.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;">×</button>
         </div>
-      </div>
-      ${screenerUniverseLoading ? `<div style="font-size:11.5px;color:var(--text-faint);">Cargando datos del S&amp;P 500…</div>`
-        : !matches.length ? `<div style="font-size:11.5px;color:var(--text-faint);">Ninguna acción del S&amp;P 500 cumple estas condiciones ahora mismo.</div>`
-        : `<div style="display:flex;flex-direction:column;gap:6px;">${matches.slice(0,20).map(renderScreenerMatchRow).join('')}${matches.length>20?`<div style="font-size:10.5px;color:var(--text-faint);text-align:center;padding-top:4px;">+ ${matches.length-20} más</div>`:''}</div>`}
+        ${screenerUniverseLoading ? `<div style="font-size:11.5px;color:var(--text-faint);">Cargando datos del S&amp;P 500…</div>`
+          : !matches.length ? `<div style="font-size:11.5px;color:var(--text-faint);">Ninguna acción del S&amp;P 500 cumple estas condiciones ahora mismo.</div>`
+          : `<div style="display:flex;flex-direction:column;gap:6px;">${matches.slice(0,20).map(renderScreenerMatchRow).join('')}${matches.length>20?`<div style="font-size:10.5px;color:var(--text-faint);text-align:center;padding-top:4px;">+ ${matches.length-20} más</div>`:''}</div>`}
+      </div>` : ''}
     </div>`;
   };
 
@@ -2589,7 +2600,14 @@ function renderScreenersScreen(){
     render(null);
   });
 
-  app.querySelectorAll('.screener-delete-btn').forEach(btn => btn.addEventListener('click', async () => {
+  app.querySelectorAll('.screener-row-toggle').forEach(btn => btn.addEventListener('click', () => {
+    const id = btn.getAttribute('data-id');
+    openScreenerId = openScreenerId === id ? null : id;
+    render(null);
+  }));
+
+  app.querySelectorAll('.screener-delete-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
     const id = btn.getAttribute('data-id');
     await supabase.from('screeners').delete().eq('id', id);
     await loadScreeners();
