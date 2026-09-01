@@ -883,7 +883,7 @@ function renderScreenersHomeSection(){
   if(screenerUniverse === null && !screenerUniverseLoading){
     loadScreenerUniverse().then(() => render(null));
   }
-  const cards = (screeners||[]).map(s => {
+  const cards = (screeners||[]).slice().sort((a,b)=>(b.alerts_enabled?1:0)-(a.alerts_enabled?1:0)).map(s => {
     const matches = matchesForScreener(s);
     const numConditions = (s.screener_conditions||[]).length;
     return `<button class="home-screener-card" data-id="${s.id}" style="cursor:pointer;text-align:left;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:8px;color:var(--text);font-family:inherit;">
@@ -2546,12 +2546,16 @@ function renderScreenersScreen(){
     const conditions = s.screener_conditions || [];
     const isOpen = openScreenerId === s.id;
     const countColor = (s.alerts_enabled && matches.length) ? 'var(--accent-text)' : 'var(--text-faint)';
+    const conditionsText = conditions.map(c=>`${SCREENER_METRIC[c.metric]?.label||c.metric} ${SCREENER_OPERATOR[c.operator]} ${c.value}`).join(' · ');
     return `<div style="background:var(--panel-2);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
       <button class="screener-row-toggle" data-id="${s.id}" style="cursor:pointer;width:100%;text-align:left;background:none;border:none;padding:14px 18px;display:flex;align-items:center;gap:14px;color:var(--text);font-family:inherit;">
         <span style="font-size:11px;color:var(--text-faint);transform:rotate(${isOpen?'90deg':'0deg'});transition:transform .15s;flex-shrink:0;">▶</span>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name)}</div>
-          <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${conditions.length} condición${conditions.length===1?'':'es'}</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name)}</div>
+            <span style="flex-shrink:0;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:8px;border:1px solid ${s.alerts_enabled?'var(--accent-border)':'var(--border)'};background:${s.alerts_enabled?'var(--accent-soft)':'var(--panel-2)'};color:${s.alerts_enabled?'var(--accent-text)':'var(--text-faint)'};">${s.alerts_enabled?'Activo':'Desactivado'}</span>
+          </div>
+          <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${conditionsText}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
           <div style="font-size:18px;font-weight:700;color:${countColor};">${screenerUniverseLoading?'…':matches.length}</div>
@@ -2559,10 +2563,12 @@ function renderScreenersScreen(){
         </div>
       </button>
       ${isOpen ? `<div style="padding:0 18px 16px;">
-        <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:12px;padding-top:12px;border-top:1px solid var(--border-soft);">${conditions.map(c=>`${SCREENER_METRIC[c.metric]?.label||c.metric} ${SCREENER_OPERATOR[c.operator]} ${c.value}`).join(' · ')}</div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-          <button class="screener-alerts-toggle" data-id="${s.id}" data-enabled="${s.alerts_enabled?'1':'0'}" style="cursor:pointer;font-size:10.5px;font-weight:700;padding:3px 11px;border-radius:10px;border:1px solid ${s.alerts_enabled?'var(--accent-border)':'var(--border)'};background:${s.alerts_enabled?'var(--accent-soft)':'var(--panel-2)'};color:${s.alerts_enabled?'var(--accent-text)':'var(--text-faint)'};white-space:nowrap;">${s.alerts_enabled?'Activo':'Desactivado'}</button>
-          <button class="screener-delete-btn" data-id="${s.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;">×</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding-top:12px;border-top:1px solid var(--border-soft);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button class="screener-alerts-toggle" data-id="${s.id}" data-enabled="${s.alerts_enabled?'1':'0'}" style="cursor:pointer;font-size:10.5px;font-weight:700;padding:3px 11px;border-radius:10px;border:1px solid ${s.alerts_enabled?'var(--accent-border)':'var(--border)'};background:${s.alerts_enabled?'var(--accent-soft)':'var(--panel-2)'};color:${s.alerts_enabled?'var(--accent-text)':'var(--text-faint)'};white-space:nowrap;">${s.alerts_enabled?'Activo':'Desactivado'}</button>
+            <button class="screener-delete-btn" data-id="${s.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;">×</button>
+          </div>
+          <div style="font-size:10px;color:var(--text-faint);white-space:nowrap;">Creado el ${s.created_at ? new Date(s.created_at).toLocaleDateString('es-ES') : '—'}</div>
         </div>
         ${screenerUniverseLoading ? `<div style="font-size:11.5px;color:var(--text-faint);">Cargando datos del S&amp;P 500…</div>`
           : !matches.length ? `<div style="font-size:11.5px;color:var(--text-faint);">Ninguna acción del S&amp;P 500 cumple estas condiciones ahora mismo.</div>`
@@ -2583,7 +2589,7 @@ function renderScreenersScreen(){
       </div>
       ${screenersLoading || screeners===null ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Cargando screeners…</div>`
         : !screeners.length ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Todavía no tienes ningún screener. Crea uno para empezar a detectar oportunidades.</div>`
-        : `<div style="display:flex;flex-direction:column;gap:14px;">${screeners.map(screenerBlock).join('')}</div>`}
+        : `<div style="display:flex;flex-direction:column;gap:14px;">${screeners.slice().sort((a,b)=>(b.alerts_enabled?1:0)-(a.alerts_enabled?1:0)).map(screenerBlock).join('')}</div>`}
     </div>
     ${renderScreenerBuilderModal()}
     ${renderViewOverlay()}
