@@ -1657,40 +1657,13 @@ function wireAddPositionModal(app){
 
 function renderViewOverlay(){
   if(!activeView) return '';
-  const titles = { cuenta:'Mi cuenta' };
-  let body;
-  if(activeView === 'cuenta'){
-    const pr = profile || {};
-    body = `<div style="display:flex;flex-direction:column;gap:14px;">
-      <div>
-        <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Email</div>
-        <div style="font-size:13px;color:var(--text);">${session ? session.user.email : ''}</div>
-      </div>
-      <div class="account-fields-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div class="field"><label>Nombre</label><input data-profile-field="first_name" value="${(pr.first_name||'').replace(/"/g,'&quot;')}" placeholder="Tu nombre"/></div>
-        <div class="field"><label>Apellidos</label><input data-profile-field="last_name" value="${(pr.last_name||'').replace(/"/g,'&quot;')}" placeholder="Tus apellidos"/></div>
-        <div class="field"><label>Fecha de nacimiento</label><input type="date" data-profile-field="birth_date" value="${pr.birth_date||''}"/></div>
-        <div class="field"><label>País</label><select data-profile-field="country">
-          <option value="">— Elegir —</option>
-          ${COUNTRIES.map(c=>`<option value="${c}" ${pr.country===c?'selected':''}>${c}</option>`).join('')}
-        </select></div>
-      </div>
-      <div id="profile-save-status" style="font-size:10.5px;color:var(--text-faint);min-height:12px;"></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--panel-2);border-radius:8px;">
-        <span style="font-size:12.5px;">Tema</span>
-        <button id="account-theme-toggle" class="pill-btn" style="border:1px solid var(--border);background:var(--panel);color:var(--text-dim);padding:6px 14px;font-size:11.5px;">${theme==='dark'?'☀ Modo claro':'☾ Modo oscuro'}</button>
-      </div>
-    </div>`;
-  } else {
-    body = `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Esta sección todavía no está construida — próximamente.</div>`;
-  }
   return `<div class="modal-backdrop" id="view-backdrop">
     <div class="modal-card" style="max-width:440px;padding:24px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
-        <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:17px;margin:0;">${titles[activeView]}</h2>
+        <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:17px;margin:0;">Próximamente</h2>
         <button id="view-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
       </div>
-      ${body}
+      <div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Esta sección todavía no está construida — próximamente.</div>
     </div>
   </div>`;
 }
@@ -1700,28 +1673,6 @@ function wireViewOverlay(app){
   if(viewClose) viewClose.addEventListener('click', () => { activeView = null; render(currentScenario); });
   const viewBackdrop = document.getElementById('view-backdrop');
   if(viewBackdrop) viewBackdrop.addEventListener('click', (e) => { if(e.target===viewBackdrop){ activeView = null; render(currentScenario); } });
-  const accountThemeBtn = document.getElementById('account-theme-toggle');
-  if(accountThemeBtn) accountThemeBtn.addEventListener('click', () => {
-    theme = theme === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('ps_theme', theme);
-    document.documentElement.setAttribute('data-theme', theme);
-    render(currentScenario);
-  });
-
-  app.querySelectorAll('[data-profile-field]').forEach(el => {
-    const evt = el.tagName === 'SELECT' ? 'change' : 'blur';
-    el.addEventListener(evt, async () => {
-      const field = el.getAttribute('data-profile-field');
-      const value = el.value.trim() ? el.value.trim() : null;
-      const statusEl = document.getElementById('profile-save-status');
-      if(statusEl) statusEl.textContent = 'Guardando…';
-      const { error } = await supabase.from('profiles').upsert({ [field]: value });
-      if(error){ if(statusEl) statusEl.textContent = 'Error al guardar.'; return; }
-      profile = { ...(profile||{}), [field]: value };
-      if(statusEl) statusEl.textContent = 'Guardado.';
-    });
-  });
-
 }
 
 function renderModal(){
@@ -1936,9 +1887,8 @@ function menuBlock(){
     <button id="menu-btn" class="theme-toggle" title="Menú">☰</button>
     ${menuOpen ? `<div style="position:absolute;top:46px;right:0;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);min-width:230px;z-index:60;overflow:hidden;">
       <button class="nav-item" data-view="carteras" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mis carteras</button>
-      <button class="nav-item" data-view="explorar" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Explorar en Walletbook</button>
-      <button class="nav-item" data-view="reglas" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mis reglas</button>
       <button class="nav-item" data-view="screeners" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mis Screeners</button>
+      <button class="nav-item" data-view="explorar" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Explorar en Walletbook</button>
       <button class="nav-item" data-view="cuenta" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mi cuenta</button>
       <button id="menu-logout-btn" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;color:var(--red);padding:13px 18px;font-size:13.5px;">Cerrar sesión</button>
     </div>` : ''}
@@ -2079,8 +2029,8 @@ function wireMenu(app){
       render(null);
       await loadExploreList();
       render(null);
-    } else if(view === 'reglas'){
-      currentScreen = 'reglas';
+    } else if(view === 'cuenta'){
+      currentScreen = 'cuenta';
       allRulesLoading = true;
       render(null);
       await loadAllRulesData();
@@ -2383,9 +2333,31 @@ function renderExploreScreen(){
   });
 }
 
-function renderRulesScreen(){
+function renderAccountScreen(){
   if(!session) return; // una operación asíncrona pendiente terminó después de cerrar sesión; no repintar la app
   const app = document.getElementById('app');
+  const pr = profile || {};
+
+  const accountSection = `<div style="max-width:560px;margin-bottom:30px;padding-bottom:26px;border-bottom:1px solid var(--border-soft);">
+    <div style="margin-bottom:14px;">
+      <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Email</div>
+      <div style="font-size:13px;color:var(--text);">${session ? esc(session.user.email) : ''}</div>
+    </div>
+    <div class="account-fields-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div class="field"><label>Nombre</label><input data-profile-field="first_name" value="${esc(pr.first_name||'')}" placeholder="Tu nombre"/></div>
+      <div class="field"><label>Apellidos</label><input data-profile-field="last_name" value="${esc(pr.last_name||'')}" placeholder="Tus apellidos"/></div>
+      <div class="field"><label>Fecha de nacimiento</label><input type="date" data-profile-field="birth_date" value="${pr.birth_date||''}"/></div>
+      <div class="field"><label>País</label><select data-profile-field="country">
+        <option value="">— Elegir —</option>
+        ${COUNTRIES.map(c=>`<option value="${c}" ${pr.country===c?'selected':''}>${c}</option>`).join('')}
+      </select></div>
+    </div>
+    <div id="profile-save-status" style="font-size:10.5px;color:var(--text-faint);min-height:12px;margin-bottom:10px;"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--panel-2);border-radius:8px;">
+      <span style="font-size:12.5px;">Tema</span>
+      <button id="account-theme-toggle" class="pill-btn" style="border:1px solid var(--border);background:var(--panel);color:var(--text-dim);padding:6px 14px;font-size:11.5px;">${theme==='dark'?'☀ Modo claro':'☾ Modo oscuro'}</button>
+    </div>
+  </div>`;
 
   const ruleRow = (item) => {
     const { rule, value, matched, missing } = item;
@@ -2426,8 +2398,13 @@ function renderRulesScreen(){
     <div style="max-width:1200px;margin:0 auto;">
       ${topNavBar()}
       <div style="margin-bottom:26px;">
-        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:26px;margin:0;">Mis reglas</h1>
-        <div style="font-size:12.5px;color:var(--text-faint);margin-top:4px;">Añade reglas desde el detalle de cada posición. Aquí verás cuáles están activas ahora mismo.</div>
+        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mi cuenta</h1>
+        <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Tus datos, preferencias y las reglas activas de tus posiciones</div>
+      </div>
+      ${accountSection}
+      <div style="margin-bottom:14px;">
+        <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:16px;margin:0;">Mis reglas</h2>
+        <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Añade reglas desde el detalle de cada posición. Aquí verás cuáles están activas ahora mismo.</div>
       </div>
       ${body}
     </div>
@@ -2440,6 +2417,27 @@ function renderRulesScreen(){
   wireDialog(app);
   wireStockFinderModal(app);
   wireViewOverlay(app);
+
+  const accountThemeBtn = document.getElementById('account-theme-toggle');
+  if(accountThemeBtn) accountThemeBtn.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('ps_theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
+    render(currentScenario);
+  });
+  app.querySelectorAll('[data-profile-field]').forEach(el => {
+    const evt = el.tagName === 'SELECT' ? 'change' : 'blur';
+    el.addEventListener(evt, async () => {
+      const field = el.getAttribute('data-profile-field');
+      const value = el.value.trim() ? el.value.trim() : null;
+      const statusEl = document.getElementById('profile-save-status');
+      if(statusEl) statusEl.textContent = 'Guardando…';
+      const { error } = await supabase.from('profiles').upsert({ [field]: value });
+      if(error){ if(statusEl) statusEl.textContent = 'Error al guardar.'; return; }
+      profile = { ...(profile||{}), [field]: value };
+      if(statusEl) statusEl.textContent = 'Guardado.';
+    });
+  });
 
   app.querySelectorAll('.global-rule-delete-btn').forEach(btn=>btn.addEventListener('click', async () => {
     const id = btn.getAttribute('data-id');
@@ -2987,8 +2985,8 @@ function render(scenario){
     renderExploreScreen();
     return;
   }
-  if(currentScreen === 'reglas'){
-    renderRulesScreen();
+  if(currentScreen === 'cuenta'){
+    renderAccountScreen();
     return;
   }
   if(currentScreen === 'screeners'){
