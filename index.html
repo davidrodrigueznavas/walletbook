@@ -59,7 +59,7 @@
   }
   html, body { height:100%; margin:0; }
   body { background:var(--bg); color:var(--text); font-family:'Calibri','Carlito',sans-serif; overflow:hidden; }
-  #app { height:100vh; max-width:1360px; margin:0 auto; padding:14px 0; box-sizing:border-box; display:flex; flex-direction:column; }
+  #app { height:100vh; padding:14px 0; box-sizing:border-box; display:flex; flex-direction:column; }
   input, textarea, select { font-family:'Calibri','Carlito',sans-serif; }
   ::-webkit-scrollbar { width:8px; height:8px; }
   ::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
@@ -899,7 +899,7 @@ function renderScreenersHomeSection(){
         <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mis Screeners</h2>
         <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Acciones del S&amp;P 500 que cumplen tus criterios</div>
       </div>
-      <button id="screeners-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Ver todos →</button>
+      <button id="screeners-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Explora todo →</button>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
       ${cards}
@@ -939,7 +939,7 @@ function renderDiscoverPreview(){
         <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Descubre</h2>
         <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Otras carteras publicadas por la comunidad</div>
       </div>
-      <button id="discover-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Explorar todas →</button>
+      <button id="discover-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Explora todo →</button>
     </div>
     ${body}
   </div>`;
@@ -2054,9 +2054,12 @@ function renderHomeScreen(){
     <div style="max-width:1200px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
       ${topNavBar()}
       ${renderMarketIndicators()}
-      <div style="margin-bottom:26px;">
-        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mis carteras</h1>
-        <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Tus carteras de inversión</div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:26px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mis carteras</h1>
+          <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Tus carteras de inversión</div>
+        </div>
+        <button id="carteras-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Explora todo →</button>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;">
         ${portfolios.map(p => `
@@ -2116,6 +2119,12 @@ function renderHomeScreen(){
     render(null);
   }));
 
+  const cartersSeeAllBtn = document.getElementById('carteras-see-all-btn');
+  if(cartersSeeAllBtn) cartersSeeAllBtn.addEventListener('click', async () => {
+    currentScreen = 'explorar';
+    exploreDetailId = null; exploreDetailPositions = null; exploreCategoryFilter = null;
+    render(null);
+  });
   const discoverSeeAllBtn = document.getElementById('discover-see-all-btn');
   if(discoverSeeAllBtn) discoverSeeAllBtn.addEventListener('click', async () => {
     currentScreen = 'explorar';
