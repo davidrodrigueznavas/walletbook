@@ -730,7 +730,7 @@ function fmtNewsDate(iso){
 async function loadPortfolioNews(){
   const token = ++portfolioNewsToken;
   portfolioNewsLoading = true; portfolioNewsError = null; portfolioNews = null;
-  const withTicker = portfolio.positions.filter(p => p.ticker);
+  const withTicker = portfolio.positions.filter(p => p.ticker && investedOf(p) > 0);
   if(!withTicker.length){
     portfolioNews = [];
     portfolioNewsLoading = false;
@@ -1794,7 +1794,7 @@ function renderPortfolioNewsModal(){
   if(!portfolioNewsOpen) return '';
   let body;
   if(portfolioNewsLoading){
-    body = `<div style="font-size:12px;color:var(--text-faint);padding:24px 0;text-align:center;">Cargando noticias de ${portfolio.positions.filter(p=>p.ticker).length} posiciones…</div>`;
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:24px 0;text-align:center;">Cargando noticias de ${portfolio.positions.filter(p=>p.ticker && investedOf(p)>0).length} posiciones…</div>`;
   } else if(portfolioNewsError){
     body = `<div style="font-size:12px;color:var(--text-faint);padding:24px 0;text-align:center;">${portfolioNewsError}</div>`;
   } else if(!portfolioNews || !portfolioNews.length){
