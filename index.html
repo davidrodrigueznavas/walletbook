@@ -894,12 +894,9 @@ function renderScreenersHomeSection(){
     </button>`;
   }).join('');
   return `<div style="margin-top:34px;">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-      <div>
-        <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mis Screeners</h2>
-        <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Acciones del S&amp;P 500 que cumplen tus criterios</div>
-      </div>
-      <button id="screeners-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Explora todo →</button>
+    <div style="margin-bottom:14px;">
+      <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mis Screeners</h2>
+      <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Acciones del S&amp;P 500 que cumplen tus criterios</div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
       ${cards}
@@ -907,6 +904,9 @@ function renderScreenersHomeSection(){
         <div style="font-size:22px;color:var(--accent-text);margin-bottom:4px;line-height:1;">+</div>
         <div style="font-size:12.5px;color:var(--accent-text);font-weight:600;">${!screeners||screeners.length===0?'Crear mi primer screener':'Crear screener'}</div>
       </button>
+    </div>
+    <div style="text-align:center;margin-top:16px;">
+      <button id="screeners-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Explora tus screeners →</button>
     </div>
   </div>`;
 }
@@ -934,14 +934,14 @@ function renderDiscoverPreview(){
     </div>`;
   }
   return `<div style="margin-top:34px;">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-      <div>
-        <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Descubre</h2>
-        <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Otras carteras publicadas por la comunidad</div>
-      </div>
-      <button id="discover-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Explora todo →</button>
+    <div style="margin-bottom:14px;">
+      <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Descubre</h2>
+      <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Otras carteras publicadas por la comunidad</div>
     </div>
     ${body}
+    <div style="text-align:center;margin-top:16px;">
+      <button id="discover-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Explora otras carteras →</button>
+    </div>
   </div>`;
 }
 
@@ -2054,12 +2054,9 @@ function renderHomeScreen(){
     <div style="max-width:1200px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
       ${topNavBar()}
       ${renderMarketIndicators()}
-      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:26px;flex-wrap:wrap;gap:8px;">
-        <div>
-          <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mis carteras</h1>
-          <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Tus carteras de inversión</div>
-        </div>
-        <button id="carteras-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Explora todo →</button>
+      <div style="margin-bottom:26px;">
+        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mis carteras</h1>
+        <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Tus carteras de inversión</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;">
         ${portfolios.map(p => `
@@ -2089,6 +2086,9 @@ function renderHomeScreen(){
           <div style="font-size:24px;color:var(--accent-text);margin-bottom:4px;line-height:1;">+</div>
           <div style="font-size:13px;color:var(--accent-text);font-weight:600;">${portfolios.length===0 ? 'Crear mi primera cartera' : 'Crear cartera'}</div>
         </div>
+      </div>
+      <div style="text-align:center;margin-top:16px;">
+        <button id="carteras-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Explora otras carteras →</button>
       </div>
       ${renderScreenersHomeSection()}
       ${renderDiscoverPreview()}
