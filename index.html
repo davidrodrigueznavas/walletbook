@@ -189,6 +189,20 @@ const RULE_ACTION = {
   comprar:'Comprar', recomprar:'Recomprar', reducir:'Reducir',
   vender:'Vender (stop-loss)', revisar_tesis:'Revisar tesis', otra:'Otra'
 };
+const SCREENER_METRIC = {
+  rsi14: {label:'RSI (14)', fmt:v=>v.toFixed(1), get:r=>r.rsi14},
+  price_vs_sma50: {label:'Precio vs SMA50 (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=> r.sma50 ? ((r.last_price-r.sma50)/r.sma50)*100 : null},
+  price_vs_sma200: {label:'Precio vs SMA200 (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=> r.sma200 ? ((r.last_price-r.sma200)/r.sma200)*100 : null},
+  day_change_pct: {label:'Variación diaria (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=>r.day_change_pct},
+  volume_ratio: {label:'Volumen vs media 30d (x)', fmt:v=>v.toFixed(2)+'x', get:r=> r.avg_volume_30d ? r.volume/r.avg_volume_30d : null},
+  week52_high_pct: {label:'Distancia al máximo 52 sem (%)', fmt:v=>v.toFixed(1)+'%', get:r=> r.week52_high ? ((r.last_price-r.week52_high)/r.week52_high)*100 : null},
+  week52_low_pct: {label:'Distancia al mínimo 52 sem (%)', fmt:v=>v.toFixed(1)+'%', get:r=> r.week52_low ? ((r.last_price-r.week52_low)/r.week52_low)*100 : null},
+  pe_ratio: {label:'PER', fmt:v=>v.toFixed(1), get:r=>r.pe_ratio},
+  market_cap: {label:'Capitalización (miles de M$)', fmt:v=>v.toFixed(1), get:r=> r.market_cap ? r.market_cap/1e9 : null},
+  revenue_growth: {label:'Crecimiento ingresos YoY (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=> r.revenue_growth!=null ? r.revenue_growth*100 : null},
+  last_price: {label:'Precio ($)', fmt:v=>v.toFixed(2), get:r=>r.last_price},
+};
+const SCREENER_OPERATOR = { gt:'mayor que', lt:'menor que' };
 function ruleMetricValue(metric, p, portfolioValue){
   const price = num(p.price), cur = p.current_price_eur, date = p.date || p.purchase_date;
   switch(metric){
@@ -295,6 +309,9 @@ let profile = null;
 let exploreList = null, exploreLoading = false, exploreDetailId = null, exploreDetailPositions = null, exploreCategoryFilter = null;
 let positionRules = [], positionRulesLoading = false, ruleFormOpen = false, ruleFormError = null;
 let allRulesData = null, allRulesLoading = false;
+let screeners = null, screenersLoading = false, screenerUniverse = null, screenerUniverseLoading = false;
+let screenerBuilderOpen = false, screenerBuilderName = '', screenerBuilderConditions = [], screenerBuilderError = null;
+let screenerDetailId = null;
 
 let marketIndicators = null, marketIndicatorsLoading = false, marketIndicatorsError = null;
 
@@ -791,6 +808,56 @@ async function loadAllRulesData(){
   allRulesLoading = false;
 }
 
+async function loadScreeners(){
+  screenersLoading = true;
+  const { data, error } = await supabase.from('screeners').select('*, screener_conditions(*)').eq('owner_id', session.user.id).order('created_at', { ascending:false });
+  if(error){ console.error(error); screeners = []; screenersLoading = false; return; }
+  screeners = data || [];
+  screenersLoading = false;
+}
+
+async function loadScreenerUniverse(){
+  if(screenerUniverse) return; // se carga una vez y se reutiliza; el refresco real lo hace el cron por detrás
+  screenerUniverseLoading = true;
+  const { data, error } = await supabase.from('sp500_constituents').select('*, sp500_metrics(*), sp500_fundamentals(*)');
+  if(error){ console.error(error); screenerUniverse = []; screenerUniverseLoading = false; return; }
+  screenerUniverse = (data || []).map(row => ({
+    ticker: row.ticker,
+    name: row.name,
+    sector: row.sector,
+    last_price: num(row.sp500_metrics?.last_price),
+    day_change_pct: num(row.sp500_metrics?.day_change_pct),
+    volume: num(row.sp500_metrics?.volume),
+    avg_volume_30d: num(row.sp500_metrics?.avg_volume_30d),
+    rsi14: num(row.sp500_metrics?.rsi14),
+    sma50: num(row.sp500_metrics?.sma50),
+    sma200: num(row.sp500_metrics?.sma200),
+    week52_high: num(row.sp500_metrics?.week52_high),
+    week52_low: num(row.sp500_metrics?.week52_low),
+    metrics_updated_at: row.sp500_metrics?.updated_at || null,
+    pe_ratio: num(row.sp500_fundamentals?.pe_ratio),
+    market_cap: num(row.sp500_fundamentals?.market_cap),
+    revenue_growth: num(row.sp500_fundamentals?.revenue_growth),
+    fundamentals_updated_at: row.sp500_fundamentals?.updated_at || null,
+  }));
+  screenerUniverseLoading = false;
+}
+
+function evaluateScreenerConditions(conditions, row){
+  return conditions.every(c => {
+    const metric = SCREENER_METRIC[c.metric];
+    if(!metric) return false;
+    const value = metric.get(row);
+    if(value===null || value===undefined || isNaN(value)) return false;
+    return c.operator==='gt' ? value > c.value : value < c.value;
+  });
+}
+
+function matchesForScreener(screener){
+  if(!screenerUniverse || !screener.screener_conditions || !screener.screener_conditions.length) return [];
+  return screenerUniverse.filter(row => evaluateScreenerConditions(screener.screener_conditions, row));
+}
+
 async function loadExploreList(){
   exploreLoading = true;
   const { data, error } = await supabase.from('shared_portfolios_summary').select('*').order('overall_gain_pct', { ascending:false, nullsFirst:false });
@@ -807,6 +874,43 @@ async function loadExploreDetail(portfolioId){
   exploreDetailPositions = data || [];
   exploreLoading = false;
 }
+function renderScreenersHomeSection(){
+  if(screeners === null && !screenersLoading){
+    loadScreeners().then(() => render(null));
+  }
+  if(screenerUniverse === null && !screenerUniverseLoading){
+    loadScreenerUniverse().then(() => render(null));
+  }
+  const cards = (screeners||[]).map(s => {
+    const matches = matchesForScreener(s);
+    const numConditions = (s.screener_conditions||[]).length;
+    return `<button class="home-screener-card" data-id="${s.id}" style="cursor:pointer;text-align:left;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:8px;color:var(--text);font-family:inherit;">
+      <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name)}</div>
+      <div style="font-size:11px;color:var(--text-faint);">${numConditions} condición${numConditions===1?'':'es'}</div>
+      <div style="display:flex;align-items:baseline;gap:6px;margin-top:6px;padding-top:10px;border-top:1px solid var(--border-soft);">
+        <span style="font-size:22px;font-weight:700;color:${matches.length?'var(--accent-text)':'var(--text-faint)'};">${screenerUniverseLoading?'…':matches.length}</span>
+        <span style="font-size:11px;color:var(--text-faint);">coincidencia${matches.length===1?'':'s'} ahora</span>
+      </div>
+    </button>`;
+  }).join('');
+  return `<div style="margin-top:34px;">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mis Screeners</h2>
+        <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Acciones del S&amp;P 500 que cumplen tus criterios</div>
+      </div>
+      <button id="screeners-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Ver todos →</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
+      ${cards}
+      <button id="screeners-create-card" style="cursor:pointer;background:var(--panel-2);border:1.5px dashed var(--accent-border);border-radius:14px;padding:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:100px;">
+        <div style="font-size:22px;color:var(--accent-text);margin-bottom:4px;line-height:1;">+</div>
+        <div style="font-size:12.5px;color:var(--accent-text);font-weight:600;">${!screeners||screeners.length===0?'Crear mi primer screener':'Crear screener'}</div>
+      </button>
+    </div>
+  </div>`;
+}
+
 function renderDiscoverPreview(){
   if(exploreList === null && !exploreLoading){
     loadExploreList().then(() => render(null));
@@ -1834,6 +1938,7 @@ function menuBlock(){
       <button class="nav-item" data-view="carteras" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mis carteras</button>
       <button class="nav-item" data-view="explorar" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Explorar en Walletbook</button>
       <button class="nav-item" data-view="reglas" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mis reglas</button>
+      <button class="nav-item" data-view="screeners" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mis Screeners</button>
       <button class="nav-item" data-view="cuenta" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mi cuenta</button>
       <button id="menu-logout-btn" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;color:var(--red);padding:13px 18px;font-size:13.5px;">Cerrar sesión</button>
     </div>` : ''}
@@ -1980,6 +2085,9 @@ function wireMenu(app){
       render(null);
       await loadAllRulesData();
       render(null);
+    } else if(view === 'screeners'){
+      currentScreen = 'screeners';
+      render(null);
     } else {
       activeView = view;
       render(currentScenario);
@@ -2028,8 +2136,10 @@ function renderHomeScreen(){
           <div style="font-size:13px;color:var(--accent-text);font-weight:600;">${portfolios.length===0 ? 'Crear mi primera cartera' : 'Crear cartera'}</div>
         </div>
       </div>
+      ${renderScreenersHomeSection()}
       ${renderDiscoverPreview()}
     </div>
+    ${renderScreenerBuilderModal()}
     ${renderViewOverlay()}
     ${renderDialog()}
     ${renderStatusToast()}
@@ -2038,6 +2148,22 @@ function renderHomeScreen(){
   wireMenu(app);
   wireDialog(app);
   wireStockFinderModal(app);
+  wireScreenerBuilder(app);
+
+  const screenersSeeAllBtn = document.getElementById('screeners-see-all-btn');
+  if(screenersSeeAllBtn) screenersSeeAllBtn.addEventListener('click', () => {
+    currentScreen = 'screeners';
+    render(null);
+  });
+  const screenersCreateCard = document.getElementById('screeners-create-card');
+  if(screenersCreateCard) screenersCreateCard.addEventListener('click', () => {
+    screenerBuilderOpen = true; screenerBuilderName = ''; screenerBuilderConditions = [{metric:'rsi14', operator:'lt', value:30}]; screenerBuilderError = null;
+    render(null);
+  });
+  app.querySelectorAll('.home-screener-card').forEach(card => card.addEventListener('click', () => {
+    currentScreen = 'screeners';
+    render(null);
+  }));
 
   const discoverSeeAllBtn = document.getElementById('discover-see-all-btn');
   if(discoverSeeAllBtn) discoverSeeAllBtn.addEventListener('click', async () => {
@@ -2320,6 +2446,170 @@ function renderRulesScreen(){
     await loadAllRulesData();
     render(null);
   }));
+}
+
+function renderScreenerBuilderModal(){
+  if(!screenerBuilderOpen) return '';
+  return `<div class="modal-backdrop" id="screener-builder-backdrop">
+    <div class="modal-card" style="max-width:560px;padding:22px 26px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <h3 style="font-family:'Calibri','Carlito',sans-serif;font-size:16px;font-weight:600;margin:0;">Nuevo screener</h3>
+        <button id="screener-builder-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
+      </div>
+      <div class="field" style="margin-bottom:14px;"><label>Nombre</label><input id="screener-builder-name" value="${esc(screenerBuilderName)}" placeholder="ej. Sobreventa fuerte"/></div>
+      <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:8px;">Condiciones (se combinan todas con Y — una acción tiene que cumplirlas todas):</div>
+      <div id="screener-builder-conditions" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+        ${screenerBuilderConditions.map((c,i)=>`<div style="display:flex;gap:6px;align-items:center;">
+          <select class="screener-cond-metric" data-idx="${i}" style="flex:1.3;font-size:11.5px;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);">
+            ${Object.entries(SCREENER_METRIC).map(([k,v])=>`<option value="${k}" ${c.metric===k?'selected':''}>${v.label}</option>`).join('')}
+          </select>
+          <select class="screener-cond-operator" data-idx="${i}" style="font-size:11.5px;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);">
+            ${Object.entries(SCREENER_OPERATOR).map(([k,v])=>`<option value="${k}" ${c.operator===k?'selected':''}>${v}</option>`).join('')}
+          </select>
+          <input class="screener-cond-value" data-idx="${i}" value="${c.value??''}" placeholder="valor" style="width:80px;font-size:11.5px;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);"/>
+          <button class="screener-cond-remove" data-idx="${i}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;">×</button>
+        </div>`).join('')}
+      </div>
+      <button id="screener-cond-add" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);margin-bottom:14px;">+ Añadir condición</button>
+      <div id="screener-builder-error" style="color:var(--red);font-size:11.5px;margin-bottom:10px;display:${screenerBuilderError?'block':'none'};">${screenerBuilderError||''}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="screener-builder-cancel" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);padding:8px 16px;font-size:12.5px;">Cancelar</button>
+        <button id="screener-builder-save" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:8px 16px;font-size:12.5px;font-weight:600;">Guardar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderScreenerMatchRow(row){
+  return `<button class="screener-match-row" data-ticker="${esc(row.ticker)}" style="cursor:pointer;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);font-family:inherit;width:100%;">
+    <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><b>${esc(row.ticker)}</b> <span style="color:var(--text-faint);font-size:11px;">${esc(row.name)}</span></span>
+    <span style="font-size:11px;color:var(--text-faint);flex-shrink:0;">${row.last_price!=null?'$'+row.last_price.toFixed(2):'—'}</span>
+  </button>`;
+}
+
+function renderScreenersScreen(){
+  if(!session) return; // una operación asíncrona pendiente terminó después de cerrar sesión; no repintar la app
+  const app = document.getElementById('app');
+  if(screeners === null && !screenersLoading) loadScreeners().then(() => render(null));
+  if(screenerUniverse === null && !screenerUniverseLoading) loadScreenerUniverse().then(() => render(null));
+
+  const screenerBlock = (s) => {
+    const matches = matchesForScreener(s);
+    const conditions = s.screener_conditions || [];
+    return `<div style="background:var(--panel-2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;">
+        <div>
+          <div style="font-size:14px;font-weight:700;">${esc(s.name)}</div>
+          <div style="font-size:10.5px;color:var(--text-faint);margin-top:3px;">${conditions.map(c=>`${SCREENER_METRIC[c.metric]?.label||c.metric} ${SCREENER_OPERATOR[c.operator]} ${c.value}`).join(' · ')}</div>
+        </div>
+        <button class="screener-delete-btn" data-id="${s.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;flex-shrink:0;">×</button>
+      </div>
+      ${screenerUniverseLoading ? `<div style="font-size:11.5px;color:var(--text-faint);">Cargando datos del S&amp;P 500…</div>`
+        : !matches.length ? `<div style="font-size:11.5px;color:var(--text-faint);">Ninguna acción del S&amp;P 500 cumple estas condiciones ahora mismo.</div>`
+        : `<div style="display:flex;flex-direction:column;gap:6px;">${matches.slice(0,20).map(renderScreenerMatchRow).join('')}${matches.length>20?`<div style="font-size:10.5px;color:var(--text-faint);text-align:center;padding-top:4px;">+ ${matches.length-20} más</div>`:''}</div>`}
+    </div>`;
+  };
+
+  app.innerHTML = `<div class="home-wrap" style="height:100vh;overflow-y:auto;box-sizing:border-box;padding:16px 32px 32px;">
+    <div style="max-width:1200px;margin:0 auto;">
+      ${topNavBar()}
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:26px;flex-wrap:wrap;">
+        <div>
+          <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:26px;margin:0;">Mis Screeners</h1>
+          <div style="font-size:12.5px;color:var(--text-faint);margin-top:4px;">Detecta acciones del S&amp;P 500 que cumplan tus criterios, actualizado cada hora.</div>
+        </div>
+        <button id="screener-create-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:8px 16px;font-size:12.5px;font-weight:600;white-space:nowrap;">+ Crear screener</button>
+      </div>
+      ${screenersLoading || screeners===null ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Cargando screeners…</div>`
+        : !screeners.length ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Todavía no tienes ningún screener. Crea uno para empezar a detectar oportunidades.</div>`
+        : `<div style="display:flex;flex-direction:column;gap:14px;max-width:760px;">${screeners.map(screenerBlock).join('')}</div>`}
+    </div>
+    ${renderScreenerBuilderModal()}
+    ${renderViewOverlay()}
+    ${renderDialog()}
+    ${renderStatusToast()}
+  </div>`;
+
+  wireMenu(app);
+  wireDialog(app);
+  wireStockFinderModal(app);
+  wireViewOverlay(app);
+  wireScreenerBuilder(app);
+
+  const createBtn = document.getElementById('screener-create-btn');
+  if(createBtn) createBtn.addEventListener('click', () => {
+    screenerBuilderOpen = true; screenerBuilderName = ''; screenerBuilderConditions = [{metric:'rsi14', operator:'lt', value:30}]; screenerBuilderError = null;
+    render(null);
+  });
+
+  app.querySelectorAll('.screener-delete-btn').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.getAttribute('data-id');
+    await supabase.from('screeners').delete().eq('id', id);
+    await loadScreeners();
+    render(null);
+  }));
+
+  app.querySelectorAll('.screener-match-row').forEach(btn => btn.addEventListener('click', () => {
+    const ticker = btn.getAttribute('data-ticker');
+    currentScreen = 'visor';
+    selectStockViewerTicker(ticker);
+  }));
+}
+
+function wireScreenerBuilder(app){
+  if(!screenerBuilderOpen) return;
+  const closeIt = () => { screenerBuilderOpen = false; render(null); };
+  const closeBtn = document.getElementById('screener-builder-close');
+  if(closeBtn) closeBtn.addEventListener('click', closeIt);
+  const cancelBtn = document.getElementById('screener-builder-cancel');
+  if(cancelBtn) cancelBtn.addEventListener('click', closeIt);
+  const backdrop = document.getElementById('screener-builder-backdrop');
+  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop) closeIt(); });
+
+  const showErr = (msg) => {
+    screenerBuilderError = msg;
+    const el = document.getElementById('screener-builder-error');
+    if(el){ el.textContent = msg; el.style.display = 'block'; }
+  };
+
+  app.querySelectorAll('.screener-cond-metric').forEach(sel => sel.addEventListener('change', () => {
+    screenerBuilderConditions[Number(sel.getAttribute('data-idx'))].metric = sel.value;
+  }));
+  app.querySelectorAll('.screener-cond-operator').forEach(sel => sel.addEventListener('change', () => {
+    screenerBuilderConditions[Number(sel.getAttribute('data-idx'))].operator = sel.value;
+  }));
+  app.querySelectorAll('.screener-cond-value').forEach(inp => inp.addEventListener('input', () => {
+    screenerBuilderConditions[Number(inp.getAttribute('data-idx'))].value = inp.value;
+  }));
+  app.querySelectorAll('.screener-cond-remove').forEach(btn => btn.addEventListener('click', () => {
+    screenerBuilderConditions.splice(Number(btn.getAttribute('data-idx')), 1);
+    render(null);
+  }));
+
+  const addBtn = document.getElementById('screener-cond-add');
+  if(addBtn) addBtn.addEventListener('click', () => {
+    screenerBuilderConditions.push({metric:'rsi14', operator:'lt', value:30});
+    render(null);
+  });
+
+  const saveBtn = document.getElementById('screener-builder-save');
+  if(saveBtn) saveBtn.addEventListener('click', async () => {
+    const nameInput = document.getElementById('screener-builder-name');
+    const name = nameInput.value.trim();
+    if(!name){ showErr('Falta el nombre.'); return; }
+    if(!screenerBuilderConditions.length){ showErr('Añade al menos una condición.'); return; }
+    for(const c of screenerBuilderConditions){
+      if(c.value===''||c.value===null||isNaN(num(c.value))){ showErr('Todas las condiciones necesitan un valor numérico.'); return; }
+    }
+    const { data: screener, error } = await supabase.from('screeners').insert({ name }).select().single();
+    if(error){ showErr('Error al guardar — revisa la conexión.'); return; }
+    const rows = screenerBuilderConditions.map(c => ({ screener_id: screener.id, metric: c.metric, operator: c.operator, value: num(c.value) }));
+    const { error: condErr } = await supabase.from('screener_conditions').insert(rows);
+    if(condErr){ showErr('Error al guardar las condiciones.'); return; }
+    screenerBuilderOpen = false;
+    await loadScreeners();
+    render(null);
+  });
 }
 
 function avPct(v){ return v==null ? '—' : (v>=0?'+':'')+(v*100).toFixed(1)+'%'; }
@@ -2698,6 +2988,10 @@ function render(scenario){
   }
   if(currentScreen === 'reglas'){
     renderRulesScreen();
+    return;
+  }
+  if(currentScreen === 'screeners'){
+    renderScreenersScreen();
     return;
   }
   if(currentScreen === 'visor'){
