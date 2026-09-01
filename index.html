@@ -2546,7 +2546,10 @@ function renderScreenersScreen(){
           <div style="font-size:14px;font-weight:700;">${esc(s.name)}</div>
           <div style="font-size:10.5px;color:var(--text-faint);margin-top:3px;">${conditions.map(c=>`${SCREENER_METRIC[c.metric]?.label||c.metric} ${SCREENER_OPERATOR[c.operator]} ${c.value}`).join(' · ')}</div>
         </div>
-        <button class="screener-delete-btn" data-id="${s.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;flex-shrink:0;">×</button>
+        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+          <button class="screener-alerts-toggle" data-id="${s.id}" data-enabled="${s.alerts_enabled?'1':'0'}" title="${s.alerts_enabled?'Alertas activas':'Alertas desactivadas'}" style="cursor:pointer;font-size:10.5px;font-weight:700;padding:3px 11px;border-radius:10px;border:1px solid ${s.alerts_enabled?'var(--accent-border)':'var(--border)'};background:${s.alerts_enabled?'var(--accent-soft)':'var(--panel-2)'};color:${s.alerts_enabled?'var(--accent-text)':'var(--text-faint)'};white-space:nowrap;">Alertas: ${s.alerts_enabled?'Sí':'No'}</button>
+          <button class="screener-delete-btn" data-id="${s.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;">×</button>
+        </div>
       </div>
       ${screenerUniverseLoading ? `<div style="font-size:11.5px;color:var(--text-faint);">Cargando datos del S&amp;P 500…</div>`
         : !matches.length ? `<div style="font-size:11.5px;color:var(--text-faint);">Ninguna acción del S&amp;P 500 cumple estas condiciones ahora mismo.</div>`
@@ -2589,6 +2592,14 @@ function renderScreenersScreen(){
   app.querySelectorAll('.screener-delete-btn').forEach(btn => btn.addEventListener('click', async () => {
     const id = btn.getAttribute('data-id');
     await supabase.from('screeners').delete().eq('id', id);
+    await loadScreeners();
+    render(null);
+  }));
+
+  app.querySelectorAll('.screener-alerts-toggle').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.getAttribute('data-id');
+    const nextEnabled = btn.getAttribute('data-enabled') !== '1';
+    await supabase.from('screeners').update({ alerts_enabled: nextEnabled }).eq('id', id);
     await loadScreeners();
     render(null);
   }));
