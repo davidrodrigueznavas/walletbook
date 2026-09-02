@@ -2794,6 +2794,25 @@ function drawStockViewerChart(points, dividends, weeklyPoints, maSelection){
   </svg>`;
 }
 
+function drawVolumeChart(points){
+  const vols = points.map(p=>p.v||0);
+  const w=900,h=70,padL=58,padR=14,padT=4,padB=4;
+  const maxV = Math.max.apply(null, vols) || 1;
+  const x = i => padL + (points.length<=1?0:(i/(points.length-1))*(w-padL-padR));
+  const barW = Math.max(1, (w-padL-padR)/points.length*0.7);
+  const bars = points.map((p,i) => {
+    const bh = Math.max(0.5, (vols[i]/maxV)*(h-padT-padB));
+    const up = i===0 ? true : p.c >= points[i-1].c;
+    const color = up ? '#4ADE8077' : '#F8717177';
+    return `<rect x="${(x(i)-barW/2).toFixed(2)}" y="${(h-padB-bh).toFixed(2)}" width="${barW.toFixed(2)}" height="${bh.toFixed(2)}" fill="${color}"><title>${new Date(p.t).toLocaleDateString('es-ES')} · ${vols[i].toLocaleString('es-ES')}</title></rect>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:100%;display:block;">
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="#2D2F35" stroke-width="1"/>
+    <text x="${padL-8}" y="${padT+8}" font-size="9" fill="#6E7177" font-family="Calibri,Carlito,sans-serif" text-anchor="end">${(maxV/1e6).toFixed(1)}M</text>
+    ${bars}
+  </svg>`;
+}
+
 function renderStockViewerScreen(){
   if(!session) return; // una operación asíncrona pendiente terminó después de cerrar sesión; no repintar la app
   const app = document.getElementById('app');
@@ -2853,6 +2872,7 @@ function renderStockViewerScreen(){
     }
 
     let chartBody = '';
+    let volumeBody = '';
     let rsiValue = null;
     if(stockViewerChartLoading){
       chartBody = `<div style="font-size:12px;color:var(--text-faint);padding:60px 0;text-align:center;">Cargando histórico…</div>`;
@@ -2863,6 +2883,7 @@ function renderStockViewerScreen(){
       const rsiArr = computeRSI(closes, 14);
       rsiValue = rsiArr[rsiArr.length-1];
       chartBody = drawStockViewerChart(stockViewerChartPoints, stockViewerDividends, stockViewerWeeklyPoints, stockViewerMASelection);
+      if(stockViewerChartPoints.some(p=>p.v!=null)) volumeBody = drawVolumeChart(stockViewerChartPoints);
     }
     const rsiColor = rsiValue==null ? 'var(--text-dim)' : rsiValue>=70 ? 'var(--red)' : rsiValue<=30 ? 'var(--green)' : 'var(--text)';
     const rsiLabel = rsiValue==null ? '' : rsiValue>=70 ? 'sobrecompra' : rsiValue<=30 ? 'sobreventa' : 'neutral';
@@ -2889,6 +2910,11 @@ function renderStockViewerScreen(){
         </div>
       </div>
 
+      ${q&&q.description ? `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:20px;">
+        <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Qué hace la empresa <span style="text-transform:none;letter-spacing:0;">· Alpha Vantage, en inglés</span></div>
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.5;">${esc(q.description)}</div>
+      </div>` : ''}
+
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px 22px;margin-bottom:20px;">
         ${quoteBody}
       </div>
@@ -2904,6 +2930,7 @@ function renderStockViewerScreen(){
           ${rsiValue!=null ? `<div style="font-size:11.5px;color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="${METRIC_INFO.rsi.replace(/"/g,'&quot;')}">RSI (14d): <b style="color:${rsiColor};">${rsiValue.toFixed(1)}</b> <span style="color:${rsiColor};">${rsiLabel?'· '+rsiLabel:''}</span></div>` : ''}
         </div>
         <div style="height:260px;">${chartBody}</div>
+        ${volumeBody ? `<div style="height:70px;margin-top:6px;border-top:1px solid var(--border-soft);padding-top:6px;">${volumeBody}</div>` : ''}
       </div>
 
       ${stockViewerEstimates && (stockViewerEstimates.fiscalYears.length || stockViewerEstimates.fiscalQuarters.length) ? `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-top:20px;">
