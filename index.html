@@ -3123,8 +3123,10 @@ function renderStockViewerScreen(){
           ${stockViewerChartLoading ? `<div style="font-size:12px;color:var(--text-faint);padding:60px 0;text-align:center;">Cargando histórico…</div>`
             : stockViewerChartError ? `<div style="font-size:12px;color:var(--text-faint);padding:60px 0;text-align:center;">${stockViewerChartError}</div>`
             : `<div id="stockviewer-main-chart" style="height:320px;"></div>
-               <div id="stockviewer-volume-chart" style="height:80px;margin-top:2px;"></div>
-               <div id="stockviewer-macd-chart" style="height:100px;margin-top:2px;display:${stockViewerShowMacd?'block':'none'};"></div>`}
+               <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-top:6px;">Volumen</div>
+               <div id="stockviewer-volume-chart" style="height:80px;"></div>
+               <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-top:6px;display:${stockViewerShowMacd?'block':'none'};">MACD (12, 26, 9)</div>
+               <div id="stockviewer-macd-chart" style="height:100px;display:${stockViewerShowMacd?'block':'none'};"></div>`}
         </div>
       </div>
 
