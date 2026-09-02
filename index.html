@@ -2003,8 +2003,8 @@ function lupaIcon(){
   return `<svg viewBox="0 0 20 20" style="width:14px;height:14px;flex-shrink:0;"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="13" y1="13" x2="18" y2="18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 }
 
-function trashIcon(){
-  return `<svg viewBox="0 0 20 20" style="width:14px;height:14px;flex-shrink:0;"><path d="M4 6h12M8 6V4.6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V6M6.2 6l.7 9.5a1 1 0 0 0 1 .9h4.2a1 1 0 0 0 1-.9L13.8 6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+function trashIcon(size=14){
+  return `<svg viewBox="0 0 20 20" style="width:${size}px;height:${size}px;flex-shrink:0;"><path d="M4 6h12M8 6V4.6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V6M6.2 6l.7 9.5a1 1 0 0 0 1 .9h4.2a1 1 0 0 0 1-.9L13.8 6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
 function stockFinderBlock(){
@@ -2643,7 +2643,7 @@ function renderScreenersScreen(){
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
           <div style="display:flex;align-items:center;gap:10px;">
-            <button class="screener-delete-btn" data-id="${s.id}" title="Eliminar screener" style="cursor:pointer;background:none;border:none;color:var(--text-faint);padding:2px;display:flex;">${trashIcon()}</button>
+            <button class="screener-delete-btn" data-id="${s.id}" title="Eliminar screener" style="cursor:pointer;background:none;border:none;color:var(--red);padding:2px;display:flex;">${trashIcon(18)}</button>
             <button class="screener-switch" data-id="${s.id}" data-enabled="${s.alerts_enabled?'1':'0'}" title="${s.alerts_enabled?'Desactivar alertas':'Activar alertas'}" style="cursor:pointer;background:none;border:none;padding:0;display:flex;align-items:center;gap:6px;">
               <span style="font-size:9.5px;font-weight:700;color:${s.alerts_enabled?'var(--accent-text)':'var(--text-faint)'};white-space:nowrap;">${s.alerts_enabled?'Activo':'Desactivado'}</span>
               <span style="width:34px;height:19px;border-radius:10px;background:${s.alerts_enabled?'var(--accent)':'var(--border)'};padding:2px;box-sizing:border-box;display:inline-block;transition:background .15s;">
