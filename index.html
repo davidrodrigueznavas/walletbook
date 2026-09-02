@@ -2005,6 +2005,10 @@ function lupaIcon(){
   return `<svg viewBox="0 0 20 20" style="width:14px;height:14px;flex-shrink:0;"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="13" y1="13" x2="18" y2="18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 }
 
+function trashIcon(){
+  return `<svg viewBox="0 0 20 20" style="width:14px;height:14px;flex-shrink:0;"><path d="M4 6h12M8 6V4.6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V6M6.2 6l.7 9.5a1 1 0 0 0 1 .9h4.2a1 1 0 0 0 1-.9L13.8 6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
 function stockFinderBlock(){
   if(!stockFinderOpen){
     return `<button id="stock-finder-btn" class="theme-toggle" title="Buscar una acción">${lupaIcon()}</button>`;
@@ -2634,19 +2638,24 @@ function renderScreenersScreen(){
           <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name)}</div>
           <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${conditionsText}</div>
         </div>
-        <div style="text-align:right;flex-shrink:0;">
-          <div style="font-size:18px;font-weight:700;color:${countColor};">${screenerUniverseLoading?'…':matches.length}</div>
-          <div style="font-size:9.5px;color:var(--text-faint);">coincidencia${matches.length===1?'':'s'}</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button class="screener-delete-btn" data-id="${s.id}" title="Eliminar screener" style="cursor:pointer;background:none;border:none;color:var(--text-faint);padding:2px;display:flex;">${trashIcon()}</button>
+            <button class="screener-switch" data-id="${s.id}" data-enabled="${s.alerts_enabled?'1':'0'}" title="${s.alerts_enabled?'Desactivar alertas':'Activar alertas'}" style="cursor:pointer;background:none;border:none;padding:0;display:flex;align-items:center;gap:6px;">
+              <span style="font-size:9.5px;font-weight:700;color:${s.alerts_enabled?'var(--accent-text)':'var(--text-faint)'};white-space:nowrap;">${s.alerts_enabled?'Activo':'Desactivado'}</span>
+              <span style="width:34px;height:19px;border-radius:10px;background:${s.alerts_enabled?'var(--accent)':'var(--border)'};padding:2px;box-sizing:border-box;display:inline-block;transition:background .15s;">
+                <span style="display:block;width:15px;height:15px;border-radius:50%;background:#fff;transition:transform .15s;transform:translateX(${s.alerts_enabled?'15px':'0'});"></span>
+              </span>
+            </button>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:18px;font-weight:700;color:${countColor};">${screenerUniverseLoading?'…':matches.length}</div>
+            <div style="font-size:9.5px;color:var(--text-faint);">coincidencia${matches.length===1?'':'s'}</div>
+          </div>
         </div>
-        <button class="screener-switch" data-id="${s.id}" data-enabled="${s.alerts_enabled?'1':'0'}" title="${s.alerts_enabled?'Desactivar alertas':'Activar alertas'}" style="cursor:pointer;flex-shrink:0;width:34px;height:19px;border-radius:10px;border:none;padding:2px;background:${s.alerts_enabled?'var(--accent)':'var(--border)'};transition:background .15s;">
-          <span style="display:block;width:15px;height:15px;border-radius:50%;background:#fff;transition:transform .15s;transform:translateX(${s.alerts_enabled?'15px':'0'});"></span>
-        </button>
       </div>
       ${isOpen ? `<div style="padding:0 18px 16px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding-top:12px;border-top:1px solid var(--border-soft);">
-          <button class="screener-delete-btn" data-id="${s.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;">×</button>
-          <div style="font-size:10px;color:var(--text-faint);white-space:nowrap;">Creado el ${s.created_at ? new Date(s.created_at).toLocaleDateString('es-ES') : '—'}</div>
-        </div>
+        <div style="font-size:10px;color:var(--text-faint);text-align:right;margin-bottom:12px;padding-top:12px;border-top:1px solid var(--border-soft);">Creado el ${s.created_at ? new Date(s.created_at).toLocaleDateString('es-ES') : '—'}</div>
         ${screenerUniverseLoading ? `<div style="font-size:11.5px;color:var(--text-faint);">Cargando datos del S&amp;P 500…</div>`
           : !matches.length ? `<div style="font-size:11.5px;color:var(--text-faint);">Ninguna acción del S&amp;P 500 cumple estas condiciones ahora mismo.</div>`
           : `<div style="display:flex;flex-direction:column;gap:6px;">${matches.slice(0,20).map(renderScreenerMatchRow).join('')}${matches.length>20?`<div style="font-size:10.5px;color:var(--text-faint);text-align:center;padding-top:4px;">+ ${matches.length-20} más</div>`:''}</div>`}
