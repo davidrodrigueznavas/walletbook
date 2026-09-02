@@ -323,6 +323,26 @@ function riskBand(score){
   return {label:'Riesgo bajo', color:'#4ADE80'};
 }
 
+// Busca, dentro de una serie de puntos {t,c,...} ya cargada, el índice cuya
+// fecha está más cerca de "hace N días" — para poder recalcular un score en
+// un momento pasado sin hacer ninguna llamada extra a la API.
+function idxNearDaysAgo(points, days){
+  const targetT = Date.now() - days*86400000;
+  let best = 0, bestDiff = Infinity;
+  for(let i=0;i<points.length;i++){
+    const diff = Math.abs(new Date(points[i].t).getTime() - targetT);
+    if(diff < bestDiff){ bestDiff = diff; best = i; }
+  }
+  return best;
+}
+function renderIndicatorDeltaRow(weekAgo, monthAgo, current, invert){
+  if(weekAgo==null || monthAgo==null || current==null) return '';
+  const d7 = current - weekAgo, d30 = current - monthAgo;
+  const fmt = d => (d>=0?'+':'')+Math.round(d);
+  const badColor = d => (invert ? d<0 : d>=0) ? 'var(--red)' : 'var(--green)';
+  return `<div style="font-size:9.5px;color:var(--text-faint);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-soft);">vs hace 1 sem: <b style="color:${badColor(d7)};">${fmt(d7)}</b> · vs hace 1 mes: <b style="color:${badColor(d30)};">${fmt(d30)}</b></div>`;
+}
+
 async function loadMarketIndicators(){
   if(marketIndicatorsLoading) return;
   marketIndicatorsLoading = true; marketIndicatorsError = null;
@@ -350,7 +370,20 @@ async function loadMarketIndicators(){
     const scoreVix = Math.max(0, Math.min(100, (vixLevel-10)*(100/30)));
     const combined = score40==null ? scoreVix : (score40+scoreVix)/2;
 
-    marketIndicators = { sp500Price:lastPrice, sp500Sma40:lastSma40, pctVsSma40, score40, vixLevel, scoreVix, combined };
+    const combinedAt = (spIdx, vixIdx) => {
+      const sma = sma40Arr[spIdx];
+      const price = sp500Closes[spIdx];
+      const pct = sma ? ((price-sma)/sma)*100 : null;
+      const s40 = pct==null ? null : Math.max(0, Math.min(100, 50 - pct*5));
+      const vix = vixRes.points[vixIdx] ? vixRes.points[vixIdx].c : null;
+      const sVix = vix==null ? null : Math.max(0, Math.min(100, (vix-10)*(100/30)));
+      if(s40==null && sVix==null) return null;
+      return s40==null ? sVix : (s40+sVix)/2;
+    };
+    const weekAgo = combinedAt(idxNearDaysAgo(sp500Res.points,7), idxNearDaysAgo(vixRes.points,7));
+    const monthAgo = combinedAt(idxNearDaysAgo(sp500Res.points,30), idxNearDaysAgo(vixRes.points,30));
+
+    marketIndicators = { sp500Price:lastPrice, sp500Sma40:lastSma40, pctVsSma40, score40, vixLevel, scoreVix, combined, weekAgo, monthAgo };
   } catch(e){
     marketIndicatorsError = (e && e.message) || 'Error al consultar indicadores de mercado.';
   }
@@ -383,7 +416,8 @@ function renderCrashIndexCard(){
           <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Índice de volatilidad del S&amp;P 500. Por debajo de 15, mercado tranquilo; 15-20 normal; 20-30 nerviosismo; por encima de 30, estrés o pánico.">VIX</span>
           <span style="font-weight:700;">${m.vixLevel.toFixed(1)}</span>
         </div>
-      </div>`;
+      </div>
+      ${renderIndicatorDeltaRow(m.weekAgo, m.monthAgo, m.combined, false)}`;
   } else {
     body = '';
   }
@@ -411,7 +445,8 @@ async function loadLiquidityIndicator(){
     // absorbe deuda de más riesgo con facilidad (liquidez amplia); cuando cae
     // por debajo de su propia media, se suele leer como estrés de crédito.
     const n = Math.min(hygRes.points.length, iefRes.points.length);
-    const hygCloses = hygRes.points.slice(hygRes.points.length-n).map(p=>p.c);
+    const alignedPoints = hygRes.points.slice(hygRes.points.length-n);
+    const hygCloses = alignedPoints.map(p=>p.c);
     const iefCloses = iefRes.points.slice(iefRes.points.length-n).map(p=>p.c);
     const ratio = hygCloses.map((v,i) => v/iefCloses[i]);
     const sma50Arr = computeSMA(ratio, 50);
@@ -420,7 +455,16 @@ async function loadLiquidityIndicator(){
     const pctVsSma = lastSma ? ((lastRatio-lastSma)/lastSma)*100 : null;
     const score = pctVsSma==null ? null : Math.max(0, Math.min(100, 50 - pctVsSma*12));
 
-    liquidityIndicator = { ratio:lastRatio, sma50:lastSma, pctVsSma, score };
+    const scoreAt = idx => {
+      const sma = sma50Arr[idx];
+      const r = ratio[idx];
+      const pct = sma ? ((r-sma)/sma)*100 : null;
+      return pct==null ? null : Math.max(0, Math.min(100, 50 - pct*12));
+    };
+    const weekAgo = scoreAt(idxNearDaysAgo(alignedPoints,7));
+    const monthAgo = scoreAt(idxNearDaysAgo(alignedPoints,30));
+
+    liquidityIndicator = { ratio:lastRatio, sma50:lastSma, pctVsSma, score, weekAgo, monthAgo };
   } catch(e){
     liquidityIndicatorError = (e && e.message) || 'Error al consultar el indicador de liquidez.';
   }
@@ -456,7 +500,8 @@ function renderLiquidityCard(){
           <span style="color:var(--text-faint);">Ratio actual</span>
           <span style="font-weight:700;">${l.ratio.toFixed(3)}</span>
         </div>
-      </div>`;
+      </div>
+      ${renderIndicatorDeltaRow(l.weekAgo, l.monthAgo, l.score, true)}`;
   } else {
     body = '';
   }
@@ -481,7 +526,16 @@ async function loadYieldCurveIndicator(){
     const irx = irxRes.points[irxRes.points.length-1].c;
     const spread = tnx - irx;
     const score = Math.max(0, Math.min(100, 50 - spread*25));
-    yieldCurveIndicator = { tnx, irx, spread, score };
+
+    const scoreAt = (tnxIdx, irxIdx) => {
+      const t = tnxRes.points[tnxIdx], i = irxRes.points[irxIdx];
+      if(!t || !i) return null;
+      return Math.max(0, Math.min(100, 50 - (t.c-i.c)*25));
+    };
+    const weekAgo = scoreAt(idxNearDaysAgo(tnxRes.points,7), idxNearDaysAgo(irxRes.points,7));
+    const monthAgo = scoreAt(idxNearDaysAgo(tnxRes.points,30), idxNearDaysAgo(irxRes.points,30));
+
+    yieldCurveIndicator = { tnx, irx, spread, score, weekAgo, monthAgo };
   } catch(e){
     yieldCurveError = (e && e.message) || 'Error al consultar la curva de tipos.';
   }
@@ -513,7 +567,8 @@ function renderYieldCurveCard(){
           <span style="color:var(--text-faint);">10 años / 3 meses</span>
           <span style="font-weight:700;">${y.tnx.toFixed(2)}% / ${y.irx.toFixed(2)}%</span>
         </div>
-      </div>`;
+      </div>
+      ${renderIndicatorDeltaRow(y.weekAgo, y.monthAgo, y.score, false)}`;
   } else {
     body = '';
   }
@@ -535,7 +590,8 @@ async function loadBreadthIndicator(){
     if(!rutRes.ok || !rutRes.points || rutRes.points.length<51) throw new Error((rutRes&&rutRes.error)||'Sin datos del Russell 2000.');
     if(!gspcRes.ok || !gspcRes.points || gspcRes.points.length<51) throw new Error((gspcRes&&gspcRes.error)||'Sin datos del S&P 500.');
     const n = Math.min(rutRes.points.length, gspcRes.points.length);
-    const rutCloses = rutRes.points.slice(rutRes.points.length-n).map(p=>p.c);
+    const alignedPoints = rutRes.points.slice(rutRes.points.length-n);
+    const rutCloses = alignedPoints.map(p=>p.c);
     const gspcCloses = gspcRes.points.slice(gspcRes.points.length-n).map(p=>p.c);
     const ratio = rutCloses.map((v,i)=>v/gspcCloses[i]);
     const sma50Arr = computeSMA(ratio, 50);
@@ -543,7 +599,17 @@ async function loadBreadthIndicator(){
     const lastRatio = ratio[ratio.length-1];
     const pctVsSma = lastSma ? ((lastRatio-lastSma)/lastSma)*100 : null;
     const score = pctVsSma==null ? null : Math.max(0, Math.min(100, 50 - pctVsSma*5));
-    breadthIndicator = { ratio:lastRatio, pctVsSma, score };
+
+    const scoreAt = idx => {
+      const sma = sma50Arr[idx];
+      const r = ratio[idx];
+      const pct = sma ? ((r-sma)/sma)*100 : null;
+      return pct==null ? null : Math.max(0, Math.min(100, 50 - pct*5));
+    };
+    const weekAgo = scoreAt(idxNearDaysAgo(alignedPoints,7));
+    const monthAgo = scoreAt(idxNearDaysAgo(alignedPoints,30));
+
+    breadthIndicator = { ratio:lastRatio, pctVsSma, score, weekAgo, monthAgo };
   } catch(e){
     breadthError = (e && e.message) || 'Error al consultar small vs large caps.';
   }
@@ -571,7 +637,8 @@ function renderBreadthCard(){
           <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Ratio Russell 2000 (small caps) / S&amp;P 500 (large caps) frente a su media de 50 días. Cuando las small caps quedan muy por debajo de su media relativa, suele leerse como mercado defensivo, con menos apetito por el riesgo.">Small vs Large caps</span>
           <span style="font-weight:700;color:${b.pctVsSma>=0?'var(--green)':'var(--red)'};">${b.pctVsSma>=0?'+':''}${b.pctVsSma.toFixed(1)}%</span>
         </div>
-      </div>`;
+      </div>
+      ${renderIndicatorDeltaRow(b.weekAgo, b.monthAgo, b.score, false)}`;
   } else {
     body = '';
   }
@@ -593,7 +660,8 @@ async function loadConcentrationIndicator(){
     if(!spyRes.ok || !spyRes.points || spyRes.points.length<51) throw new Error((spyRes&&spyRes.error)||'Sin datos de SPY.');
     if(!rspRes.ok || !rspRes.points || rspRes.points.length<51) throw new Error((rspRes&&rspRes.error)||'Sin datos de RSP.');
     const n = Math.min(spyRes.points.length, rspRes.points.length);
-    const spyCloses = spyRes.points.slice(spyRes.points.length-n).map(p=>p.c);
+    const alignedPoints = spyRes.points.slice(spyRes.points.length-n);
+    const spyCloses = alignedPoints.map(p=>p.c);
     const rspCloses = rspRes.points.slice(rspRes.points.length-n).map(p=>p.c);
     const ratio = spyCloses.map((v,i)=>v/rspCloses[i]);
     const sma50Arr = computeSMA(ratio, 50);
@@ -604,7 +672,17 @@ async function loadConcentrationIndicator(){
     // (ponderado ganando al equiponderado) es la señal de riesgo
     // (concentración en pocas megacaps), no la de seguridad.
     const score = pctVsSma==null ? null : Math.max(0, Math.min(100, 50 + pctVsSma*5));
-    concentrationIndicator = { ratio:lastRatio, pctVsSma, score };
+
+    const scoreAt = idx => {
+      const sma = sma50Arr[idx];
+      const r = ratio[idx];
+      const pct = sma ? ((r-sma)/sma)*100 : null;
+      return pct==null ? null : Math.max(0, Math.min(100, 50 + pct*5));
+    };
+    const weekAgo = scoreAt(idxNearDaysAgo(alignedPoints,7));
+    const monthAgo = scoreAt(idxNearDaysAgo(alignedPoints,30));
+
+    concentrationIndicator = { ratio:lastRatio, pctVsSma, score, weekAgo, monthAgo };
   } catch(e){
     concentrationError = (e && e.message) || 'Error al consultar la concentración del mercado.';
   }
@@ -636,7 +714,8 @@ function renderConcentrationCard(){
           <span style="color:var(--text-faint);">Ratio SPY/RSP</span>
           <span style="font-weight:700;">${c.ratio.toFixed(3)}</span>
         </div>
-      </div>`;
+      </div>
+      ${renderIndicatorDeltaRow(c.weekAgo, c.monthAgo, c.score, false)}`;
   } else {
     body = '';
   }
