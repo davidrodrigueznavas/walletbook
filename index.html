@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   :root {
     --bg: #18191C;
@@ -742,6 +743,50 @@ let stockViewerChartLoading = false, stockViewerChartError = null, stockViewerCh
 let stockViewerWeeklyPoints = null;
 let stockViewerMASelection = { w10:false, w50:true, w200:true };
 const MA_WEEK_OPTIONS = [{key:'w10', weeks:10, label:'MA 10 sem', color:'#5B8DEF'}, {key:'w50', weeks:50, label:'MA 50 sem', color:'#FBBF24'}, {key:'w200', weeks:200, label:'MA 200 sem', color:'#B79CED'}];
+let stockViewerChartType = 'candles'; // 'candles' | 'area'
+let stockViewerShowBollinger = false;
+let stockViewerShowMacd = false;
+// Referencias a la librería de gráficos (no se pueden guardar en el estado
+// serializable de arriba porque son instancias con vida propia — se crean
+// una vez por ticker y se reutilizan entre renders en vez de recrearse).
+let lwMainChart = null, lwCandleSeries = null, lwAreaSeries = null;
+let lwMaSeries = {}, lwBbUpperSeries = null, lwBbLowerSeries = null;
+let lwVolumeChart = null, lwVolumeSeries = null;
+let lwMacdChart = null, lwMacdLineSeries = null, lwMacdSignalSeries = null, lwMacdHistSeries = null;
+let lwChartTicker = null;
+
+function computeEMA(values, period){
+  const out = new Array(values.length).fill(null);
+  const k = 2/(period+1);
+  let ema = null;
+  for(let i=0;i<values.length;i++){
+    if(values[i]==null){ out[i] = ema; continue; }
+    ema = ema==null ? values[i] : values[i]*k + ema*(1-k);
+    out[i] = ema;
+  }
+  return out;
+}
+function computeBollinger(closes, period=20, mult=2){
+  const sma = computeSMA(closes, period);
+  const upper = new Array(closes.length).fill(null);
+  const lower = new Array(closes.length).fill(null);
+  for(let i=period-1;i<closes.length;i++){
+    let sumSq = 0;
+    for(let j=i-period+1;j<=i;j++) sumSq += Math.pow(closes[j]-sma[i], 2);
+    const sd = Math.sqrt(sumSq/period);
+    upper[i] = sma[i] + mult*sd;
+    lower[i] = sma[i] - mult*sd;
+  }
+  return { upper, lower, middle: sma };
+}
+function computeMACD(closes, fast=12, slow=26, signalPeriod=9){
+  const emaFast = computeEMA(closes, fast);
+  const emaSlow = computeEMA(closes, slow);
+  const macd = closes.map((_,i)=> (emaFast[i]!=null && emaSlow[i]!=null) ? emaFast[i]-emaSlow[i] : null);
+  const signal = computeEMA(macd.map(v=>v==null?0:v), signalPeriod).map((v,i)=> macd[i]==null?null:v);
+  const hist = macd.map((v,i)=> (v!=null && signal[i]!=null) ? v-signal[i] : null);
+  return { macd, signal, hist };
+}
 
 function computeSMA(values, period){
   const out = new Array(values.length).fill(null);
@@ -2797,112 +2842,164 @@ function fmtMarketCap(v, currency){
   return v.toLocaleString('es-ES')+' '+cur;
 }
 
-function drawStockViewerChart(points, dividends, weeklyPoints, maSelection){
-  const closes = points.map(p=>p.c);
-  const w=900,h=260,padL=58,padR=14,padT=14,padB=24;
+function wireStockViewerChart(){
+  // Cada render() sustituye el DOM entero via innerHTML, así que los
+  // contenedores de la vez anterior ya no existen: hay que liberar las
+  // instancias de la librería a mano antes de crear las nuevas.
+  [lwMainChart, lwVolumeChart, lwMacdChart].forEach(c => { if(c){ try{ c.remove(); }catch(e){} } });
+  lwMainChart = lwCandleSeries = lwAreaSeries = null;
+  lwMaSeries = {}; lwBbUpperSeries = null; lwBbLowerSeries = null;
+  lwVolumeChart = lwVolumeSeries = null;
+  lwMacdChart = lwMacdLineSeries = lwMacdSignalSeries = lwMacdHistSeries = null;
 
-  // Las medias móviles se piden en semanas (10/50/200), pero el precio se
-  // dibuja en escala diaria (últimos 2 años). Se calcula cada media sobre el
-  // cierre semanal (hasta 5 años de histórico) y se proyecta sobre cada día
-  // usando la última semana ya cerrada en esa fecha.
-  const maLines = [];
-  if(weeklyPoints && weeklyPoints.length && maSelection){
-    const weeklyCloses = weeklyPoints.map(p=>p.c);
+  const mainEl = document.getElementById('stockviewer-main-chart');
+  if(!mainEl || !stockViewerChartPoints || !stockViewerChartPoints.length) return;
+  if(typeof LightweightCharts === 'undefined'){
+    mainEl.innerHTML = `<div style="font-size:12px;color:var(--text-faint);padding:60px 0;text-align:center;">No se pudo cargar la librería de gráficos.</div>`;
+    return;
+  }
+
+  const points = stockViewerChartPoints;
+  const closes = points.map(p=>p.c);
+  const toTime = t => t.slice(0,10);
+  const dark = theme === 'dark';
+  const textColor = dark ? '#9CA0A8' : '#5B5F66';
+  const gridColor = dark ? '#26282D' : '#E8E9EC';
+  const upColor = dark ? '#4ADE80' : '#1E9E5A';
+  const downColor = dark ? '#F87171' : '#D3453B';
+  const commonOptions = {
+    layout: { background: { color: 'transparent' }, textColor, fontSize: 10, fontFamily: 'Calibri, Carlito, sans-serif' },
+    grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
+    rightPriceScale: { borderColor: gridColor },
+    timeScale: { borderColor: gridColor, visible: false },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    autoSize: true,
+  };
+
+  lwMainChart = LightweightCharts.createChart(mainEl, commonOptions);
+  if(stockViewerChartType === 'candles'){
+    lwCandleSeries = lwMainChart.addCandlestickSeries({ upColor, downColor, borderVisible:false, wickUpColor:upColor, wickDownColor:downColor });
+    lwCandleSeries.setData(points.map(p => ({ time: toTime(p.t), open:p.o??p.c, high:p.h??p.c, low:p.l??p.c, close:p.c })));
+  } else {
+    const up = closes[closes.length-1] >= closes[0];
+    const lineColor = up ? upColor : downColor;
+    lwAreaSeries = lwMainChart.addAreaSeries({ lineColor, topColor: lineColor+'38', bottomColor: lineColor+'00', lineWidth:2 });
+    lwAreaSeries.setData(points.map(p => ({ time: toTime(p.t), value: p.c })));
+  }
+
+  // Marcadores de dividendo en el precio, igual que antes.
+  const mainSeries = lwCandleSeries || lwAreaSeries;
+  if(mainSeries && stockViewerDividends && stockViewerDividends.length){
+    const firstT = new Date(points[0].t).getTime(), lastT = new Date(points[points.length-1].t).getTime();
+    const markers = stockViewerDividends
+      .filter(d => { const t = new Date(d.date).getTime(); return !isNaN(t) && t>=firstT && t<=lastT; })
+      .map(d => ({ time: toTime(new Date(d.date).toISOString()), position:'aboveBar', color:'#4ADE80', shape:'circle', text: d.amount!=null?String(d.amount):'' }));
+    if(markers.length) mainSeries.setMarkers(markers);
+  }
+
+  // Medias móviles semanales proyectadas sobre la escala diaria: se calculan
+  // sobre el cierre semanal (hasta 5 años) y se proyectan usando la última
+  // semana ya cerrada en cada fecha diaria — igual que la versión anterior.
+  if(stockViewerWeeklyPoints && stockViewerWeeklyPoints.length){
+    const weeklyCloses = stockViewerWeeklyPoints.map(p=>p.c);
     MA_WEEK_OPTIONS.forEach(opt => {
-      if(!maSelection[opt.key]) return;
+      if(!stockViewerMASelection[opt.key]) return;
       const smaWeekly = computeSMA(weeklyCloses, opt.weeks);
-      const mapped = [];
       let wi = 0;
+      const data = [];
       points.forEach(pt => {
         const t = new Date(pt.t).getTime();
-        while(wi+1 < weeklyPoints.length && new Date(weeklyPoints[wi+1].t).getTime() <= t) wi++;
-        const wt = new Date(weeklyPoints[wi].t).getTime();
-        mapped.push(wt<=t ? smaWeekly[wi] : null);
+        while(wi+1 < stockViewerWeeklyPoints.length && new Date(stockViewerWeeklyPoints[wi+1].t).getTime() <= t) wi++;
+        const wt = new Date(stockViewerWeeklyPoints[wi].t).getTime();
+        const v = wt<=t ? smaWeekly[wi] : null;
+        if(v!=null) data.push({ time: toTime(pt.t), value: v });
       });
-      maLines.push({ color: opt.color, values: mapped });
+      if(data.length){
+        lwMaSeries[opt.key] = lwMainChart.addLineSeries({ color: opt.color, lineWidth:1, priceLineVisible:false, lastValueVisible:false });
+        lwMaSeries[opt.key].setData(data);
+      }
     });
   }
 
-  const allVals = closes.concat(maLines.flatMap(m=>m.values.filter(v=>v!=null)));
-  const min=Math.min.apply(null,allVals), max=Math.max.apply(null,allVals);
-  const range=(max-min)||Math.max(min,1)*0.05||1;
-  const lo=min-range*0.08, hi=max+range*0.08, r2=(hi-lo)||1;
-  const x = i => padL + (points.length<=1?0:(i/(points.length-1))*(w-padL-padR));
-  const y = v => h-padB - ((v-lo)/r2)*(h-padT-padB);
-  const lineOf = (arr) => arr.map((v,i)=> v==null?null:((i===0||arr[i-1]==null?'M':'L')+x(i)+','+y(v))).filter(Boolean).join(' ');
-  const priceLine = points.map((pt,i)=>(i===0?'M':'L')+x(i)+','+y(closes[i])).join(' ');
-  const area = priceLine + ` L${x(points.length-1)},${h-padB} L${x(0)},${h-padB} Z`;
-  const up = closes[closes.length-1] >= closes[0];
-  const color = up ? '#4ADE80' : '#F87171';
-
-  const yTickN = 5;
-  const yGrid = Array.from({length:yTickN}, (_,i) => {
-    const v = min + (max-min)*i/(yTickN-1);
-    const yy = y(v);
-    return `<line x1="${padL}" y1="${yy}" x2="${w-padR}" y2="${yy}" stroke="#26282D" stroke-width="1"/>
-      <text x="${padL-8}" y="${yy+3}" font-size="9.5" fill="#6E7177" font-family="Calibri,Carlito,sans-serif" text-anchor="end">${v.toFixed(2)}</text>`;
-  }).join('');
-
-  const xTickN = Math.min(6, points.length);
-  const xIdx = xTickN<=1 ? [0] : Array.from({length:xTickN}, (_,i)=>Math.round(i*(points.length-1)/(xTickN-1)));
-  const xGrid = [...new Set(xIdx)].map(i => {
-    const xx = x(i);
-    const d = new Date(points[i].t);
-    return `<line x1="${xx}" y1="${padT}" x2="${xx}" y2="${h-padB}" stroke="#212327" stroke-width="1"/>
-      <text x="${xx}" y="${h-6}" font-size="9" fill="#6E7177" font-family="Calibri,Carlito,sans-serif" text-anchor="middle">${d.toLocaleDateString('es-ES',{month:'short',year:'2-digit'})}</text>`;
-  }).join('');
-
-  const firstT = new Date(points[0].t).getTime();
-  const lastT = new Date(points[points.length-1].t).getTime();
-  const divMarkers = (dividends||[]).map(d => {
-    const t = new Date(d.date).getTime();
-    if(isNaN(t) || t<firstT || t>lastT) return '';
-    let nearest = 0, best = Infinity;
-    for(let i=0;i<points.length;i++){
-      const diff = Math.abs(new Date(points[i].t).getTime()-t);
-      if(diff<best){ best=diff; nearest=i; }
+  if(stockViewerShowBollinger){
+    const bb = computeBollinger(closes, 20, 2);
+    const upperData = points.map((p,i)=>({time:toTime(p.t), value:bb.upper[i]})).filter(d=>d.value!=null);
+    const lowerData = points.map((p,i)=>({time:toTime(p.t), value:bb.lower[i]})).filter(d=>d.value!=null);
+    if(upperData.length){
+      lwBbUpperSeries = lwMainChart.addLineSeries({ color:'#4ADE80', lineWidth:1, lineStyle: LightweightCharts.LineStyle.Dashed, priceLineVisible:false, lastValueVisible:false });
+      lwBbUpperSeries.setData(upperData);
+      lwBbLowerSeries = lwMainChart.addLineSeries({ color:'#4ADE80', lineWidth:1, lineStyle: LightweightCharts.LineStyle.Dashed, priceLineVisible:false, lastValueVisible:false });
+      lwBbLowerSeries.setData(lowerData);
     }
-    const xx = x(nearest);
-    return `<g>
-      <line x1="${xx}" y1="${padT}" x2="${xx}" y2="${h-padB}" stroke="#4ADE80" stroke-width="1" stroke-dasharray="2,3" opacity="0.55"/>
-      <circle cx="${xx}" cy="${padT+4}" r="3" fill="#4ADE80"/>
-      <title>Dividendo · ${d.date}${d.amount!=null?' · '+d.amount:''}</title>
-    </g>`;
-  }).join('');
+  }
 
-  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:100%;display:block;">
-    <defs><linearGradient id="areaFillVisor" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${color}" stop-opacity="0.22"/>
-      <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
-    </linearGradient></defs>
-    ${xGrid}
-    ${yGrid}
-    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="#2D2F35" stroke-width="1"/>
-    <path d="${area}" fill="url(#areaFillVisor)"/>
-    ${maLines.map(m=>`<path d="${lineOf(m.values)}" fill="none" stroke="${m.color}" stroke-width="1.3"/>`).join('')}
-    <path d="${priceLine}" fill="none" stroke="${color}" stroke-width="1.8"/>
-    <circle cx="${x(points.length-1)}" cy="${y(closes[closes.length-1])}" r="3" fill="${color}"/>
-    ${divMarkers}
-  </svg>`;
-}
+  const charts = [lwMainChart];
 
-function drawVolumeChart(points){
-  const vols = points.map(p=>p.v||0);
-  const w=900,h=70,padL=58,padR=14,padT=4,padB=4;
-  const maxV = Math.max.apply(null, vols) || 1;
-  const x = i => padL + (points.length<=1?0:(i/(points.length-1))*(w-padL-padR));
-  const barW = Math.max(1, (w-padL-padR)/points.length*0.7);
-  const bars = points.map((p,i) => {
-    const bh = Math.max(0.5, (vols[i]/maxV)*(h-padT-padB));
-    const up = i===0 ? true : p.c >= points[i-1].c;
-    const color = up ? '#4ADE8077' : '#F8717177';
-    return `<rect x="${(x(i)-barW/2).toFixed(2)}" y="${(h-padB-bh).toFixed(2)}" width="${barW.toFixed(2)}" height="${bh.toFixed(2)}" fill="${color}"><title>${new Date(p.t).toLocaleDateString('es-ES')} · ${vols[i].toLocaleString('es-ES')}</title></rect>`;
-  }).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:100%;display:block;">
-    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="#2D2F35" stroke-width="1"/>
-    <text x="${padL-8}" y="${padT+8}" font-size="9" fill="#6E7177" font-family="Calibri,Carlito,sans-serif" text-anchor="end">${(maxV/1e6).toFixed(1)}M</text>
-    ${bars}
-  </svg>`;
+  const volEl = document.getElementById('stockviewer-volume-chart');
+  if(volEl && points.some(p=>p.v!=null)){
+    lwVolumeChart = LightweightCharts.createChart(volEl, commonOptions);
+    lwVolumeSeries = lwVolumeChart.addHistogramSeries({ priceFormat:{type:'volume'}, priceLineVisible:false, lastValueVisible:false });
+    const volData = [];
+    for(let i=0;i<points.length;i++){
+      if(points[i].v==null) continue;
+      const up = i===0 || points[i].c >= points[i-1].c;
+      volData.push({ time: toTime(points[i].t), value: points[i].v, color: (up?upColor:downColor)+'77' });
+    }
+    lwVolumeSeries.setData(volData);
+    charts.push(lwVolumeChart);
+  }
+
+  const macdEl = document.getElementById('stockviewer-macd-chart');
+  if(stockViewerShowMacd && macdEl){
+    const { macd, signal, hist } = computeMACD(closes, 12, 26, 9);
+    lwMacdChart = LightweightCharts.createChart(macdEl, commonOptions);
+    lwMacdHistSeries = lwMacdChart.addHistogramSeries({ priceLineVisible:false, lastValueVisible:false });
+    const histData = [];
+    for(let i=0;i<points.length;i++){
+      if(hist[i]==null) continue;
+      histData.push({ time: toTime(points[i].t), value: hist[i], color: (hist[i]>=0?upColor:downColor)+'88' });
+    }
+    lwMacdHistSeries.setData(histData);
+    lwMacdLineSeries = lwMacdChart.addLineSeries({ color:'#5B8DEF', lineWidth:1.3, priceLineVisible:false, lastValueVisible:false });
+    lwMacdLineSeries.setData(points.map((p,i)=>({time:toTime(p.t), value:macd[i]})).filter(d=>d.value!=null));
+    lwMacdSignalSeries = lwMacdChart.addLineSeries({ color:'#FBBF24', lineWidth:1.3, priceLineVisible:false, lastValueVisible:false });
+    lwMacdSignalSeries.setData(points.map((p,i)=>({time:toTime(p.t), value:signal[i]})).filter(d=>d.value!=null));
+    charts.push(lwMacdChart);
+  }
+
+  // Sincronizar el desplazamiento/zoom entre los paneles apilados (precio,
+  // volumen, MACD) para que se muevan juntos.
+  if(charts.length > 1){
+    charts.forEach(c => {
+      c.timeScale().subscribeVisibleLogicalRangeChange(range => {
+        if(!range) return;
+        charts.forEach(other => { if(other!==c) other.timeScale().setVisibleLogicalRange(range); });
+      });
+    });
+  }
+  charts[charts.length-1].timeScale().applyOptions({ visible: true });
+
+  // Tooltip con el valor bajo el cursor — se busca directamente en los
+  // puntos ya cargados en vez de depender de los datos de la serie, así
+  // funciona igual con velas o área y puede incluir el volumen sin
+  // depender de la serie de otro gráfico.
+  const legendEl = document.getElementById('stockviewer-legend');
+  if(legendEl){
+    lwMainChart.subscribeCrosshairMove(param => {
+      if(!param || !param.time){ legendEl.style.display = 'none'; return; }
+      const pt = points.find(p => toTime(p.t) === param.time);
+      if(!pt){ legendEl.style.display = 'none'; return; }
+      const parts = [];
+      if(stockViewerChartType === 'candles' && pt.o!=null){
+        parts.push(`O <b>${pt.o.toFixed(2)}</b> · H <b>${pt.h.toFixed(2)}</b> · L <b>${pt.l.toFixed(2)}</b> · C <b>${pt.c.toFixed(2)}</b>`);
+      } else {
+        parts.push(`Precio: <b>${pt.c.toFixed(2)}</b>`);
+      }
+      if(pt.v!=null) parts.push(`Vol: <b>${pt.v.toLocaleString('es-ES')}</b>`);
+      legendEl.innerHTML = parts.join(' · ');
+      legendEl.style.display = 'block';
+    });
+  }
 }
 
 function renderStockViewerScreen(){
@@ -2963,19 +3060,11 @@ function renderStockViewerScreen(){
       </div>`;
     }
 
-    let chartBody = '';
-    let volumeBody = '';
     let rsiValue = null;
-    if(stockViewerChartLoading){
-      chartBody = `<div style="font-size:12px;color:var(--text-faint);padding:60px 0;text-align:center;">Cargando histórico…</div>`;
-    } else if(stockViewerChartError){
-      chartBody = `<div style="font-size:12px;color:var(--text-faint);padding:60px 0;text-align:center;">${stockViewerChartError}</div>`;
-    } else if(stockViewerChartPoints){
+    if(stockViewerChartPoints && stockViewerChartPoints.length){
       const closes = stockViewerChartPoints.map(p=>p.c);
       const rsiArr = computeRSI(closes, 14);
       rsiValue = rsiArr[rsiArr.length-1];
-      chartBody = drawStockViewerChart(stockViewerChartPoints, stockViewerDividends, stockViewerWeeklyPoints, stockViewerMASelection);
-      if(stockViewerChartPoints.some(p=>p.v!=null)) volumeBody = drawVolumeChart(stockViewerChartPoints);
     }
     const rsiColor = rsiValue==null ? 'var(--text-dim)' : rsiValue>=70 ? 'var(--red)' : rsiValue<=30 ? 'var(--green)' : 'var(--text)';
     const rsiLabel = rsiValue==null ? '' : rsiValue>=70 ? 'sobrecompra' : rsiValue<=30 ? 'sobreventa' : 'neutral';
@@ -3014,15 +3103,29 @@ function renderStockViewerScreen(){
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px;">
           <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-faint);flex-wrap:wrap;">
+            <div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+              <button type="button" class="chart-type-btn" data-type="candles" style="cursor:pointer;padding:4px 10px;border:none;background:${stockViewerChartType==='candles'?'var(--accent-soft)':'var(--panel-2)'};color:${stockViewerChartType==='candles'?'var(--accent-text)':'var(--text-faint)'};font-size:11px;font-weight:600;">Velas</button>
+              <button type="button" class="chart-type-btn" data-type="area" style="cursor:pointer;padding:4px 10px;border:none;border-left:1px solid var(--border);background:${stockViewerChartType==='area'?'var(--accent-soft)':'var(--panel-2)'};color:${stockViewerChartType==='area'?'var(--accent-text)':'var(--text-faint)'};font-size:11px;font-weight:600;">Área</button>
+            </div>
             ${MA_WEEK_OPTIONS.map(opt => `<button type="button" class="ma-toggle-btn" data-key="${opt.key}" title="${METRIC_INFO[opt.key].replace(/"/g,'&quot;')}" style="cursor:pointer;display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:12px;border:1px solid ${stockViewerMASelection[opt.key]?opt.color:'var(--border)'};background:${stockViewerMASelection[opt.key]?opt.color+'22':'var(--panel-2)'};color:${stockViewerMASelection[opt.key]?'var(--text)':'var(--text-faint)'};font-size:11px;">
               <span style="display:inline-block;width:9px;height:2px;background:${opt.color};"></span>${opt.label}
             </button>`).join('')}
+            <button type="button" id="bollinger-toggle-btn" style="cursor:pointer;display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:12px;border:1px solid ${stockViewerShowBollinger?'#4ADE80':'var(--border)'};background:${stockViewerShowBollinger?'#4ADE8022':'var(--panel-2)'};color:${stockViewerShowBollinger?'var(--text)':'var(--text-faint)'};font-size:11px;">
+              <span style="display:inline-block;width:9px;height:2px;background:#4ADE80;"></span>Bollinger
+            </button>
+            <button type="button" id="macd-toggle-btn" style="cursor:pointer;padding:3px 9px;border-radius:12px;border:1px solid ${stockViewerShowMacd?'var(--accent-border)':'var(--border)'};background:${stockViewerShowMacd?'var(--accent-soft)':'var(--panel-2)'};color:${stockViewerShowMacd?'var(--accent-text)':'var(--text-faint)'};font-size:11px;font-weight:600;">MACD</button>
             ${stockViewerDividends.length ? `<span title="Fecha ex-dividendo dentro de los últimos 2 años" style="margin-left:4px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4ADE80;margin-right:5px;vertical-align:middle;"></span>Dividendo</span>` : ''}
           </div>
           ${rsiValue!=null ? `<div style="font-size:11.5px;color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="${METRIC_INFO.rsi.replace(/"/g,'&quot;')}">RSI (14d): <b style="color:${rsiColor};">${rsiValue.toFixed(1)}</b> <span style="color:${rsiColor};">${rsiLabel?'· '+rsiLabel:''}</span></div>` : ''}
         </div>
-        <div style="height:260px;">${chartBody}</div>
-        ${volumeBody ? `<div style="height:70px;margin-top:6px;border-top:1px solid var(--border-soft);padding-top:6px;">${volumeBody}</div>` : ''}
+        <div style="position:relative;">
+          <div id="stockviewer-legend" style="position:absolute;top:4px;left:4px;z-index:5;font-size:11px;color:var(--text-dim);pointer-events:none;line-height:1.5;background:var(--panel);padding:2px 6px;border-radius:6px;opacity:0.92;display:none;"></div>
+          ${stockViewerChartLoading ? `<div style="font-size:12px;color:var(--text-faint);padding:60px 0;text-align:center;">Cargando histórico…</div>`
+            : stockViewerChartError ? `<div style="font-size:12px;color:var(--text-faint);padding:60px 0;text-align:center;">${stockViewerChartError}</div>`
+            : `<div id="stockviewer-main-chart" style="height:320px;"></div>
+               <div id="stockviewer-volume-chart" style="height:80px;margin-top:2px;"></div>
+               <div id="stockviewer-macd-chart" style="height:100px;margin-top:2px;display:${stockViewerShowMacd?'block':'none'};"></div>`}
+        </div>
       </div>
 
       ${stockViewerEstimates && (stockViewerEstimates.fiscalYears.length || stockViewerEstimates.fiscalQuarters.length) ? `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-top:20px;">
@@ -3120,6 +3223,21 @@ function renderStockViewerScreen(){
     stockViewerMASelection[key] = !stockViewerMASelection[key];
     render(null);
   }));
+  app.querySelectorAll('.chart-type-btn').forEach(btn => btn.addEventListener('click', () => {
+    stockViewerChartType = btn.getAttribute('data-type');
+    render(null);
+  }));
+  const bollingerBtn = document.getElementById('bollinger-toggle-btn');
+  if(bollingerBtn) bollingerBtn.addEventListener('click', () => {
+    stockViewerShowBollinger = !stockViewerShowBollinger;
+    render(null);
+  });
+  const macdBtn = document.getElementById('macd-toggle-btn');
+  if(macdBtn) macdBtn.addEventListener('click', () => {
+    stockViewerShowMacd = !stockViewerShowMacd;
+    render(null);
+  });
+  wireStockViewerChart();
 
   const visorAddBtn = document.getElementById('visor-addpos-btn');
   if(visorAddBtn) visorAddBtn.addEventListener('click', async (e) => {
