@@ -2260,6 +2260,7 @@ function renderHomeScreen(){
     render(null);
   });
   app.querySelectorAll('.home-screener-card').forEach(card => card.addEventListener('click', () => {
+    openScreenerId = card.getAttribute('data-id');
     currentScreen = 'screeners';
     render(null);
   }));
