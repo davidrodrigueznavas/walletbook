@@ -2017,7 +2017,7 @@ function stockFinderBlock(){
       <input id="stockfinder-input" placeholder="Buscar acción…" autocomplete="off" style="border:none;background:none;outline:none;color:var(--text);font-size:12.5px;width:190px;height:34px;"/>
       <button id="stockfinder-close" title="Cerrar" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;line-height:1;padding:2px 4px;">×</button>
     </div>
-    <div id="stockfinder-suggestions" style="position:absolute;top:44px;right:0;width:280px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);z-index:60;overflow:hidden;"></div>
+    <div id="stockfinder-suggestions" style="position:absolute;top:44px;right:0;width:280px;z-index:60;"></div>
   </div>`;
 }
 
@@ -2057,24 +2057,25 @@ function wireStockFinderModal(app){
     input.addEventListener('click', (e) => e.stopPropagation());
     const suggestionsBox = document.getElementById('stockfinder-suggestions');
     let searchTimer = null;
+    const suggestionsBoxStyle = 'background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);overflow:hidden;';
     input.addEventListener('input', () => {
       const q = input.value.trim();
       if(searchTimer) clearTimeout(searchTimer);
       if(q.length < 2){ suggestionsBox.innerHTML = ''; return; }
       searchTimer = setTimeout(async () => {
         const token = ++stockFinderSearchToken;
-        suggestionsBox.innerHTML = `<div style="padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Buscando…</div>`;
+        suggestionsBox.innerHTML = `<div style="${suggestionsBoxStyle}padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Buscando…</div>`;
         let results = [];
         try {
           const res = await callEdgeFunction('ticker-search', {q});
           results = (res && res.ok) ? res.results : [];
         } catch(e){ results = null; }
         if(token !== stockFinderSearchToken) return;
-        if(results === null){ suggestionsBox.innerHTML = `<div style="padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Error al buscar.</div>`; return; }
-        if(!results.length){ suggestionsBox.innerHTML = `<div style="padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Sin resultados.</div>`; return; }
-        suggestionsBox.innerHTML = results.map((r,i) => `<button type="button" class="ticker-suggestion" data-idx="${i}">
+        if(results === null){ suggestionsBox.innerHTML = `<div style="${suggestionsBoxStyle}padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Error al buscar.</div>`; return; }
+        if(!results.length){ suggestionsBox.innerHTML = `<div style="${suggestionsBoxStyle}padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Sin resultados.</div>`; return; }
+        suggestionsBox.innerHTML = `<div style="${suggestionsBoxStyle}">${results.map((r,i) => `<button type="button" class="ticker-suggestion" data-idx="${i}">
           <b>${r.symbol}</b> — ${r.name}${r.exchange?` <span style="color:var(--text-faint);">(${r.exchange})</span>`:''}
-        </button>`).join('');
+        </button>`).join('')}</div>`;
         suggestionsBox.querySelectorAll('.ticker-suggestion').forEach(sbtn => sbtn.addEventListener('mousedown', (e) => {
           e.preventDefault();
           const r = results[Number(sbtn.getAttribute('data-idx'))];
