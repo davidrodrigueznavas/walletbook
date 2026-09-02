@@ -966,10 +966,8 @@ function renderScreenersHomeSection(){
     const matches = matchesForScreener(s);
     const numConditions = (s.screener_conditions||[]).length;
     return `<button class="home-screener-card" data-id="${s.id}" style="cursor:pointer;text-align:left;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:8px;color:var(--text);font-family:inherit;">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
-        <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name)}</div>
-        <span style="flex-shrink:0;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:8px;border:1px solid ${s.alerts_enabled?'var(--accent-border)':'var(--border)'};background:${s.alerts_enabled?'var(--accent-soft)':'var(--panel-2)'};color:${s.alerts_enabled?'var(--accent-text)':'var(--text-faint)'};">${s.alerts_enabled?'Activo':'Desactivado'}</span>
-      </div>
+      <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name)}</div>
+      <span style="align-self:flex-start;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:8px;border:1px solid ${s.alerts_enabled?'var(--accent-border)':'var(--border)'};background:${s.alerts_enabled?'var(--accent-soft)':'var(--panel-2)'};color:${s.alerts_enabled?'var(--accent-text)':'var(--text-faint)'};">${s.alerts_enabled?'Activo':'Desactivado'}</span>
       <div style="font-size:11px;color:var(--text-faint);">${numConditions} condición${numConditions===1?'':'es'}</div>
       <div style="display:flex;align-items:baseline;gap:6px;margin-top:6px;padding-top:10px;border-top:1px solid var(--border-soft);">
         <span style="font-size:22px;font-weight:700;color:${(s.alerts_enabled && matches.length)?'var(--accent-text)':'var(--text-faint)'};">${screenerUniverseLoading?'…':matches.length}</span>
