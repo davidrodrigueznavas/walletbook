@@ -1990,7 +1990,7 @@ function walletbookIcon(size){
 
 function topNavBar(){
   return `<div style="height:76px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 4px;margin-bottom:22px;border-bottom:1px solid var(--border);">
-    <button id="logo-home-btn" title="Ir a Mis carteras" style="cursor:pointer;background:none;border:none;display:flex;align-items:center;gap:12px;padding:6px 4px;">
+    <button id="logo-home-btn" title="Ir a inicio" style="cursor:pointer;background:none;border:none;display:flex;align-items:center;gap:12px;padding:6px 4px;">
       ${walletbookIcon(46)}
       <span style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:29px;color:var(--text);letter-spacing:-.01em;">Walletbook</span>
     </button>
@@ -2111,7 +2111,12 @@ function wireMenu(app){
     const view = btn.getAttribute('data-view');
     menuOpen = false;
     if(view === 'carteras'){
-      await goHome();
+      currentScreen = 'mis-carteras';
+      selectedId = null;
+      diversificationFilter = null;
+      render(null);
+      await loadPortfolios();
+      render(null);
     } else if(view === 'explorar'){
       currentScreen = 'explorar';
       exploreDetailId = null; exploreDetailPositions = null; exploreCategoryFilter = null; exploreLoading = true;
