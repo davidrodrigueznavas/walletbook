@@ -1756,6 +1756,7 @@ function wireAddPositionModal(app){
     const row = {
       id: crypto.randomUUID(),
       portfolio_id: portfolioId,
+      owner_id: session.user.id,
       name,
       ticker: ticker || null,
       market,
@@ -1774,7 +1775,7 @@ function wireAddPositionModal(app){
       row.business_summary_source = addPositionCompanyInfo.source || null;
     }
     const { error } = await supabase.from('positions').insert(row);
-    if(error){ showAddPosError('Error al guardar — revisa la conexión.'); return; }
+    if(error){ console.error('Error al insertar posición', error); showAddPosError(`Error al guardar: ${error.message || 'revisa la conexión'}`); return; }
     addPositionOpen = false;
     markDirty();
     await loadAll();
