@@ -1731,7 +1731,7 @@ function wireAddPositionModal(app){
         addPositionCompanyInfo = null;
         tickerInput.value = r.symbol;
         const nameInput = document.getElementById('addpos-name');
-        if(nameInput && !nameInput.value.trim()) nameInput.value = r.name;
+        if(nameInput) nameInput.value = r.name;
         const marketSelect = document.getElementById('addpos-market');
         if(marketSelect){ const m = marketForTicker(r.symbol, r.exchange); if(m) marketSelect.value = m; }
         suggestionsBox.innerHTML = '';
