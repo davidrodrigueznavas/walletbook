@@ -115,6 +115,9 @@
     .modal-card { padding: 18px 16px !important; max-height: 94vh !important; }
 
     .home-portfolio-card { min-height: auto !important; }
+
+    .market-status-badge { padding: 6px 8px !important; }
+    .market-status-badge-label { display: none !important; }
   }
 </style>
 </head>
@@ -2032,13 +2035,31 @@ function walletbookIcon(size){
   </svg>`;
 }
 
+function usMarketStatus(){
+  const now = new Date();
+  const fmt = new Intl.DateTimeFormat('en-US', { timeZone:'America/New_York', hour:'2-digit', minute:'2-digit', hourCycle:'h23', weekday:'short' });
+  const map = {};
+  fmt.formatToParts(now).forEach(p => { map[p.type] = p.value; });
+  const isWeekday = map.weekday !== 'Sat' && map.weekday !== 'Sun';
+  const minutesNow = Number(map.hour)*60 + Number(map.minute);
+  const open = isWeekday && minutesNow >= 9*60+30 && minutesNow < 16*60;
+  return { open, label: open ? 'Mercado abierto' : 'Mercado cerrado' };
+}
+function marketStatusBadge(){
+  const st = usMarketStatus();
+  return `<div class="market-status-badge" title="Bolsa de EE.UU. (NYSE/Nasdaq): 9:30-16:00, hora de Nueva York, días laborables. No tiene en cuenta festivos del mercado." style="cursor:help;display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:14px;border:1px solid ${st.open?'var(--green-border)':'var(--border)'};background:${st.open?'var(--green-soft)':'var(--panel-2)'};font-size:11px;font-weight:600;color:${st.open?'var(--green)':'var(--text-faint)'};white-space:nowrap;flex-shrink:0;">
+    <span style="width:7px;height:7px;border-radius:50%;background:${st.open?'var(--green)':'var(--text-faint)'};flex-shrink:0;"></span><span class="market-status-badge-label">${st.label}</span>
+  </div>`;
+}
+
 function topNavBar(){
-  return `<div style="height:76px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 4px;margin-bottom:22px;border-bottom:1px solid var(--border);">
-    <button id="logo-home-btn" title="Ir a inicio" style="cursor:pointer;background:none;border:none;display:flex;align-items:center;gap:12px;padding:6px 4px;">
+  return `<div style="height:76px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 4px;margin-bottom:22px;border-bottom:1px solid var(--border);gap:12px;">
+    <button id="logo-home-btn" title="Ir a inicio" style="cursor:pointer;background:none;border:none;display:flex;align-items:center;gap:12px;padding:6px 4px;flex-shrink:0;">
       ${walletbookIcon(46)}
       <span style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:29px;color:var(--text);letter-spacing:-.01em;">Walletbook</span>
     </button>
-    <div style="display:flex;align-items:center;gap:8px;">
+    <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+      ${marketStatusBadge()}
       ${stockFinderBlock()}
       ${menuBlock()}
     </div>
