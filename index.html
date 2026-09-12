@@ -193,6 +193,18 @@ const RULE_ACTION = {
   comprar:'Comprar', recomprar:'Recomprar', reducir:'Reducir',
   vender:'Vender (stop-loss)', revisar_tesis:'Revisar tesis', otra:'Otra'
 };
+const STRATEGY = {
+  value: { label:'Value investing', info:'Buscas empresas que cotizan por debajo de su valor intrínseco. El mercado las ha penalizado temporalmente pero el negocio subyacente es sólido. Compras con margen de seguridad y esperas a que el mercado corrija la infravaloración.' },
+  growth: { label:'Growth investing', info:'Pagas múltiplos altos por empresas que crecen muy rápido. La apuesta es que el crecimiento futuro justifica el precio actual. Típico en sectores tecnológicos y de salud.' },
+  garp: { label:'GARP', info:'Growth at a Reasonable Price. Híbrido entre value y growth. Quieres crecimiento pero con un límite de cuánto pagas por él. Ni tan barato como el value puro ni tan caro como el growth puro.' },
+  quality: { label:'Quality investing', info:'Seleccionas por métricas de calidad: ROIC alto, márgenes estables, poca deuda, ventaja competitiva clara. Sin importar mucho si está "barata" o "cara", priorizas la excelencia del negocio.' },
+  dividends: { label:'Dividendos', info:'Buscas empresas con historial de dividendo creciente y sostenible. El objetivo es construir una renta pasiva que crezca con el tiempo. Ideal para inversores que buscan flujo de caja regular.' },
+  momentum: { label:'Momentum', info:'Compras lo que está subiendo técnicamente, sin análisis del negocio. Funciona en mercados alcistas, destruye capital en correcciones bruscas. Puramente basado en precio y volumen.' },
+  contrarian: { label:'Contrarian', info:'Compras lo que nadie quiere y vendes lo que todos adoran. Requiere convicción y estómago para aguantar que el mercado te lleve la contraria durante meses.' },
+  event_driven: { label:'Event-driven', info:'Te posicionas antes de eventos concretos: resultados trimestrales, fusiones, spin-offs, cambios de directiva. Requiere información muy actualizada y reacción rápida.' },
+  deep_value: { label:'Deep value', info:'Versión extrema del value investing. Buscas empresas muy deterioradas o casi ignoradas donde el mercado ha sobrerreaccionado a la baja. Alto riesgo, alto potencial si aciertas.' },
+  swing_trading: { label:'Intradía y swing trading', info:'Especulación a corto plazo basada en movimientos del precio. Técnicamente no es inversión sino especulación, pero se practica ampliamente con acciones.' },
+};
 const SCREENER_METRIC = {
   rsi14: {label:'RSI (14)', fmt:v=>v.toFixed(1), get:r=>r.rsi14},
   price_vs_sma50: {label:'Precio vs SMA50 (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=> r.sma50 ? ((r.last_price-r.sma50)/r.sma50)*100 : null},
@@ -1505,11 +1517,23 @@ async function loadPortfolioId(){
   return data ? data.id : null;
 }
 
+let portfolioStrategies = {}; // portfolio_id -> array de claves de estrategia distintas entre sus posiciones
 async function loadPortfolios(){
   if(!session){ portfolios = []; return; }
   const { data, error } = await supabase.from('portfolios').select('*').eq('owner_id', session.user.id).is('deleted_at', null).order('created_at');
   if(error){ console.error(error); return; }
   portfolios = data || [];
+
+  const { data: posRows, error: posErr } = await supabase.from('positions').select('portfolio_id, strategies').is('deleted_at', null);
+  if(!posErr){
+    const map = {};
+    (posRows||[]).forEach(row => {
+      if(!row.strategies || !row.strategies.length) return;
+      if(!map[row.portfolio_id]) map[row.portfolio_id] = new Set();
+      row.strategies.forEach(k => map[row.portfolio_id].add(k));
+    });
+    portfolioStrategies = Object.fromEntries(Object.entries(map).map(([k,v])=>[k,[...v]]));
+  }
 }
 
 async function loadProfile(){
@@ -1847,6 +1871,7 @@ function renderModal(){
             <span style="font-family:'Calibri','Carlito',sans-serif;font-size:12px;color:var(--text-faint);">${esc(p.ticker)||''}</span>
           </div>
           <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${esc(p.sector)}${p.cluster?' · '+esc(p.cluster):''}${p.tier?(' · '+(TIER[p.tier]?.label||esc(p.tier))):''}</div>
+          ${(p.strategies||[]).length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${(p.strategies||[]).map(k=>`<span style="font-size:9.5px;font-weight:600;padding:2px 8px;border-radius:9px;background:var(--accent-soft);color:var(--accent-text);">${STRATEGY[k]?.label||k}</span>`).join('')}</div>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:14px;">
           <button id="modal-delete" style="cursor:pointer;background:none;border:none;color:var(--red);font-size:11px;padding:2px 0;">Eliminar posición</button>
@@ -1896,6 +1921,13 @@ function renderModal(){
           </div>
         </div>
         <div style="display:flex;flex-direction:column;min-height:420px;">
+          <label style="font-size:9.5px;color:var(--text-faint);display:block;margin-bottom:6px;">Estrategia (puedes elegir varias)</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+            ${Object.entries(STRATEGY).map(([k,v])=>{
+              const on = (p.strategies||[]).includes(k);
+              return `<button type="button" class="strategy-toggle-btn" data-id="${p.id}" data-key="${k}" title="${v.info.replace(/"/g,'&quot;')}" style="cursor:pointer;padding:4px 10px;border-radius:12px;border:1px solid ${on?'var(--accent-border)':'var(--border)'};background:${on?'var(--accent-soft)':'var(--panel-2)'};color:${on?'var(--accent-text)':'var(--text-faint)'};font-size:11px;font-weight:600;">${v.label}</button>`;
+            }).join('')}
+          </div>
           <label style="font-size:9.5px;color:var(--text-faint);display:block;margin-bottom:4px;">Tesis de inversión</label>
           <textarea data-id="${p.id}" data-field="thesis" style="flex:1;width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;line-height:1.55;padding:10px 12px;box-sizing:border-box;resize:none;">${esc(p.thesis??'')}</textarea>
         </div>
@@ -2239,6 +2271,7 @@ function renderPortfolioCardHTML(p){
     </div>` : ''}
     <div style="font-size:15px;font-weight:600;padding-right:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:8px;">${esc(p.name)}</div>
     <div style="font-size:12px;color:var(--text-faint);line-height:1.4;min-height:32px;">${p.description ? esc(p.description) : '<span style="opacity:.5;">Sin descripción</span>'}</div>
+    ${(portfolioStrategies[p.id]||[]).length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">${(portfolioStrategies[p.id]||[]).map(k=>`<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:8px;background:var(--panel-2);color:var(--text-dim);border:1px solid var(--border);">${STRATEGY[k]?.label||k}</span>`).join('')}</div>` : ''}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid var(--border-soft);">
       <span style="font-size:10.5px;color:var(--text-faint);">Tipo de cartera</span>
       <select class="home-portfolio-category-select" data-id="${p.id}" style="cursor:pointer;font-size:10.5px;padding:3px 8px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);">
@@ -3482,6 +3515,18 @@ function render(scenario){
   app.querySelectorAll('.pf-section-toggle').forEach(btn => btn.addEventListener('click', () => {
     const key = btn.getAttribute('data-key');
     positionsSectionCollapsed[key] = !positionsSectionCollapsed[key];
+    render(currentScenario);
+  }));
+
+  app.querySelectorAll('.strategy-toggle-btn').forEach(btn=>btn.addEventListener('click', async () => {
+    const id = btn.getAttribute('data-id'), key = btn.getAttribute('data-key');
+    const pos = portfolio.positions.find(p=>p.id===id);
+    if(!pos) return;
+    const current = pos.strategies || [];
+    const next = current.includes(key) ? current.filter(k=>k!==key) : [...current, key];
+    const ok = await updatePositionField(id, 'strategies', next);
+    if(ok) pos.strategies = next;
+    else showStatus('Error al guardar — revisa la conexión.');
     render(currentScenario);
   }));
 
