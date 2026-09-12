@@ -1885,12 +1885,12 @@ function renderModal(){
           </div>` : '<div style="flex:1;"></div>'}
 
           <div class="modal-fields-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;flex-shrink:0;">
-            <div class="field"><label>Invertido (€)</label><input data-id="${p.id}" data-field="invested" value="${p.invested??''}" placeholder="0"/></div>
-            <div class="field"><label>Precio compra (€)</label><input data-id="${p.id}" data-field="price" value="${p.price??''}" placeholder="ej. 512,30"/></div>
-            <div class="field"><label>Comisión broker (€)</label><input data-id="${p.id}" data-field="commission" value="${p.commission??''}" placeholder="0"/></div>
-            <div class="field"><label>Fecha compra</label><input type="date" data-id="${p.id}" data-field="date" value="${p.date??''}"/></div>
-            <div class="field"><label>Horizonte</label><input data-id="${p.id}" data-field="horizon" value="${p.horizon??''}" placeholder="ej. 2029"/></div>
-            <div class="field"><label>Pendiente invertir (€)</label><input data-id="${p.id}" data-field="pending_investment" value="${p.pending_investment??pendingInvestmentFor(p)}" placeholder="ej. 500"/></div>
+            <div class="field"><label>Invertido (€)</label><input data-id="${p.id}" data-field="invested" value="${p.invested??''}" placeholder="0" autocomplete="off"/></div>
+            <div class="field"><label>Precio compra (€)</label><input data-id="${p.id}" data-field="price" value="${p.price??''}" placeholder="ej. 512,30" autocomplete="off"/></div>
+            <div class="field"><label>Comisión broker (€)</label><input data-id="${p.id}" data-field="commission" value="${p.commission??''}" placeholder="0" autocomplete="off"/></div>
+            <div class="field"><label>Fecha compra</label><input type="date" data-id="${p.id}" data-field="date" value="${p.date??''}" autocomplete="off"/></div>
+            <div class="field"><label>Horizonte</label><input data-id="${p.id}" data-field="horizon" value="${p.horizon??''}" placeholder="ej. 2029" autocomplete="off"/></div>
+            <div class="field"><label>Pendiente invertir (€)</label><input data-id="${p.id}" data-field="pending_investment" value="${p.pending_investment??pendingInvestmentFor(p)}" placeholder="ej. 500" autocomplete="off"/></div>
           </div>
         </div>
         <div style="display:flex;flex-direction:column;min-height:420px;">
@@ -1962,7 +1962,7 @@ function renderAddPositionModal(){
       </div>
       <div style="font-size:10px;color:var(--text-faint);margin-bottom:14px;">${sel ? `Seleccionado: ${sel.symbol} — ${sel.exchange||''}` : 'Escribe al menos 2 letras para buscar en Yahoo Finance.'}</div>
 
-      <div class="field" style="margin-bottom:12px;"><label>Nombre</label><input id="addpos-name" value="${sel?sel.name.replace(/"/g,'&quot;'):''}" placeholder="Nombre de la empresa"/></div>
+      <div class="field" style="margin-bottom:12px;"><label>Nombre</label><input id="addpos-name" value="${sel?sel.name.replace(/"/g,'&quot;'):''}" placeholder="Nombre de la empresa" autocomplete="off"/></div>
 
       <div class="modal-fields-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
         <div class="field"><label>Mercado</label><select id="addpos-market">
@@ -1980,11 +1980,11 @@ function renderAddPositionModal(){
       </div>
 
       <div class="modal-fields-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:6px;">
-        <div class="field"><label>Invertido (€)</label><input id="addpos-invested" placeholder="0"/></div>
-        <div class="field"><label>Precio compra (€)</label><input id="addpos-price" placeholder="ej. 512,30"/></div>
-        <div class="field"><label>Comisión broker (€)</label><input id="addpos-commission" placeholder="0"/></div>
-        <div class="field"><label>Fecha compra</label><input id="addpos-date" type="date"/></div>
-        <div class="field"><label>Horizonte (opcional)</label><input id="addpos-horizon" placeholder="ej. 2029"/></div>
+        <div class="field"><label>Invertido (€)</label><input id="addpos-invested" placeholder="0" autocomplete="off"/></div>
+        <div class="field"><label>Precio compra (€)</label><input id="addpos-price" placeholder="ej. 512,30" autocomplete="off"/></div>
+        <div class="field"><label>Comisión broker (€)</label><input id="addpos-commission" placeholder="0" autocomplete="off"/></div>
+        <div class="field"><label>Fecha compra</label><input id="addpos-date" type="date" autocomplete="off"/></div>
+        <div class="field"><label>Horizonte (opcional)</label><input id="addpos-horizon" placeholder="ej. 2029" autocomplete="off"/></div>
       </div>
 
       <div id="addpos-error" style="color:var(--red);font-size:11.5px;margin:10px 0 0;display:${addPositionError?'block':'none'};">${addPositionError||''}</div>
