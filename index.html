@@ -1253,11 +1253,12 @@ function sectorColor(sector){
 }
 
 function breakdownByWeight(keyFn){
-  // Reparto de TODA la cartera (las 45 posiciones) según su peso objetivo,
-  // no solo de lo que ya se ha invertido -- así se ve el diseño completo.
+  // Reparto de lo que está Pendiente de invertir (invested<=0 y algo
+  // marcado como pendiente) — no del diseño objetivo ni de lo ya invertido.
   const map = {};
   portfolio.positions.forEach(p=>{
-    const w = p.target_weight || 0;
+    if(investedOf(p) > 0) return;
+    const w = pendingInvestmentFor(p);
     if(w<=0) return;
     const k = keyFn(p);
     map[k] = (map[k]||0) + w;
@@ -3415,11 +3416,11 @@ function render(scenario){
       ${drawChart()}
     </div>
     <div class="pf-donut" style="flex:0.9;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;display:flex;flex-direction:column;">
-      <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;flex-shrink:0;">Por mercado</div>
+      <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;flex-shrink:0;">Por mercado <span style="text-transform:none;letter-spacing:0;">(pendiente de invertir)</span></div>
       <div style="flex:1;min-height:0;">${drawDiversification(breakdownByWeight(p=>p.market), k=>MARKET[k]?.color||'#6E7177', k=>MARKET[k]?.label||k, 5, fundedDetail(p=>p.market), 'market')}</div>
     </div>
     <div class="pf-donut" style="flex:0.9;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 10px;box-sizing:border-box;display:flex;flex-direction:column;">
-      <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;flex-shrink:0;">Por sector</div>
+      <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;flex-shrink:0;">Por sector <span style="text-transform:none;letter-spacing:0;">(pendiente de invertir)</span></div>
       <div style="flex:1;min-height:0;">${drawDiversification(breakdownByWeight(p=>p.sector), sectorColor, k=>k, 6, fundedDetail(p=>p.sector), 'sector')}</div>
     </div>
   </div>
