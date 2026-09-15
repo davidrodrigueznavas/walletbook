@@ -1811,6 +1811,11 @@ function renderPositionCard(p, sc){
   const weekLabel = wk===null ? `<span style="color:var(--text-faint);">7d —</span>` : `<span style="color:${wk>=0?'var(--green)':'var(--red)'};">7d ${wk>=0?'+':''}${wk}%</span>`;
   const cardBg = resp==='pos' ? 'var(--green-soft)' : resp==='neg' ? 'var(--red-soft)' : 'var(--panel-2)';
   const cardBorder = resp==='pos' ? 'var(--green-border)' : resp==='neg' ? 'var(--red-border)' : 'var(--border)';
+  const isPending = inv<=0 && pendingInvestmentFor(p)>0;
+  const validationRow = isPending ? `<div style="display:flex;gap:3px;margin-top:2px;">
+    <span title="Validación fundamental${p.fundamental_validated?' hecha':' pendiente'}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:${p.fundamental_validated?'var(--green-soft)':'var(--panel)'};color:${p.fundamental_validated?'var(--green)':'var(--text-faint)'};border:1px solid ${p.fundamental_validated?'var(--green-border)':'var(--border-soft)'};">F</span>
+    <span title="Validación técnica${p.technical_validated?' hecha':' pendiente'}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:${p.technical_validated?'var(--green-soft)':'var(--panel)'};color:${p.technical_validated?'var(--green)':'var(--text-faint)'};border:1px solid ${p.technical_validated?'var(--green-border)':'var(--border-soft)'};">T</span>
+  </div>` : '';
   return `<div class="pf-card" data-id="${p.id}" style="background:${cardBg};border:1px solid ${cardBorder};border-radius:6px;padding:4px 7px;cursor:pointer;min-width:0;overflow:hidden;box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:5px;">
       <div style="display:flex;align-items:center;gap:4px;min-width:0;">
@@ -1823,6 +1828,7 @@ function renderPositionCard(p, sc){
       <span style="overflow:hidden;text-overflow:ellipsis;"><span style="color:var(--text-dim);">${esc(p.ticker)||esc(p.name)}</span> · ${esc(p.sector)}</span>
       <span style="flex-shrink:0;">${inv>0?fmtEUR(inv):'—'} · ${weekLabel}</span>
     </div>
+    ${validationRow}
   </div>`;
 }
 
@@ -2085,10 +2091,10 @@ const FRAMEWORK_RULES = [
 ];
 const FRAMEWORK_STRATEGY = [
   { title:'Análisis de compañía', items:['Mercado en el que opera', 'Modelo de negocio', 'Competencia', 'Ventajas competitivas', 'Puntos fuertes', 'Puntos flojos', 'Directiva', 'Recompras y ventas de acciones por parte de la directiva', 'Regulación y terceros'] },
-  { title:'Análisis de situación financiera', items:['Caja disponible', 'Inversiones', 'Nivel de endeudamiento'] },
+  { title:'Análisis de situación financiera', items:['Caja y equivalentes', 'Deuda neta y deuda neta / EBITDA', 'Calendario de vencimientos de deuda', 'Free cash flow', 'Márgenes: bruto, operativo y neto', 'Evolución de ingresos y beneficio (crecimiento)', 'Rentabilidad: ROIC y ROE'] },
   { title:'Historial de sucesos relevantes', items:['Revisar los últimos 10 años de la compañía'] },
-  { title:'Valor razonable', items:['Triangulado con varios métodos de valoración'] },
-  { title:'Margen de seguridad', items:[] },
+  { title:'Valor razonable', items:['Múltiplos comparables (PER, EV/EBITDA, P/FCF) vs sector y media histórica propia', 'Descuento de flujos de caja (DCF)', 'Suma de partes, si aplica', 'Transacciones precedentes comparables', 'Triangular los métodos anteriores en un rango de valor, no un número único'] },
+  { title:'Margen de seguridad', items:['Diferencia entre precio actual y el rango de valor razonable', 'Definir el % mínimo de margen exigido antes de entrar'] },
   { title:'Situación técnica', items:['Media de 200 días vs media de 40 días', 'Volumen', 'Figuras chartistas'] },
   { title:'Salida de la posición', items:['Cuándo', 'En qué condiciones', 'Con qué motivos', 'En qué plazo de tiempo', 'A qué importe'] },
   { title:'Revisión de la tesis', items:['Cuándo hay que revisarla', 'Qué eventos disparan las acciones de revisión'] },
@@ -2111,11 +2117,14 @@ function renderFrameworkModal(){
       </div>
 
       <div>
-        <div style="font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:10px;">Estrategia para invertir en este framework</div>
+        <div style="font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:10px;">Pasos para analizar una opción</div>
         <div style="display:flex;flex-direction:column;gap:10px;">
-          ${FRAMEWORK_STRATEGY.map(s=>`<div style="padding:10px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
-            <div style="font-size:12.5px;font-weight:700;">${esc(s.title)}</div>
-            ${s.items && s.items.length ? `<ul style="margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px;">${s.items.map(it=>`<li style="font-size:11.5px;color:var(--text-dim);line-height:1.5;">${esc(it)}</li>`).join('')}</ul>` : ''}
+          ${FRAMEWORK_STRATEGY.map((s,i)=>`<div style="display:flex;gap:10px;padding:10px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
+            <div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);border:1px solid var(--accent-border);color:var(--accent-text);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;">${i+1}</div>
+            <div style="min-width:0;">
+              <div style="font-size:12.5px;font-weight:700;">${esc(s.title)}</div>
+              ${s.items && s.items.length ? `<ul style="margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px;">${s.items.map(it=>`<li style="font-size:11.5px;color:var(--text-dim);line-height:1.5;">${esc(it)}</li>`).join('')}</ul>` : ''}
+            </div>
           </div>`).join('')}
         </div>
       </div>
@@ -2163,6 +2172,21 @@ function renderModal(){
         <div><div style="font-size:14px;">${fmtEUR(currentValueOf(p))}</div><div style="font-size:9px;color:var(--text-faint);">VALOR ACTUAL</div></div>
         <div><div style="font-size:14px;">${p.current_price ? p.current_price.toLocaleString('es-ES')+' '+(p.currency||'') : '—'}</div><div style="font-size:9px;color:var(--text-faint);">COTIZACIÓN</div></div>
         <div><div style="font-size:14px;color:${gp===null?'var(--text-dim)':(gp>=0?'var(--green)':'var(--red)')};">${gp===null?'—':(gp>=0?'+':'')+fmtPct(gp)}</div><div style="font-size:9px;color:var(--text-faint);">GANANCIA</div></div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <button class="validation-switch" data-id="${p.id}" data-field="fundamental_validated" data-value="${p.fundamental_validated?'1':'0'}" style="cursor:pointer;flex:1;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="font-size:11px;font-weight:600;color:${p.fundamental_validated?'var(--accent-text)':'var(--text-dim)'};">Validación Fundamental</span>
+          <span style="width:32px;height:18px;border-radius:9px;background:${p.fundamental_validated?'var(--accent)':'var(--border)'};padding:2px;box-sizing:border-box;display:inline-block;flex-shrink:0;transition:background .15s;">
+            <span style="display:block;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s;transform:translateX(${p.fundamental_validated?'14px':'0'});"></span>
+          </span>
+        </button>
+        <button class="validation-switch" data-id="${p.id}" data-field="technical_validated" data-value="${p.technical_validated?'1':'0'}" style="cursor:pointer;flex:1;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="font-size:11px;font-weight:600;color:${p.technical_validated?'var(--accent-text)':'var(--text-dim)'};">Validación Técnica</span>
+          <span style="width:32px;height:18px;border-radius:9px;background:${p.technical_validated?'var(--accent)':'var(--border)'};padding:2px;box-sizing:border-box;display:inline-block;flex-shrink:0;transition:background .15s;">
+            <span style="display:block;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s;transform:translateX(${p.technical_validated?'14px':'0'});"></span>
+          </span>
+        </button>
       </div>
 
       ${p.ticker ? `<div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
@@ -4187,6 +4211,16 @@ function render(scenario){
   app.querySelectorAll('.recompra-delete-btn').forEach(btn=>btn.addEventListener('click', async () => {
     const id = btn.getAttribute('data-id');
     await supabase.from('position_recompras').delete().eq('id', id);
+    markDirty();
+    await loadAll();
+    render(currentScenario);
+  }));
+
+  app.querySelectorAll('.validation-switch').forEach(btn=>btn.addEventListener('click', async () => {
+    const id = btn.getAttribute('data-id');
+    const field = btn.getAttribute('data-field');
+    const next = btn.getAttribute('data-value') !== '1';
+    await supabase.from('positions').update({ [field]: next }).eq('id', id);
     markDirty();
     await loadAll();
     render(currentScenario);
