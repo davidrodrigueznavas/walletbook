@@ -325,6 +325,7 @@ let activePortfolioName = 'Mi cartera', portfolios = [], menuOpen = false, activ
 let profile = null;
 let exploreList = null, exploreLoading = false, exploreDetailId = null, exploreDetailPositions = null, exploreCategoryFilter = null;
 let positionRules = [], positionRulesLoading = false, ruleFormOpen = false, ruleFormError = null, ruleEditingId = null;
+let recompraFormOpen = false, recompraFormError = null;
 let allRulesData = null, allRulesLoading = false;
 let screeners = null, screenersLoading = false, screenerUniverse = null, screenerUniverseLoading = false;
 let screenerBuilderOpen = false, screenerBuilderName = '', screenerBuilderConditions = [], screenerBuilderError = null;
@@ -925,6 +926,16 @@ async function loadPositionRules(positionId){
   positionRulesLoading = false;
 }
 
+async function attachRecompras(positions){
+  if(!positions.length) return positions;
+  const { data, error } = await supabase.from('position_recompras').select('*').in('position_id', positions.map(p=>p.id)).order('purchase_date');
+  if(error){ console.error(error); return positions; }
+  const byPosition = {};
+  (data||[]).forEach(r => { (byPosition[r.position_id] = byPosition[r.position_id]||[]).push(r); });
+  positions.forEach(p => { p.recompras = byPosition[p.id] || []; });
+  return positions;
+}
+
 async function loadAllRulesData(){
   allRulesLoading = true;
   const [rulesRes, positionsRes] = await Promise.all([
@@ -933,7 +944,7 @@ async function loadAllRulesData(){
   ]);
   if(rulesRes.error) console.error(rulesRes.error);
   if(positionsRes.error) console.error(positionsRes.error);
-  const positions = positionsRes.data || [];
+  const positions = await attachRecompras(positionsRes.data || []);
   const totalsByPortfolio = {};
   positions.forEach(p => {
     totalsByPortfolio[p.portfolio_id] = (totalsByPortfolio[p.portfolio_id] || 0) + currentValueOf(p);
@@ -1188,6 +1199,7 @@ function esc(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function fmtEUR(n){ return Math.round(n).toLocaleString('es-ES') + ' €'; }
+function fmtNum(n){ return n==null ? '—' : n.toLocaleString('es-ES', {maximumFractionDigits:2}); }
 function fmtPct(n){ return (Math.round(n*10)/10).toString().replace('.',',') + '%'; }
 function gainChip(g, size){
   const color = g==null ? 'var(--text-dim)' : (g>=0 ? 'var(--green)' : 'var(--red)');
@@ -1198,22 +1210,58 @@ function gainChip(g, size){
 }
 function num(v){ if(v===null||v===undefined) return null; let s=String(v).trim(); if(s==='') return null; s=s.replace('€','').replace('$','').replace(/\s/g,''); if(s.includes(',')&&s.includes('.')){ s=s.replace(/\./g,'').replace(',','.'); } else if(s.includes(',')){ s=s.replace(',','.'); } const n=parseFloat(s); return isNaN(n)?null:n; }
 
-function investedOf(p){ const v = num(p.invested); return v!==null ? v : 0; }
+// Cada posición puede tener varias compras: la original (campos invested/price
+// en la propia fila) más N recompras (tabla position_recompras), cada una a su
+// propio precio. investedOf suma el dinero puesto sin más; positionLots() solo
+// incluye los lotes con precio válido, para poder convertir a valor actual sin
+// que una compra sin precio "contamine" el cálculo de las demás.
+function investedOf(p){
+  const base = num(p.invested);
+  const baseAmt = base!==null ? base : 0;
+  const recompraSum = (p.recompras||[]).reduce((sum,r) => sum + (num(r.invested)||0), 0);
+  return baseAmt + recompraSum;
+}
+function positionLots(p){
+  const lots = [];
+  const baseInv = num(p.invested), basePrice = num(p.price);
+  if(baseInv && baseInv>0 && basePrice && basePrice>0) lots.push({invested:baseInv, price:basePrice});
+  (p.recompras||[]).forEach(r => {
+    const inv = num(r.invested), price = num(r.price);
+    if(inv && inv>0 && price && price>0) lots.push({invested:inv, price});
+  });
+  return lots;
+}
 function pendingInvestmentFor(p){
   if(investedOf(p) > 0) return 0; // ya invertido: no cuenta como pendiente, aunque el campo guarde un valor
   const v = num(p.pending_investment);
   return v!==null ? v : 0;
 }
-function commissionOf(p){ const v = num(p.commission); return v!==null ? v : 0; }
+function commissionOf(p){
+  const base = num(p.commission);
+  const baseAmt = base!==null ? base : 0;
+  return baseAmt + (p.recompras||[]).reduce((sum,r) => sum + (num(r.commission)||0), 0);
+}
 function currentValueOf(p){
-  const inv = investedOf(p), price = num(p.price), cur = p.current_price_eur;
-  if(price && cur && price>0){ return (inv/price)*cur; }
-  return inv;
+  const cur = num(p.current_price_eur);
+  const lots = positionLots(p);
+  if(cur && lots.length) return lots.reduce((sum,l) => sum + (l.invested/l.price)*cur, 0);
+  return investedOf(p);
 }
 function gainPctOf(p){
-  const price = num(p.price), cur = p.current_price_eur;
-  if(price && cur && price>0) return (cur-price)/price*100;
-  return null;
+  const invested = investedOf(p);
+  const cur = num(p.current_price_eur);
+  const lots = positionLots(p);
+  if(!cur || !lots.length || invested<=0) return null;
+  return (currentValueOf(p) - invested) / invested * 100;
+}
+// Precio medio ponderado de compra, para mostrar un único numero de referencia
+// aunque haya varias compras a precios distintos.
+function avgPriceOf(p){
+  const lots = positionLots(p);
+  if(!lots.length) return null;
+  const totalInvested = lots.reduce((s,l)=>s+l.invested, 0);
+  const totalShares = lots.reduce((s,l)=>s+(l.invested/l.price), 0);
+  return totalShares>0 ? totalInvested/totalShares : null;
 }
 function computeTotals(){
   let invested=0, value=0, withData=0, commission=0;
@@ -1552,7 +1600,8 @@ async function loadAll(){
   ]);
   if(posErr) console.error(posErr);
   if(histErr) console.error(histErr);
-  portfolio = { positions: (rows||[]).map(r => ({ ...r, date: r.purchase_date })) };
+  const positions = await attachRecompras((rows||[]).map(r => ({ ...r, date: r.purchase_date })));
+  portfolio = { positions };
   history = histRows || [];
 }
 
@@ -1931,6 +1980,32 @@ function renderModal(){
           <label style="font-size:9.5px;color:var(--text-faint);display:block;margin-bottom:4px;">Tesis de inversión</label>
           <textarea data-id="${p.id}" data-field="thesis" style="flex:1;width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;line-height:1.55;padding:10px 12px;box-sizing:border-box;resize:none;">${esc(p.thesis??'')}</textarea>
         </div>
+      </div>
+
+      <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;">Compras de esta posición${positionLots(p).length>1?` · media ${fmtNum(avgPriceOf(p))}€`:''}</div>
+          <button id="recompra-add-toggle" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:11.5px;font-weight:600;padding:0;">${recompraFormOpen?'Cancelar':'+ Añadir recompra'}</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:${recompraFormOpen?'14px':'0'};">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
+            <div style="font-size:11.5px;"><b>Compra inicial</b>${p.invested?` · ${fmtEUR(num(p.invested))} a ${p.price?fmtNum(num(p.price))+'€':'—'}`:' · sin importe'}${p.date?' · '+p.date:''}</div>
+          </div>
+          ${(p.recompras||[]).map(r=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
+            <div style="font-size:11.5px;">${fmtEUR(num(r.invested)||0)} a ${r.price?fmtNum(num(r.price))+'€':'—'}${r.purchase_date?' · '+r.purchase_date:''}${r.commission?' · comisión '+fmtEUR(num(r.commission)):''}</div>
+            <button class="recompra-delete-btn" data-id="${r.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;flex-shrink:0;">×</button>
+          </div>`).join('')}
+        </div>
+        ${recompraFormOpen ? `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;align-items:end;">
+          <div class="field"><label>Importe (€)</label><input id="recompra-invested" placeholder="ej. 300" autocomplete="off"/></div>
+          <div class="field"><label>Precio</label><input id="recompra-price" placeholder="ej. 480,50" autocomplete="off"/></div>
+          <div class="field"><label>Fecha</label><input type="date" id="recompra-date" autocomplete="off"/></div>
+          <div class="field"><label>Comisión (€)</label><input id="recompra-commission" placeholder="0" autocomplete="off"/></div>
+        </div>
+        ${recompraFormError ? `<div style="color:var(--red);font-size:11px;margin-top:8px;">${recompraFormError}</div>` : ''}
+        <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+          <button id="recompra-save-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:6px 14px;font-size:11.5px;font-weight:600;">Guardar recompra</button>
+        </div>` : ''}
       </div>
 
       <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft);">
@@ -3530,9 +3605,41 @@ function render(scenario){
   }));
 
   const closeBtn = document.getElementById('modal-close');
-  if(closeBtn) closeBtn.addEventListener('click', () => { selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; render(currentScenario); });
+  if(closeBtn) closeBtn.addEventListener('click', () => { selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; recompraFormOpen = false; recompraFormError = null; render(currentScenario); });
   const backdrop = document.getElementById('modal-backdrop');
-  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; render(currentScenario); } });
+  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; recompraFormOpen = false; recompraFormError = null; render(currentScenario); } });
+
+  const recompraAddToggle = document.getElementById('recompra-add-toggle');
+  if(recompraAddToggle) recompraAddToggle.addEventListener('click', () => {
+    recompraFormOpen = !recompraFormOpen; recompraFormError = null;
+    render(currentScenario);
+  });
+  const recompraSaveBtn = document.getElementById('recompra-save-btn');
+  if(recompraSaveBtn) recompraSaveBtn.addEventListener('click', async () => {
+    const pos = portfolio.positions.find(p=>p.id===selectedId);
+    if(!pos) return;
+    const invested = num(document.getElementById('recompra-invested').value);
+    const price = num(document.getElementById('recompra-price').value);
+    const date = document.getElementById('recompra-date').value;
+    const commission = num(document.getElementById('recompra-commission').value);
+    if(invested===null || invested<=0){ recompraFormError = 'Indica el importe de la recompra.'; render(currentScenario); return; }
+    if(price===null || price<=0){ recompraFormError = 'Indica el precio de la recompra.'; render(currentScenario); return; }
+    const { error } = await supabase.from('position_recompras').insert({
+      position_id: pos.id, owner_id: session.user.id, invested, price, purchase_date: date || null, commission
+    });
+    if(error){ recompraFormError = 'No se pudo guardar la recompra.'; render(currentScenario); return; }
+    recompraFormOpen = false; recompraFormError = null;
+    markDirty();
+    await loadAll();
+    render(currentScenario);
+  });
+  app.querySelectorAll('.recompra-delete-btn').forEach(btn=>btn.addEventListener('click', async () => {
+    const id = btn.getAttribute('data-id');
+    await supabase.from('position_recompras').delete().eq('id', id);
+    markDirty();
+    await loadAll();
+    render(currentScenario);
+  }));
 
   const ruleAddToggle = document.getElementById('rule-add-toggle');
   if(ruleAddToggle) ruleAddToggle.addEventListener('click', () => {
