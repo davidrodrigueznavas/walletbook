@@ -233,9 +233,9 @@ function ruleMetricValue(metric, p, portfolioValue){
   const price = num(p.price), cur = p.current_price_eur, date = p.date || p.purchase_date;
   switch(metric){
     case 'gain_pct': return gainPctOf(p);
-    case 'gain_eur': { const gp = gainPctOf(p); return gp===null ? null : currentValueOf(p) - investedOf(p); }
+    case 'gain_eur': { const gp = gainPctOf(p); return gp===null ? null : currentValueOf(p) - investedOf(p) - compraCommissionOf(p); }
     case 'loss_pct': { const gp = gainPctOf(p); return gp===null ? null : -gp; }
-    case 'loss_eur': { const gp = gainPctOf(p); return gp===null ? null : investedOf(p) - currentValueOf(p); }
+    case 'loss_eur': { const gp = gainPctOf(p); return gp===null ? null : investedOf(p) + compraCommissionOf(p) - currentValueOf(p); }
     case 'weight_deviation': {
       if(!p.target_weight || !portfolioValue) return null;
       const weightPct = portfolioValue>0 ? currentValueOf(p)/portfolioValue*100 : 0;
@@ -1402,6 +1402,13 @@ function commissionOf(p){
   const baseAmt = base!==null ? base : 0;
   return baseAmt + (p.recompras||[]).reduce((sum,r) => sum + (num(r.commission)||0), 0);
 }
+// Solo las comisiones de compra (inicial + recompras) — las de venta ya se
+// restan dentro de realizedGainOf, así que aquí no se contarían dos veces.
+function compraCommissionOf(p){
+  const base = num(p.commission);
+  const baseAmt = base!==null ? base : 0;
+  return baseAmt + (p.recompras||[]).filter(r => r.type !== 'venta').reduce((sum,r) => sum + (num(r.commission)||0), 0);
+}
 function currentValueOf(p){
   const cur = num(p.current_price_eur);
   const { lots, noPriceAmount } = computeLotsAndRealized(p);
@@ -1415,7 +1422,7 @@ function gainPctOf(p){
   const cur = num(p.current_price_eur);
   const lots = positionLots(p);
   if(!cur || !lots.length || invested<=0) return null;
-  return (currentValueOf(p) - invested) / invested * 100;
+  return (currentValueOf(p) - invested - compraCommissionOf(p)) / invested * 100;
 }
 // Precio medio ponderado de compra, para mostrar un único numero de referencia
 // aunque haya varias compras a precios distintos.
@@ -1427,9 +1434,10 @@ function avgPriceOf(p){
   return totalShares>0 ? totalInvested/totalShares : null;
 }
 function computeTotals(){
-  let invested=0, value=0, withData=0, commission=0;
-  portfolio.positions.forEach(p => { invested+=investedOf(p); value+=currentValueOf(p); commission+=commissionOf(p); if(investedOf(p)>0) withData++; });
-  return {invested, value, gain: value-invested, gainPct: invested>0 ? (value-invested)/invested*100 : 0, withData, total: portfolio.positions.length, commission};
+  let invested=0, value=0, withData=0, commission=0, compraCommission=0;
+  portfolio.positions.forEach(p => { invested+=investedOf(p); value+=currentValueOf(p); commission+=commissionOf(p); compraCommission+=compraCommissionOf(p); if(investedOf(p)>0) withData++; });
+  const gain = value-invested-compraCommission;
+  return {invested, value, gain, gainPct: invested>0 ? gain/invested*100 : 0, withData, total: portfolio.positions.length, commission};
 }
 
 function computeCAGR(totals){
