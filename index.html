@@ -118,6 +118,9 @@
 
     .market-status-badge { padding: 6px 8px !important; }
     .market-status-badge-label { display: none !important; }
+
+    .home-main-grid { grid-template-columns: 1fr !important; }
+    .home-calendar-sidebar { position: static !important; }
   }
 </style>
 </head>
@@ -332,7 +335,9 @@ let activePortfolioName = 'Mi cartera', portfolios = [], menuOpen = false, activ
 let profile = null;
 let exploreList = null, exploreLoading = false, exploreDetailId = null, exploreDetailPositions = null, exploreCategoryFilter = null;
 let positionRules = [], positionRulesLoading = false, ruleFormOpen = false, ruleFormError = null, ruleEditingId = null;
-let recompraFormOpen = false, recompraFormError = null;
+let recompraFormOpen = false, recompraFormError = null, recompraFormType = 'compra';
+let positionEvents = [], positionEventsLoading = false, positionEventFormOpen = false, positionEventFormError = null;
+let calendarViewYear = new Date().getFullYear(), calendarViewMonth = new Date().getMonth(), calendarSelectedDay = new Date().toISOString().slice(0,10);
 let allRulesData = null, allRulesLoading = false;
 let calendarEvents = null, calendarEventsLoading = false, calendarPositionOptions = null;
 let calendarFormOpen = false, calendarFormError = null, calendarFormSource = 'propio';
@@ -935,6 +940,14 @@ async function loadPositionRules(positionId){
   positionRulesLoading = false;
 }
 
+async function loadPositionEvents(positionId){
+  positionEventsLoading = true;
+  const { data, error } = await supabase.from('calendar_events').select('*').eq('position_id', positionId).eq('owner_id', session.user.id).order('event_date');
+  if(error) console.error(error);
+  positionEvents = data || [];
+  positionEventsLoading = false;
+}
+
 async function attachRecompras(positions){
   if(!positions.length) return positions;
   const { data, error } = await supabase.from('position_recompras').select('*').in('position_id', positions.map(p=>p.id)).order('purchase_date');
@@ -972,13 +985,20 @@ async function loadCalendarEvents(){
   calendarEventsLoading = true;
   const [evRes, posRes] = await Promise.all([
     supabase.from('calendar_events').select('*').eq('owner_id', session.user.id).order('event_date', { ascending:true }),
-    supabase.from('positions').select('id, name, ticker, portfolio_id').eq('owner_id', session.user.id).is('deleted_at', null).order('name'),
+    supabase.from('positions').select('id, name, ticker, portfolio_id, invested, price').eq('owner_id', session.user.id).is('deleted_at', null).order('name'),
   ]);
   if(evRes.error) console.error(evRes.error);
   if(posRes.error) console.error(posRes.error);
   calendarEvents = evRes.data || [];
-  calendarPositionOptions = posRes.data || [];
+  calendarPositionOptions = await attachRecompras(posRes.data || []);
   calendarEventsLoading = false;
+}
+
+// Solo se muestran los eventos propios y los de acciones que ya están invertidas
+// (no las que solo tienen importe pendiente o están en watchlist).
+function visibleCalendarEvents(){
+  const investedIds = new Set((calendarPositionOptions||[]).filter(p => investedOf(p) > 0).map(p => p.id));
+  return (calendarEvents||[]).filter(e => e.source === 'propio' || investedIds.has(e.position_id));
 }
 
 async function loadScreeners(){
@@ -1113,31 +1133,43 @@ function calendarEventRow(e){
   </div>`;
 }
 
-function renderCalendarHomeSection(){
+function calendarSidebarRow(e){
+  const isPast = e.event_date < new Date().toISOString().slice(0,10);
+  const d = new Date(e.event_date+'T00:00:00');
+  return `<div style="display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--border-soft);opacity:${isPast?0.5:1};">
+    <div style="text-align:center;flex-shrink:0;width:32px;">
+      <div style="font-size:14px;font-weight:700;line-height:1;">${d.toLocaleDateString('es-ES',{day:'2-digit'})}</div>
+      <div style="font-size:8px;color:var(--text-faint);text-transform:uppercase;">${d.toLocaleDateString('es-ES',{month:'short'}).replace('.','')}</div>
+    </div>
+    <div style="min-width:0;flex:1;">
+      <div style="font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.title)}</div>
+      <div style="font-size:9.5px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${EVENT_TYPE[e.event_type]||e.event_type}${e.source==='accion'&&e.ticker?' · '+esc(e.ticker):''}</div>
+    </div>
+    <button class="calendar-event-delete-btn" data-id="${e.id}" title="Eliminar" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:2px 4px;flex-shrink:0;">×</button>
+  </div>`;
+}
+
+function renderCalendarSidebar(){
   if(calendarEvents === null && !calendarEventsLoading){
     loadCalendarEvents().then(() => render(null));
   }
-  const now = new Date();
-  const monthPrefix = now.toISOString().slice(0,7);
-  const monthEvents = (calendarEvents||[]).filter(e => e.event_date.slice(0,7) === monthPrefix);
-  const monthLabel = now.toLocaleDateString('es-ES', {month:'long', year:'numeric'});
+  const today = new Date().toISOString().slice(0,10);
+  const events = visibleCalendarEvents().filter(e => e.event_date >= today).slice(0,8);
   let body;
   if(calendarEventsLoading && calendarEvents === null){
-    body = `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Cargando eventos…</div>`;
-  } else if(!monthEvents.length){
-    body = `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Sin eventos este mes.</div>`;
+    body = `<div style="font-size:11.5px;color:var(--text-faint);padding:8px 2px;">Cargando…</div>`;
+  } else if(!events.length){
+    body = `<div style="font-size:11.5px;color:var(--text-faint);padding:8px 2px;">Sin próximos eventos.</div>`;
   } else {
-    body = `<div style="display:flex;flex-direction:column;gap:8px;">${monthEvents.map(calendarEventRow).join('')}</div>`;
+    body = `<div>${events.map(calendarSidebarRow).join('')}</div>`;
   }
-  return `<div style="margin-top:34px;">
-    <div style="margin-bottom:14px;">
-      <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;text-transform:capitalize;">Calendario — ${monthLabel}</h2>
-      <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Tus notificaciones y eventos de acciones de este mes</div>
+  return `<div class="home-calendar-sidebar" style="position:sticky;top:16px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px 14px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <h3 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:14.5px;margin:0;">Calendario</h3>
+      <button id="calendar-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:10.5px;font-weight:600;padding:0;white-space:nowrap;">Ver todo →</button>
     </div>
+    <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:4px;">Próximos eventos</div>
     ${body}
-    <div style="text-align:right;margin-top:16px;">
-      <button id="calendar-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Ver calendario completo →</button>
-    </div>
   </div>`;
 }
 
@@ -1292,21 +1324,46 @@ function num(v){ if(v===null||v===undefined) return null; let s=String(v).trim()
 // propio precio. investedOf suma el dinero puesto sin más; positionLots() solo
 // incluye los lotes con precio válido, para poder convertir a valor actual sin
 // que una compra sin precio "contamine" el cálculo de las demás.
-function investedOf(p){
-  const base = num(p.invested);
-  const baseAmt = base!==null ? base : 0;
-  const recompraSum = (p.recompras||[]).reduce((sum,r) => sum + (num(r.invested)||0), 0);
-  return baseAmt + recompraSum;
+// Aplica las ventas (FIFO, por fecha) sobre los lotes de compra (inicial + recompras)
+// y devuelve tanto lo que queda en cartera como la ganancia/pérdida ya realizada.
+function computeLotsAndRealized(p){
+  let lots = [];
+  const baseInv = num(p.invested), basePrice = num(p.price);
+  if(baseInv && baseInv>0 && basePrice && basePrice>0) lots.push({invested:baseInv, price:basePrice, date:p.purchase_date||''});
+  (p.recompras||[]).filter(r => r.type !== 'venta').forEach(r => {
+    const inv = num(r.invested), price = num(r.price);
+    if(inv && inv>0 && price && price>0) lots.push({invested:inv, price, date:r.purchase_date||''});
+  });
+  lots.sort((a,b) => (a.date||'').localeCompare(b.date||''));
+  const remaining = lots.map(l => ({ shares: l.invested/l.price, price: l.price }));
+  const ventas = (p.recompras||[]).filter(r => r.type === 'venta' && num(r.invested)>0 && num(r.price)>0).sort((a,b) => (a.purchase_date||'').localeCompare(b.purchase_date||''));
+  let realizedGain = 0;
+  ventas.forEach(v => {
+    const salePrice = num(v.price);
+    let sharesToSell = num(v.invested)/salePrice;
+    for(const lot of remaining){
+      if(sharesToSell<=1e-9) break;
+      const take = Math.min(lot.shares, sharesToSell);
+      realizedGain += take*(salePrice-lot.price);
+      lot.shares -= take;
+      sharesToSell -= take;
+    }
+    realizedGain -= (num(v.commission)||0);
+  });
+  const remainingLots = remaining.filter(l => l.shares>1e-9).map(l => ({ invested:l.shares*l.price, price:l.price }));
+  return { lots: remainingLots, realizedGain };
 }
 function positionLots(p){
-  const lots = [];
-  const baseInv = num(p.invested), basePrice = num(p.price);
-  if(baseInv && baseInv>0 && basePrice && basePrice>0) lots.push({invested:baseInv, price:basePrice});
-  (p.recompras||[]).forEach(r => {
-    const inv = num(r.invested), price = num(r.price);
-    if(inv && inv>0 && price && price>0) lots.push({invested:inv, price});
-  });
-  return lots;
+  return computeLotsAndRealized(p).lots;
+}
+function realizedGainOf(p){
+  return computeLotsAndRealized(p).realizedGain;
+}
+function heldSharesOf(p){
+  return positionLots(p).reduce((sum,l) => sum + l.invested/l.price, 0);
+}
+function investedOf(p){
+  return positionLots(p).reduce((sum,l) => sum + l.invested, 0);
 }
 function pendingInvestmentFor(p){
   if(investedOf(p) > 0) return 0; // ya invertido: no cuenta como pendiente, aunque el campo guarde un valor
@@ -2080,27 +2137,60 @@ function renderModal(){
 
       <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft);">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-          <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;">Compras de esta posición${positionLots(p).length>1?` · media ${fmtNum(avgPriceOf(p))}€`:''}</div>
-          <button id="recompra-add-toggle" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:11.5px;font-weight:600;padding:0;">${recompraFormOpen?'Cancelar':'+ Añadir recompra'}</button>
+          <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;">Compras y ventas de esta posición${positionLots(p).length>1?` · media ${fmtNum(avgPriceOf(p))}€`:''}${realizedGainOf(p)!==0?` · realizada <span style="color:${realizedGainOf(p)>=0?'var(--green)':'var(--red)'};">${realizedGainOf(p)>=0?'+':''}${fmtEUR(realizedGainOf(p))}</span>`:''}</div>
+          <div style="display:flex;gap:10px;">
+            <button id="recompra-add-toggle" data-type="compra" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:11.5px;font-weight:600;padding:0;">${recompraFormOpen&&recompraFormType==='compra'?'Cancelar':'+ Compra'}</button>
+            <button id="venta-add-toggle" data-type="venta" style="cursor:pointer;background:none;border:none;color:var(--red);font-size:11.5px;font-weight:600;padding:0;">${recompraFormOpen&&recompraFormType==='venta'?'Cancelar':'+ Venta'}</button>
+          </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:${recompraFormOpen?'14px':'0'};">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
             <div style="font-size:11.5px;"><b>Compra inicial</b>${p.invested?` · ${fmtEUR(num(p.invested))} a ${p.price?fmtNum(num(p.price))+'€':'—'}`:' · sin importe'}${p.date?' · '+p.date:''}</div>
           </div>
-          ${(p.recompras||[]).map(r=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
-            <div style="font-size:11.5px;">${fmtEUR(num(r.invested)||0)} a ${r.price?fmtNum(num(r.price))+'€':'—'}${r.purchase_date?' · '+r.purchase_date:''}${r.commission?' · comisión '+fmtEUR(num(r.commission)):''}</div>
+          ${(p.recompras||[]).map(r=>{
+            const isVenta = r.type === 'venta';
+            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
+            <div style="font-size:11.5px;">
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:1px 6px;border-radius:6px;margin-right:6px;background:${isVenta?'var(--red-soft)':'var(--accent-soft)'};color:${isVenta?'var(--red)':'var(--accent-text)'};border:1px solid ${isVenta?'var(--red-border)':'var(--accent-border)'};">${isVenta?'Venta':'Compra'}</span>
+              ${fmtEUR(num(r.invested)||0)} a ${r.price?fmtNum(num(r.price))+'€':'—'}${r.purchase_date?' · '+r.purchase_date:''}${r.commission?' · comisión '+fmtEUR(num(r.commission)):''}
+            </div>
             <button class="recompra-delete-btn" data-id="${r.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;flex-shrink:0;">×</button>
-          </div>`).join('')}
+          </div>`;
+          }).join('')}
         </div>
         ${recompraFormOpen ? `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;align-items:end;">
-          <div class="field"><label>Importe (€)</label><input id="recompra-invested" placeholder="ej. 300" autocomplete="off"/></div>
-          <div class="field"><label>Precio</label><input id="recompra-price" placeholder="ej. 480,50" autocomplete="off"/></div>
+          <div class="field"><label>${recompraFormType==='venta'?'Importe vendido (€)':'Importe (€)'}</label><input id="recompra-invested" placeholder="ej. 300" autocomplete="off"/></div>
+          <div class="field"><label>${recompraFormType==='venta'?'Precio venta':'Precio'}</label><input id="recompra-price" placeholder="ej. 480,50" autocomplete="off"/></div>
           <div class="field"><label>Fecha</label><input type="date" id="recompra-date" autocomplete="off"/></div>
           <div class="field"><label>Comisión (€)</label><input id="recompra-commission" placeholder="0" autocomplete="off"/></div>
         </div>
         ${recompraFormError ? `<div style="color:var(--red);font-size:11px;margin-top:8px;">${recompraFormError}</div>` : ''}
         <div style="display:flex;justify-content:flex-end;margin-top:10px;">
-          <button id="recompra-save-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:6px 14px;font-size:11.5px;font-weight:600;">Guardar recompra</button>
+          <button id="recompra-save-btn" class="pill-btn" style="border:1px solid ${recompraFormType==='venta'?'var(--red-border)':'var(--accent-border)'};background:${recompraFormType==='venta'?'var(--red-soft)':'var(--accent-soft)'};color:${recompraFormType==='venta'?'var(--red)':'var(--accent-text)'};padding:6px 14px;font-size:11.5px;font-weight:600;">${recompraFormType==='venta'?'Guardar venta':'Guardar compra'}</button>
+        </div>` : ''}
+      </div>
+
+      <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;">Eventos de esta posición</div>
+          <button id="posevent-add-toggle" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:11.5px;font-weight:600;padding:0;">${positionEventFormOpen?'Cancelar':'+ Añadir evento'}</button>
+        </div>
+        ${positionEventsLoading ? `<div style="font-size:11px;color:var(--text-faint);">Cargando…</div>` : (positionEvents.length ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:${positionEventFormOpen?'14px':'0'};">
+          ${positionEvents.map(e=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
+            <div style="font-size:11.5px;">${calendarEventTypeBadge(e.event_type)} <span style="margin-left:6px;">${esc(e.title)}</span><span style="color:var(--text-faint);"> · ${e.event_date}</span></div>
+            <button class="posevent-delete-btn" data-id="${e.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;flex-shrink:0;">×</button>
+          </div>`).join('')}
+        </div>` : (!positionEventFormOpen ? `<div style="font-size:11px;color:var(--text-faint);">Sin eventos todavía.</div>` : ''))}
+        ${positionEventFormOpen ? `<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;align-items:end;">
+          <div class="field"><label>Título</label><input id="posevent-title" placeholder="ej. Resultados Q4" autocomplete="off"/></div>
+          <div class="field"><label>Tipo</label><select id="posevent-type">
+            ${Object.entries(EVENT_TYPE).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
+          </select></div>
+          <div class="field"><label>Fecha</label><input type="date" id="posevent-date" autocomplete="off"/></div>
+        </div>
+        ${positionEventFormError ? `<div style="color:var(--red);font-size:11px;margin-top:8px;">${positionEventFormError}</div>` : ''}
+        <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+          <button id="posevent-save-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:6px 14px;font-size:11.5px;font-weight:600;">Guardar evento</button>
         </div>` : ''}
       </div>
 
@@ -2613,20 +2703,24 @@ function renderHomeScreen(){
     <div style="max-width:1200px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
       ${topNavBar()}
       ${renderMarketIndicators()}
-      <div style="margin-bottom:26px;">
-        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mis carteras</h1>
-        <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Tus carteras de inversión</div>
+      <div class="home-main-grid" style="display:grid;grid-template-columns:1fr 300px;gap:28px;align-items:start;">
+        <div style="min-width:0;">
+          <div style="margin-bottom:26px;">
+            <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mis carteras</h1>
+            <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Tus carteras de inversión</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;">
+            ${portfolios.slice(0,6).map(renderPortfolioCardHTML).join('')}
+            ${renderCreatePortfolioCardHTML()}
+          </div>
+          <div style="text-align:right;margin-top:16px;">
+            <button id="carteras-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Explora mis carteras →</button>
+          </div>
+          ${renderScreenersHomeSection()}
+          ${renderDiscoverPreview()}
+        </div>
+        <aside style="min-width:0;">${renderCalendarSidebar()}</aside>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;">
-        ${portfolios.slice(0,6).map(renderPortfolioCardHTML).join('')}
-        ${renderCreatePortfolioCardHTML()}
-      </div>
-      <div style="text-align:right;margin-top:16px;">
-        <button id="carteras-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Explora mis carteras →</button>
-      </div>
-      ${renderScreenersHomeSection()}
-      ${renderCalendarHomeSection()}
-      ${renderDiscoverPreview()}
     </div>
     ${renderScreenerBuilderModal()}
     ${renderViewOverlay()}
@@ -2902,66 +2996,98 @@ function renderCalendarScreen(){
   if(!session) return; // una operación asíncrona pendiente terminó después de cerrar sesión; no repintar la app
   const app = document.getElementById('app');
 
-  const events = calendarEvents || [];
-  const grouped = {};
-  events.forEach(e => {
-    const key = e.event_date.slice(0,7);
-    if(!grouped[key]) grouped[key] = [];
-    grouped[key].push(e);
-  });
-  const monthKeys = Object.keys(grouped).sort();
+  const year = calendarViewYear, month = calendarViewMonth;
+  const events = visibleCalendarEvents();
+  const eventsByDay = {};
+  events.forEach(e => { (eventsByDay[e.event_date] = eventsByDay[e.event_date]||[]).push(e); });
 
-  const form = calendarFormOpen ? `<div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:20px;">
-    <div class="modal-fields-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-      <div class="field"><label>Título</label><input id="cal-title" placeholder="ej. Resultados Q3" autocomplete="off"/></div>
-      <div class="field"><label>Fecha</label><input id="cal-date" type="date" autocomplete="off"/></div>
-      <div class="field"><label>Tipo de evento</label><select id="cal-type">
-        ${Object.entries(EVENT_TYPE).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
-      </select></div>
-      <div class="field">
-        <label>Origen</label>
-        <div style="display:flex;gap:6px;">
-          <button type="button" id="cal-source-propio" style="flex:1;cursor:pointer;font-size:11.5px;font-weight:600;padding:8px;border-radius:6px;border:1px solid ${calendarFormSource==='propio'?'var(--accent-border)':'var(--border)'};background:${calendarFormSource==='propio'?'var(--accent-soft)':'var(--panel-2)'};color:${calendarFormSource==='propio'?'var(--accent-text)':'var(--text-dim)'};">Propio</button>
-          <button type="button" id="cal-source-accion" style="flex:1;cursor:pointer;font-size:11.5px;font-weight:600;padding:8px;border-radius:6px;border:1px solid ${calendarFormSource==='accion'?'var(--accent-border)':'var(--border)'};background:${calendarFormSource==='accion'?'var(--accent-soft)':'var(--panel-2)'};color:${calendarFormSource==='accion'?'var(--accent-text)':'var(--text-dim)'};">De una acción</button>
+  const firstOfMonth = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const leadingBlanks = (firstOfMonth.getDay()+6)%7; // semana empieza en lunes
+  const rows = Math.ceil((leadingBlanks+daysInMonth)/7);
+  const todayStr = new Date().toISOString().slice(0,10);
+  const monthLabel = firstOfMonth.toLocaleDateString('es-ES', {month:'long', year:'numeric'});
+
+  const dayCells = [];
+  for(let i=0;i<rows*7;i++){
+    const dayNum = i - leadingBlanks + 1;
+    if(dayNum < 1 || dayNum > daysInMonth){ dayCells.push('<div></div>'); continue; }
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+    const dayEvents = eventsByDay[dateStr] || [];
+    const isToday = dateStr === todayStr;
+    const isSelected = dateStr === calendarSelectedDay;
+    dayCells.push(`<button type="button" class="cal-day-cell" data-date="${dateStr}" style="cursor:pointer;text-align:left;background:${isSelected?'var(--accent-soft)':'var(--panel-2)'};border:1px solid ${isSelected?'var(--accent-border)':'var(--border-soft)'};border-radius:8px;padding:6px;min-height:72px;display:flex;flex-direction:column;gap:3px;color:var(--text);font-family:inherit;box-sizing:border-box;">
+      <span style="font-size:11px;font-weight:${isToday?'800':'600'};color:${isToday?'var(--accent-text)':'var(--text)'};">${dayNum}</span>
+      <div style="display:flex;flex-direction:column;gap:2px;overflow:hidden;">
+        ${dayEvents.slice(0,2).map(e=>`<span style="font-size:8.5px;padding:1px 4px;border-radius:4px;background:${e.source==='accion'?'var(--accent-soft)':'var(--panel)'};color:${e.source==='accion'?'var(--accent-text)':'var(--text-dim)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.title)}</span>`).join('')}
+        ${dayEvents.length>2?`<span style="font-size:8px;color:var(--text-faint);">+${dayEvents.length-2} más</span>`:''}
+      </div>
+    </button>`);
+  }
+
+  const weekdayHeaders = ['L','M','X','J','V','S','D'];
+  const grid = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px;">
+    ${weekdayHeaders.map(w=>`<div style="text-align:center;font-size:10px;color:var(--text-faint);font-weight:700;text-transform:uppercase;">${w}</div>`).join('')}
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;">${dayCells.join('')}</div>`;
+
+  const selectedEvents = eventsByDay[calendarSelectedDay] || [];
+  const selectedLabel = calendarSelectedDay ? new Date(calendarSelectedDay+'T00:00:00').toLocaleDateString('es-ES',{weekday:'long', day:'numeric', month:'long'}) : '';
+
+  const agenda = `<div style="margin-top:22px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-size:12.5px;font-weight:700;text-transform:capitalize;">${selectedLabel}</div>
+      <button id="cal-add-toggle" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);white-space:nowrap;">${calendarFormOpen?'Cancelar':'+ Añadir evento'}</button>
+    </div>
+    ${calendarFormOpen ? `<div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:16px;">
+      <div class="modal-fields-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="field"><label>Título</label><input id="cal-title" placeholder="ej. Resultados Q3" autocomplete="off"/></div>
+        <div class="field"><label>Fecha</label><input id="cal-date" type="date" value="${calendarSelectedDay||''}" autocomplete="off"/></div>
+        <div class="field"><label>Tipo de evento</label><select id="cal-type">
+          ${Object.entries(EVENT_TYPE).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
+        </select></div>
+        <div class="field">
+          <label>Origen</label>
+          <div style="display:flex;gap:6px;">
+            <button type="button" id="cal-source-propio" style="flex:1;cursor:pointer;font-size:11.5px;font-weight:600;padding:8px;border-radius:6px;border:1px solid ${calendarFormSource==='propio'?'var(--accent-border)':'var(--border)'};background:${calendarFormSource==='propio'?'var(--accent-soft)':'var(--panel-2)'};color:${calendarFormSource==='propio'?'var(--accent-text)':'var(--text-dim)'};">Propio</button>
+            <button type="button" id="cal-source-accion" style="flex:1;cursor:pointer;font-size:11.5px;font-weight:600;padding:8px;border-radius:6px;border:1px solid ${calendarFormSource==='accion'?'var(--accent-border)':'var(--border)'};background:${calendarFormSource==='accion'?'var(--accent-soft)':'var(--panel-2)'};color:${calendarFormSource==='accion'?'var(--accent-text)':'var(--text-dim)'};">De una acción</button>
+          </div>
         </div>
       </div>
-    </div>
-    ${calendarFormSource==='accion' ? `<div class="field" style="margin-bottom:10px;"><label>Acción</label><select id="cal-position">
-      <option value="">— Elegir —</option>
-      ${(calendarPositionOptions||[]).map(p=>`<option value="${p.id}">${esc(p.name)}${p.ticker?' ('+esc(p.ticker)+')':''}</option>`).join('')}
-    </select></div>` : ''}
-    <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-dim);margin-bottom:12px;cursor:pointer;">
-      <input type="checkbox" id="cal-notify" checked/> Avisarme por email el día del evento
-    </label>
-    <div id="cal-form-error" style="color:var(--red);font-size:11.5px;margin-bottom:10px;display:${calendarFormError?'block':'none'};">${calendarFormError||''}</div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
-      <button id="cal-form-cancel" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);padding:8px 16px;font-size:12.5px;">Cancelar</button>
-      <button id="cal-form-save" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:8px 16px;font-size:12.5px;font-weight:600;">Guardar</button>
-    </div>
-  </div>` : '';
-
-  const body = calendarEventsLoading ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Cargando eventos…</div>`
-    : (!monthKeys.length ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Todavía no tienes eventos. Añade uno, o marca la fecha de resultados al dar de alta una acción.</div>`
-    : monthKeys.map(key => {
-        const label = new Date(key+'-01T00:00:00').toLocaleDateString('es-ES',{month:'long',year:'numeric'});
-        return `<div style="margin-bottom:22px;">
-          <div style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:10px;">${label}</div>
-          <div style="display:flex;flex-direction:column;gap:8px;">${grouped[key].map(calendarEventRow).join('')}</div>
-        </div>`;
-      }).join(''));
+      ${calendarFormSource==='accion' ? `<div class="field" style="margin-bottom:10px;"><label>Acción</label><select id="cal-position">
+        <option value="">— Elegir —</option>
+        ${(calendarPositionOptions||[]).map(p=>`<option value="${p.id}">${esc(p.name)}${p.ticker?' ('+esc(p.ticker)+')':''}</option>`).join('')}
+      </select></div>` : ''}
+      <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-dim);margin-bottom:12px;cursor:pointer;">
+        <input type="checkbox" id="cal-notify" checked/> Avisarme por email el día del evento
+      </label>
+      <div id="cal-form-error" style="color:var(--red);font-size:11.5px;margin-bottom:10px;display:${calendarFormError?'block':'none'};">${calendarFormError||''}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="cal-form-cancel" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);padding:8px 16px;font-size:12.5px;">Cancelar</button>
+        <button id="cal-form-save" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:8px 16px;font-size:12.5px;font-weight:600;">Guardar</button>
+      </div>
+    </div>` : ''}
+    ${selectedEvents.length ? `<div style="display:flex;flex-direction:column;gap:8px;">${selectedEvents.map(calendarEventRow).join('')}</div>` : `<div style="font-size:12px;color:var(--text-faint);">Sin eventos este día.</div>`}
+  </div>`;
 
   app.innerHTML = `<div class="home-wrap" style="flex:1;min-height:0;overflow-y:auto;box-sizing:border-box;padding:16px 0 32px;">
-    <div style="max-width:900px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
+    <div style="max-width:760px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
       ${topNavBar()}
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:26px;">
-        <div>
-          <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Calendario</h1>
-          <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Notificaciones propias y eventos de tus acciones (resultados, dividendos…)</div>
-        </div>
-        <button id="cal-add-toggle" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);white-space:nowrap;">${calendarFormOpen?'Cancelar':'+ Añadir evento'}</button>
+      <div style="margin-bottom:20px;">
+        <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Calendario</h1>
+        <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Notificaciones propias y eventos de tus acciones invertidas (resultados, dividendos…)</div>
       </div>
-      ${form}
-      ${body}
+      ${calendarEventsLoading ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Cargando eventos…</div>` : `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button id="cal-prev-month" class="theme-toggle" title="Mes anterior">‹</button>
+          <div style="font-size:15px;font-weight:700;text-transform:capitalize;min-width:150px;text-align:center;">${monthLabel}</div>
+          <button id="cal-next-month" class="theme-toggle" title="Mes siguiente">›</button>
+        </div>
+        <button id="cal-today-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);">Hoy</button>
+      </div>
+      ${grid}
+      ${agenda}`}
     </div>
     ${renderViewOverlay()}
     ${renderDialog()}
@@ -2972,6 +3098,31 @@ function renderCalendarScreen(){
   wireDialog(app);
   wireStockFinderModal(app);
   wireViewOverlay(app);
+
+  app.querySelectorAll('.cal-day-cell').forEach(btn=>btn.addEventListener('click', () => {
+    calendarSelectedDay = btn.getAttribute('data-date');
+    calendarFormOpen = false; calendarFormError = null;
+    render(null);
+  }));
+  const prevBtn = document.getElementById('cal-prev-month');
+  if(prevBtn) prevBtn.addEventListener('click', () => {
+    calendarViewMonth--;
+    if(calendarViewMonth < 0){ calendarViewMonth = 11; calendarViewYear--; }
+    render(null);
+  });
+  const nextBtn = document.getElementById('cal-next-month');
+  if(nextBtn) nextBtn.addEventListener('click', () => {
+    calendarViewMonth++;
+    if(calendarViewMonth > 11){ calendarViewMonth = 0; calendarViewYear++; }
+    render(null);
+  });
+  const todayBtn = document.getElementById('cal-today-btn');
+  if(todayBtn) todayBtn.addEventListener('click', () => {
+    const now = new Date();
+    calendarViewYear = now.getFullYear(); calendarViewMonth = now.getMonth();
+    calendarSelectedDay = now.toISOString().slice(0,10);
+    render(null);
+  });
 
   const addToggle = document.getElementById('cal-add-toggle');
   if(addToggle) addToggle.addEventListener('click', () => {
@@ -3022,6 +3173,7 @@ function renderCalendarScreen(){
     });
     if(error){ console.error(error); showErr('Error al guardar: ' + (error.message||'revisa la conexión')); return; }
     calendarFormOpen = false;
+    calendarSelectedDay = date;
     await loadCalendarEvents();
     render(null);
   });
@@ -3821,10 +3973,13 @@ function render(scenario){
       modalCompanyState = {loading:false, error:null, summary:null};
     }
     ruleFormOpen = false; ruleFormError = null; positionRules = []; positionRulesLoading = true;
+    recompraFormOpen = false; recompraFormError = null; recompraFormType = 'compra';
+    positionEventFormOpen = false; positionEventFormError = null; positionEvents = []; positionEventsLoading = true;
     render(currentScenario);
     if(pos && pos.ticker) loadModalChart(pos.ticker, modalRange);
     if(pos && pos.ticker && !pos.business_summary) loadModalCompanyInfo(pos);
     loadPositionRules(selectedId).then(() => render(currentScenario));
+    loadPositionEvents(selectedId).then(() => render(currentScenario));
   }));
 
   const sel = document.getElementById('scenario-select');
@@ -3871,14 +4026,19 @@ function render(scenario){
   }));
 
   const closeBtn = document.getElementById('modal-close');
-  if(closeBtn) closeBtn.addEventListener('click', () => { selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; recompraFormOpen = false; recompraFormError = null; render(currentScenario); });
+  if(closeBtn) closeBtn.addEventListener('click', () => { selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; recompraFormOpen = false; recompraFormError = null; positionEventFormOpen = false; positionEventFormError = null; render(currentScenario); });
   const backdrop = document.getElementById('modal-backdrop');
-  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; recompraFormOpen = false; recompraFormError = null; render(currentScenario); } });
+  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; recompraFormOpen = false; recompraFormError = null; positionEventFormOpen = false; positionEventFormError = null; render(currentScenario); } });
 
-  const recompraAddToggle = document.getElementById('recompra-add-toggle');
-  if(recompraAddToggle) recompraAddToggle.addEventListener('click', () => {
-    recompraFormOpen = !recompraFormOpen; recompraFormError = null;
-    render(currentScenario);
+  [document.getElementById('recompra-add-toggle'), document.getElementById('venta-add-toggle')].forEach(btn => {
+    if(!btn) return;
+    btn.addEventListener('click', () => {
+      const type = btn.getAttribute('data-type');
+      if(recompraFormOpen && recompraFormType === type){ recompraFormOpen = false; }
+      else { recompraFormOpen = true; recompraFormType = type; }
+      recompraFormError = null;
+      render(currentScenario);
+    });
   });
   const recompraSaveBtn = document.getElementById('recompra-save-btn');
   if(recompraSaveBtn) recompraSaveBtn.addEventListener('click', async () => {
@@ -3888,12 +4048,18 @@ function render(scenario){
     const price = num(document.getElementById('recompra-price').value);
     const date = document.getElementById('recompra-date').value;
     const commission = num(document.getElementById('recompra-commission').value);
-    if(invested===null || invested<=0){ recompraFormError = 'Indica el importe de la recompra.'; render(currentScenario); return; }
-    if(price===null || price<=0){ recompraFormError = 'Indica el precio de la recompra.'; render(currentScenario); return; }
+    const isVenta = recompraFormType === 'venta';
+    if(invested===null || invested<=0){ recompraFormError = isVenta ? 'Indica el importe vendido.' : 'Indica el importe de la recompra.'; render(currentScenario); return; }
+    if(price===null || price<=0){ recompraFormError = isVenta ? 'Indica el precio de venta.' : 'Indica el precio de la recompra.'; render(currentScenario); return; }
+    if(isVenta){
+      const sharesToSell = invested/price;
+      const heldShares = heldSharesOf(pos);
+      if(sharesToSell > heldShares + 1e-6){ recompraFormError = 'No puedes vender más de lo que tienes en esta posición.'; render(currentScenario); return; }
+    }
     const { error } = await supabase.from('position_recompras').insert({
-      position_id: pos.id, owner_id: session.user.id, invested, price, purchase_date: date || null, commission
+      position_id: pos.id, owner_id: session.user.id, invested, price, purchase_date: date || null, commission, type: recompraFormType
     });
-    if(error){ recompraFormError = 'No se pudo guardar la recompra.'; render(currentScenario); return; }
+    if(error){ recompraFormError = isVenta ? 'No se pudo guardar la venta.' : 'No se pudo guardar la recompra.'; render(currentScenario); return; }
     recompraFormOpen = false; recompraFormError = null;
     markDirty();
     await loadAll();
@@ -3904,6 +4070,47 @@ function render(scenario){
     await supabase.from('position_recompras').delete().eq('id', id);
     markDirty();
     await loadAll();
+    render(currentScenario);
+  }));
+
+  const posEventAddToggle = document.getElementById('posevent-add-toggle');
+  if(posEventAddToggle) posEventAddToggle.addEventListener('click', () => {
+    positionEventFormOpen = !positionEventFormOpen; positionEventFormError = null;
+    render(currentScenario);
+  });
+  const posEventSaveBtn = document.getElementById('posevent-save-btn');
+  if(posEventSaveBtn) posEventSaveBtn.addEventListener('click', async () => {
+    const pos = portfolio.positions.find(p=>p.id===selectedId);
+    if(!pos) return;
+    const title = document.getElementById('posevent-title').value.trim();
+    const type = document.getElementById('posevent-type').value;
+    const date = document.getElementById('posevent-date').value;
+    if(!title){ positionEventFormError = 'Falta el título.'; render(currentScenario); return; }
+    if(!date){ positionEventFormError = 'Falta la fecha.'; render(currentScenario); return; }
+    const { error } = await supabase.from('calendar_events').insert({
+      owner_id: session.user.id,
+      position_id: pos.id,
+      position_name: pos.name,
+      ticker: pos.ticker || null,
+      portfolio_id: pos.portfolio_id,
+      title,
+      event_type: type,
+      source: 'accion',
+      event_date: date,
+      notify_email: true,
+    });
+    if(error){ positionEventFormError = 'No se pudo guardar el evento.'; render(currentScenario); return; }
+    positionEventFormOpen = false; positionEventFormError = null;
+    await loadPositionEvents(pos.id);
+    calendarEvents = null; // se refresca de nuevo en el home/calendario cuando se visiten
+    render(currentScenario);
+  });
+  app.querySelectorAll('.posevent-delete-btn').forEach(btn=>btn.addEventListener('click', async () => {
+    const id = btn.getAttribute('data-id');
+    const pos = portfolio.positions.find(p=>p.id===selectedId);
+    await supabase.from('calendar_events').delete().eq('id', id);
+    if(pos) await loadPositionEvents(pos.id);
+    calendarEvents = null;
     render(currentScenario);
   }));
 
