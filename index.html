@@ -2076,22 +2076,22 @@ function wireViewOverlay(app){
 
 const FRAMEWORK_RULES = [
   'Controlar las emociones y no operar con sentimientos, creencias o influencias.',
-  'El fundamental decide si inviertes, el técnico decide cuándo.',
   'Protege tu capital: cada inversión, una estrategia.',
   'Diferencia siempre precio de valor.',
+  'El fundamental decide si inviertes, el técnico decide cuándo.',
   'En algún momento, el 80% de las empresas caerán más de un 50%; el 50% caerán más de un 80%.',
-  'No hacer nada, ya es hacer algo.',
   'Nunca se opera cerca de eventos o resultados, por muy positivos que puedan ser.',
+  'No hacer nada, ya es hacer algo.',
 ];
 const FRAMEWORK_STRATEGY = [
-  { title:'Análisis de compañía', detail:'Mercado, modelo de negocio, competencia, ventajas competitivas, puntos fuertes, puntos flojos, directiva, recompras y ventas, regulación y terceros.' },
-  { title:'Análisis de situación financiera', detail:'Caja, inversiones y endeudamiento.' },
-  { title:'Historial de sucesos relevantes', detail:'Los últimos 10 años.' },
-  { title:'Valor razonable', detail:'Triangulado.' },
-  { title:'Margen de seguridad', detail:null },
-  { title:'Situación técnica', detail:'200 días vs 40, volumen, figuras.' },
-  { title:'Salida de la posición', detail:'Cuándo, en qué condiciones, con qué motivos, en qué tiempo, a qué importe.' },
-  { title:'Revisión de la tesis', detail:'Cuándo hay que revisarla o qué eventos disparan las acciones de revisión.' },
+  { title:'Análisis de compañía', items:['Mercado en el que opera', 'Modelo de negocio', 'Competencia', 'Ventajas competitivas', 'Puntos fuertes', 'Puntos flojos', 'Directiva', 'Recompras y ventas de acciones por parte de la directiva', 'Regulación y terceros'] },
+  { title:'Análisis de situación financiera', items:['Caja disponible', 'Inversiones', 'Nivel de endeudamiento'] },
+  { title:'Historial de sucesos relevantes', items:['Revisar los últimos 10 años de la compañía'] },
+  { title:'Valor razonable', items:['Triangulado con varios métodos de valoración'] },
+  { title:'Margen de seguridad', items:[] },
+  { title:'Situación técnica', items:['Media de 200 días vs media de 40 días', 'Volumen', 'Figuras chartistas'] },
+  { title:'Salida de la posición', items:['Cuándo', 'En qué condiciones', 'Con qué motivos', 'En qué plazo de tiempo', 'A qué importe'] },
+  { title:'Revisión de la tesis', items:['Cuándo hay que revisarla', 'Qué eventos disparan las acciones de revisión'] },
 ];
 
 function renderFrameworkModal(){
@@ -2115,7 +2115,7 @@ function renderFrameworkModal(){
         <div style="display:flex;flex-direction:column;gap:10px;">
           ${FRAMEWORK_STRATEGY.map(s=>`<div style="padding:10px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
             <div style="font-size:12.5px;font-weight:700;">${esc(s.title)}</div>
-            ${s.detail ? `<div style="font-size:11.5px;color:var(--text-dim);margin-top:3px;line-height:1.5;">${esc(s.detail)}</div>` : ''}
+            ${s.items && s.items.length ? `<ul style="margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px;">${s.items.map(it=>`<li style="font-size:11.5px;color:var(--text-dim);line-height:1.5;">${esc(it)}</li>`).join('')}</ul>` : ''}
           </div>`).join('')}
         </div>
       </div>
@@ -2471,15 +2471,13 @@ function marketStatusBadge(){
 
 function topNavBar(){
   return `<div style="height:76px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 4px;margin-bottom:22px;border-bottom:1px solid var(--border);gap:12px;">
-    <div style="display:flex;align-items:center;gap:14px;min-width:0;flex-shrink:0;">
-      <button id="logo-home-btn" title="Ir a inicio" style="cursor:pointer;background:none;border:none;display:flex;align-items:center;gap:12px;padding:6px 4px;flex-shrink:0;">
-        ${walletbookIcon(46)}
-        <span style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:29px;color:var(--text);letter-spacing:-.01em;">Walletbook</span>
-      </button>
-      <button id="framework-open-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);font-weight:600;white-space:nowrap;">Framework</button>
-    </div>
+    <button id="logo-home-btn" title="Ir a inicio" style="cursor:pointer;background:none;border:none;display:flex;align-items:center;gap:12px;padding:6px 4px;flex-shrink:0;">
+      ${walletbookIcon(46)}
+      <span style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:29px;color:var(--text);letter-spacing:-.01em;">Walletbook</span>
+    </button>
     <div style="display:flex;align-items:center;gap:10px;min-width:0;">
       ${marketStatusBadge()}
+      <button id="framework-open-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);font-weight:600;white-space:nowrap;">Framework</button>
       ${stockFinderBlock()}
       ${menuBlock()}
     </div>
