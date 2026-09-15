@@ -958,6 +958,16 @@ async function attachRecompras(positions){
   return positions;
 }
 
+async function attachCalendarEvents(positions){
+  if(!positions.length) return positions;
+  const { data, error } = await supabase.from('calendar_events').select('id, position_id, event_date, event_type').in('position_id', positions.map(p=>p.id));
+  if(error){ console.error(error); return positions; }
+  const byPosition = {};
+  (data||[]).forEach(e => { (byPosition[e.position_id] = byPosition[e.position_id]||[]).push(e); });
+  positions.forEach(p => { p.events = byPosition[p.id] || []; });
+  return positions;
+}
+
 async function loadAllRulesData(){
   allRulesLoading = true;
   const [rulesRes, positionsRes] = await Promise.all([
@@ -1753,7 +1763,7 @@ async function loadAll(){
   ]);
   if(posErr) console.error(posErr);
   if(histErr) console.error(histErr);
-  const positions = await attachRecompras((rows||[]).map(r => ({ ...r, date: r.purchase_date })));
+  const positions = await attachCalendarEvents(await attachRecompras((rows||[]).map(r => ({ ...r, date: r.purchase_date }))));
   portfolio = { positions };
   history = histRows || [];
 }
@@ -1809,12 +1819,15 @@ function renderPositionCard(p, sc){
     ? `<span style="display:inline-block;flex-shrink:0;min-width:18px;padding:1px 7px;border-radius:9px;background:${RESP[resp].color};color:#14151A;font-family:'Calibri','Carlito',sans-serif;font-weight:700;font-size:10.5px;" title="${RESP[resp].label}">${RESP[resp].sign}</span>`
     : (gp===null ? `<span style="color:var(--text-faint);flex-shrink:0;">—</span>` : `<span style="flex-shrink:0;color:${gp>=0?'var(--green)':'var(--red)'};font-family:'Calibri','Carlito',sans-serif;font-weight:700;">${gp>=0?'+':''}${fmtPct(gp)}</span>`);
   const weekLabel = wk===null ? `<span style="color:var(--text-faint);">7d —</span>` : `<span style="color:${wk>=0?'var(--green)':'var(--red)'};">7d ${wk>=0?'+':''}${wk}%</span>`;
-  const cardBg = resp==='pos' ? 'var(--green-soft)' : resp==='neg' ? 'var(--red-soft)' : 'var(--panel-2)';
-  const cardBorder = resp==='pos' ? 'var(--green-border)' : resp==='neg' ? 'var(--red-border)' : 'var(--border)';
   const isPending = inv<=0 && pendingInvestmentFor(p)>0;
-  const validationRow = isPending ? `<div style="display:flex;gap:3px;margin-top:2px;">
+  const todayStr = new Date().toISOString().slice(0,10);
+  const hasOverdueEvent = inv>0 && (p.events||[]).some(e => e.event_date < todayStr);
+  const cardBg = hasOverdueEvent ? 'var(--red-soft)' : resp==='pos' ? 'var(--green-soft)' : resp==='neg' ? 'var(--red-soft)' : 'var(--panel-2)';
+  const cardBorder = hasOverdueEvent ? 'var(--red-border)' : resp==='pos' ? 'var(--green-border)' : resp==='neg' ? 'var(--red-border)' : 'var(--border)';
+  const validationRow = (isPending || inv>0) ? `<div style="display:flex;gap:3px;margin-top:2px;">
     <span title="Validación fundamental${p.fundamental_validated?' hecha':' pendiente'}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:${p.fundamental_validated?'var(--green-soft)':'var(--panel)'};color:${p.fundamental_validated?'var(--green)':'var(--text-faint)'};border:1px solid ${p.fundamental_validated?'var(--green-border)':'var(--border-soft)'};">F</span>
     <span title="Validación técnica${p.technical_validated?' hecha':' pendiente'}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:${p.technical_validated?'var(--green-soft)':'var(--panel)'};color:${p.technical_validated?'var(--green)':'var(--text-faint)'};border:1px solid ${p.technical_validated?'var(--green-border)':'var(--border-soft)'};">T</span>
+    ${hasOverdueEvent ? `<span title="Hay un evento pasado sin revisar" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:var(--red-soft);color:var(--red);border:1px solid var(--red-border);">⚠</span>` : ''}
   </div>` : '';
   return `<div class="pf-card" data-id="${p.id}" style="background:${cardBg};border:1px solid ${cardBorder};border-radius:6px;padding:4px 7px;cursor:pointer;min-width:0;overflow:hidden;box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:5px;">
