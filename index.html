@@ -110,6 +110,7 @@
     table.postable { font-size: 12.5px !important; }
 
     .modal-two-col { grid-template-columns: 1fr !important; gap: 16px !important; }
+    .calendar-two-col { grid-template-columns: 1fr !important; gap: 20px !important; }
     .modal-fields-grid { grid-template-columns: 1fr 1fr !important; }
     .account-fields-grid { grid-template-columns: 1fr !important; }
     .modal-card { padding: 18px 16px !important; max-height: 94vh !important; }
@@ -3052,6 +3053,20 @@ function renderCalendarScreen(){
   </div>
   <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;">${dayCells.join('')}</div>`;
 
+  const groupedByMonth = {};
+  events.forEach(e => { const key = e.event_date.slice(0,7); (groupedByMonth[key] = groupedByMonth[key]||[]).push(e); });
+  const monthKeys = Object.keys(groupedByMonth).sort();
+  const allEventsList = `<div>
+    <div style="font-size:12.5px;font-weight:700;margin-bottom:12px;">Todos los eventos</div>
+    ${!monthKeys.length ? `<div style="font-size:12px;color:var(--text-faint);">Todavía no tienes eventos.</div>` : monthKeys.map(key => {
+      const label = new Date(key+'-01T00:00:00').toLocaleDateString('es-ES',{month:'long',year:'numeric'});
+      return `<div style="margin-bottom:18px;">
+        <div style="font-size:10.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:8px;">${label}</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">${groupedByMonth[key].map(calendarEventRow).join('')}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+
   const selectedEvents = eventsByDay[calendarSelectedDay] || [];
   const selectedLabel = calendarSelectedDay ? new Date(calendarSelectedDay+'T00:00:00').toLocaleDateString('es-ES',{weekday:'long', day:'numeric', month:'long'}) : '';
 
@@ -3093,23 +3108,28 @@ function renderCalendarScreen(){
   </div>`;
 
   app.innerHTML = `<div class="home-wrap" style="flex:1;min-height:0;overflow-y:auto;box-sizing:border-box;padding:16px 0 32px;">
-    <div style="max-width:760px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
+    <div style="max-width:1120px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
       ${topNavBar()}
       <div style="margin-bottom:20px;">
         <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Calendario</h1>
         <div style="font-size:11.5px;color:var(--text-faint);margin-top:2px;">Notificaciones propias y eventos de tus acciones invertidas (resultados, dividendos…)</div>
       </div>
       ${calendarEventsLoading ? `<div style="font-size:12.5px;color:var(--text-faint);padding:8px 0;">Cargando eventos…</div>` : `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <button id="cal-prev-month" class="theme-toggle" title="Mes anterior">‹</button>
-          <div style="font-size:15px;font-weight:700;text-transform:capitalize;min-width:150px;text-align:center;">${monthLabel}</div>
-          <button id="cal-next-month" class="theme-toggle" title="Mes siguiente">›</button>
+      <div class="calendar-two-col" style="display:grid;grid-template-columns:1fr 360px;gap:32px;align-items:start;">
+        <div style="min-width:0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <button id="cal-prev-month" class="theme-toggle" title="Mes anterior">‹</button>
+              <div style="font-size:15px;font-weight:700;text-transform:capitalize;min-width:150px;text-align:center;">${monthLabel}</div>
+              <button id="cal-next-month" class="theme-toggle" title="Mes siguiente">›</button>
+            </div>
+            <button id="cal-today-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);">Hoy</button>
+          </div>
+          ${grid}
+          ${agenda}
         </div>
-        <button id="cal-today-btn" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);">Hoy</button>
-      </div>
-      ${grid}
-      ${agenda}`}
+        <div style="min-width:0;max-height:720px;overflow-y:auto;padding-right:4px;">${allEventsList}</div>
+      </div>`}
     </div>
     ${renderViewOverlay()}
     ${renderDialog()}
