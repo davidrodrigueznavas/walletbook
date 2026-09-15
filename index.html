@@ -2095,7 +2095,7 @@ function renderModal(){
       </div>
 
       <div style="display:flex;gap:12px;margin:14px 0;align-items:stretch;">
-        <div style="flex:1;min-width:0;display:grid;grid-template-columns:repeat(2,1fr);gap:8px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px;text-align:center;align-content:center;">
+        <div style="flex:1;min-width:0;display:grid;grid-template-columns:repeat(2,1fr);gap:8px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px;text-align:center;align-content:start;">
           <div><div style="font-size:13px;">${fmtEUR(investedOf(p))}</div><div style="font-size:8.5px;color:var(--text-faint);">INVERTIDO</div></div>
           <div><div style="font-size:13px;">${fmtEUR(currentValueOf(p))}</div><div style="font-size:8.5px;color:var(--text-faint);">VALOR ACTUAL</div></div>
           <div><div style="font-size:13px;">${p.current_price ? p.current_price.toLocaleString('es-ES')+' '+(p.currency||'') : '—'}</div><div style="font-size:8.5px;color:var(--text-faint);">COTIZACIÓN</div></div>
