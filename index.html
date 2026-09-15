@@ -1148,13 +1148,12 @@ function renderCalendarStrip(){
     loadCalendarEvents().then(() => render(null));
   }
   const today = new Date().toISOString().slice(0,10);
-  const in30 = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
-  const events = visibleCalendarEvents().filter(e => e.event_date >= today && e.event_date <= in30);
+  const events = visibleCalendarEvents().filter(e => e.event_date >= today);
   let body;
   if(calendarEventsLoading && calendarEvents === null){
     body = `<div style="font-size:11.5px;color:var(--text-faint);">Cargando eventos…</div>`;
   } else if(!events.length){
-    body = `<div style="font-size:11.5px;color:var(--text-faint);">Sin eventos en los próximos 30 días.</div>`;
+    body = `<div style="font-size:11.5px;color:var(--text-faint);">Sin próximos eventos.</div>`;
   } else {
     body = `<div style="display:flex;flex-wrap:nowrap;overflow:hidden;gap:8px;">${events.map(calendarChip).join('')}</div>`;
   }
