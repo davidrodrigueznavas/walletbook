@@ -1154,7 +1154,7 @@ function renderCalendarStrip(){
   } else if(!events.length){
     body = `<div style="font-size:11.5px;color:var(--text-faint);">Sin próximos eventos.</div>`;
   } else {
-    body = `<div style="display:flex;flex-wrap:nowrap;overflow:hidden;gap:8px;">${events.map(calendarChip).join('')}</div>`;
+    body = `<div id="calendar-strip-row" style="display:flex;flex-wrap:nowrap;overflow:hidden;gap:8px;">${events.map(calendarChip).join('')}</div>`;
   }
   return `<div style="margin-bottom:26px;">
     ${body}
@@ -1162,6 +1162,21 @@ function renderCalendarStrip(){
       <button id="calendar-see-all-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:12px;font-weight:600;padding:0;">Ver calendario completo →</button>
     </div>
   </div>`;
+}
+
+// Oculta las tarjetas de "Próximos eventos" que no caben enteras en la fila —
+// nunca se debe ver una tarjeta a medias, mejor mostrar una menos.
+function trimCalendarStrip(){
+  const row = document.getElementById('calendar-strip-row');
+  if(!row) return;
+  const maxWidth = row.clientWidth;
+  let used = 0;
+  Array.from(row.children).forEach((chip, i) => {
+    const w = chip.offsetWidth;
+    const needed = used + w + (i>0 ? 8 : 0);
+    if(needed > maxWidth){ chip.style.display = 'none'; }
+    else { used = needed; }
+  });
 }
 
 function renderDiscoverPreview(){
@@ -2737,6 +2752,7 @@ function renderHomeScreen(){
   wireDialog(app);
   wireStockFinderModal(app);
   wireScreenerBuilder(app);
+  trimCalendarStrip();
 
   const screenersSeeAllBtn = document.getElementById('screeners-see-all-btn');
   if(screenersSeeAllBtn) screenersSeeAllBtn.addEventListener('click', () => {
