@@ -1328,11 +1328,19 @@ function num(v){ if(v===null||v===undefined) return null; let s=String(v).trim()
 // y devuelve tanto lo que queda en cartera como la ganancia/pérdida ya realizada.
 function computeLotsAndRealized(p){
   let lots = [];
+  let noPriceAmount = 0; // importe invertido sin precio de compra: no se puede repartir en acciones,
+  // se cuenta tal cual (igual que hacía la app antes de llevar la contabilidad por lotes).
   const baseInv = num(p.invested), basePrice = num(p.price);
-  if(baseInv && baseInv>0 && basePrice && basePrice>0) lots.push({invested:baseInv, price:basePrice, date:p.purchase_date||''});
+  if(baseInv && baseInv>0){
+    if(basePrice && basePrice>0) lots.push({invested:baseInv, price:basePrice, date:p.purchase_date||''});
+    else noPriceAmount += baseInv;
+  }
   (p.recompras||[]).filter(r => r.type !== 'venta').forEach(r => {
     const inv = num(r.invested), price = num(r.price);
-    if(inv && inv>0 && price && price>0) lots.push({invested:inv, price, date:r.purchase_date||''});
+    if(inv && inv>0){
+      if(price && price>0) lots.push({invested:inv, price, date:r.purchase_date||''});
+      else noPriceAmount += inv;
+    }
   });
   lots.sort((a,b) => (a.date||'').localeCompare(b.date||''));
   const remaining = lots.map(l => ({ shares: l.invested/l.price, price: l.price }));
@@ -1351,7 +1359,7 @@ function computeLotsAndRealized(p){
     realizedGain -= (num(v.commission)||0);
   });
   const remainingLots = remaining.filter(l => l.shares>1e-9).map(l => ({ invested:l.shares*l.price, price:l.price }));
-  return { lots: remainingLots, realizedGain };
+  return { lots: remainingLots, noPriceAmount, realizedGain };
 }
 function positionLots(p){
   return computeLotsAndRealized(p).lots;
@@ -1363,7 +1371,8 @@ function heldSharesOf(p){
   return positionLots(p).reduce((sum,l) => sum + l.invested/l.price, 0);
 }
 function investedOf(p){
-  return positionLots(p).reduce((sum,l) => sum + l.invested, 0);
+  const { lots, noPriceAmount } = computeLotsAndRealized(p);
+  return lots.reduce((sum,l) => sum + l.invested, 0) + noPriceAmount;
 }
 function pendingInvestmentFor(p){
   if(investedOf(p) > 0) return 0; // ya invertido: no cuenta como pendiente, aunque el campo guarde un valor
@@ -1377,9 +1386,11 @@ function commissionOf(p){
 }
 function currentValueOf(p){
   const cur = num(p.current_price_eur);
-  const lots = positionLots(p);
-  if(cur && lots.length) return lots.reduce((sum,l) => sum + (l.invested/l.price)*cur, 0);
-  return investedOf(p);
+  const { lots, noPriceAmount } = computeLotsAndRealized(p);
+  let value = noPriceAmount; // sin precio de compra no se puede escalar por la cotización actual
+  if(cur && lots.length) value += lots.reduce((sum,l) => sum + (l.invested/l.price)*cur, 0);
+  else value += lots.reduce((sum,l) => sum + l.invested, 0);
+  return value;
 }
 function gainPctOf(p){
   const invested = investedOf(p);
@@ -2088,6 +2099,31 @@ function renderModal(){
         <div><div style="font-size:14px;color:${gp===null?'var(--text-dim)':(gp>=0?'var(--green)':'var(--red)')};">${gp===null?'—':(gp>=0?'+':'')+fmtPct(gp)}</div><div style="font-size:9px;color:var(--text-faint);">GANANCIA</div></div>
       </div>
 
+      <div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${investedOf(p)<=0?'0':'6px'};">
+          <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;">Eventos de esta posición</div>
+          ${investedOf(p)>0 ? `<button id="posevent-add-toggle" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:11.5px;font-weight:600;padding:0;">${positionEventFormOpen?'Cancelar':'+ Añadir evento'}</button>` : ''}
+        </div>
+        ${investedOf(p)<=0 ? `<div style="font-size:11px;color:var(--text-faint);">Solo se pueden añadir eventos a posiciones ya invertidas.</div>` : `
+        ${positionEventsLoading ? `<div style="font-size:11px;color:var(--text-faint);">Cargando…</div>` : (positionEvents.length ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:${positionEventFormOpen?'12px':'0'};">
+          ${positionEvents.map(e=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 9px;border-radius:7px;background:var(--panel);border:1px solid var(--border-soft);">
+            <div style="font-size:11.5px;">${calendarEventTypeBadge(e.event_type)} <span style="margin-left:6px;">${esc(e.title)}</span><span style="color:var(--text-faint);"> · ${e.event_date}</span></div>
+            <button class="posevent-delete-btn" data-id="${e.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;flex-shrink:0;">×</button>
+          </div>`).join('')}
+        </div>` : (!positionEventFormOpen ? `<div style="font-size:11px;color:var(--text-faint);">Sin eventos todavía.</div>` : ''))}
+        ${positionEventFormOpen ? `<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;align-items:end;">
+          <div class="field"><label>Título</label><input id="posevent-title" placeholder="ej. Resultados Q4" autocomplete="off"/></div>
+          <div class="field"><label>Tipo</label><select id="posevent-type">
+            ${Object.entries(EVENT_TYPE).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
+          </select></div>
+          <div class="field"><label>Fecha</label><input type="date" id="posevent-date" autocomplete="off"/></div>
+        </div>
+        ${positionEventFormError ? `<div style="color:var(--red);font-size:11px;margin-top:8px;">${positionEventFormError}</div>` : ''}
+        <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+          <button id="posevent-save-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:6px 14px;font-size:11.5px;font-weight:600;">Guardar evento</button>
+        </div>` : ''}`}
+      </div>
+
       ${p.ticker ? `<div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
         <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Qué hace la empresa${modalCompanyState.source==='alphavantage'?' <span style="text-transform:none;letter-spacing:0;">· Alpha Vantage, en inglés</span>':''}</div>
         ${modalCompanyState.loading ? `<div style="font-size:11.5px;color:var(--text-faint);">Consultando…</div>`
@@ -2167,30 +2203,6 @@ function renderModal(){
         ${recompraFormError ? `<div style="color:var(--red);font-size:11px;margin-top:8px;">${recompraFormError}</div>` : ''}
         <div style="display:flex;justify-content:flex-end;margin-top:10px;">
           <button id="recompra-save-btn" class="pill-btn" style="border:1px solid ${recompraFormType==='venta'?'var(--red-border)':'var(--accent-border)'};background:${recompraFormType==='venta'?'var(--red-soft)':'var(--accent-soft)'};color:${recompraFormType==='venta'?'var(--red)':'var(--accent-text)'};padding:6px 14px;font-size:11.5px;font-weight:600;">${recompraFormType==='venta'?'Guardar venta':'Guardar compra'}</button>
-        </div>` : ''}
-      </div>
-
-      <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft);">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-          <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;">Eventos de esta posición</div>
-          <button id="posevent-add-toggle" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:11.5px;font-weight:600;padding:0;">${positionEventFormOpen?'Cancelar':'+ Añadir evento'}</button>
-        </div>
-        ${positionEventsLoading ? `<div style="font-size:11px;color:var(--text-faint);">Cargando…</div>` : (positionEvents.length ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:${positionEventFormOpen?'14px':'0'};">
-          ${positionEvents.map(e=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
-            <div style="font-size:11.5px;">${calendarEventTypeBadge(e.event_type)} <span style="margin-left:6px;">${esc(e.title)}</span><span style="color:var(--text-faint);"> · ${e.event_date}</span></div>
-            <button class="posevent-delete-btn" data-id="${e.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;flex-shrink:0;">×</button>
-          </div>`).join('')}
-        </div>` : (!positionEventFormOpen ? `<div style="font-size:11px;color:var(--text-faint);">Sin eventos todavía.</div>` : ''))}
-        ${positionEventFormOpen ? `<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;align-items:end;">
-          <div class="field"><label>Título</label><input id="posevent-title" placeholder="ej. Resultados Q4" autocomplete="off"/></div>
-          <div class="field"><label>Tipo</label><select id="posevent-type">
-            ${Object.entries(EVENT_TYPE).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
-          </select></div>
-          <div class="field"><label>Fecha</label><input type="date" id="posevent-date" autocomplete="off"/></div>
-        </div>
-        ${positionEventFormError ? `<div style="color:var(--red);font-size:11px;margin-top:8px;">${positionEventFormError}</div>` : ''}
-        <div style="display:flex;justify-content:flex-end;margin-top:10px;">
-          <button id="posevent-save-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:6px 14px;font-size:11.5px;font-weight:600;">Guardar evento</button>
         </div>` : ''}
       </div>
 
