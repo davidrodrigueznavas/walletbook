@@ -331,6 +331,7 @@ let portfolio = {positions:[]}, history = [], currentScenario = null, selectedId
 let session = null, portfolioId = null, loginError = null, loginBusy = false;
 let authMode = 'login', authInfo = null; // authMode: 'login' | 'signup' | 'reset' | 'recovery'
 let activePortfolioName = 'Mi cartera', portfolios = [], menuOpen = false, activeView = null;
+let frameworkModalOpen = false;
 let profile = null;
 let exploreList = null, exploreLoading = false, exploreDetailId = null, exploreDetailPositions = null, exploreCategoryFilter = null;
 let positionRules = [], positionRulesLoading = false, ruleFormOpen = false, ruleFormError = null, ruleEditingId = null;
@@ -2073,6 +2074,63 @@ function wireViewOverlay(app){
   if(viewBackdrop) viewBackdrop.addEventListener('click', (e) => { if(e.target===viewBackdrop){ activeView = null; render(currentScenario); } });
 }
 
+const FRAMEWORK_RULES = [
+  'Controlar las emociones y no operar con sentimientos, creencias o influencias.',
+  'El fundamental decide si inviertes, el técnico decide cuándo.',
+  'Protege tu capital: cada inversión, una estrategia.',
+  'Diferencia siempre precio de valor.',
+  'En algún momento, el 80% de las empresas caerán más de un 50%; el 50% caerán más de un 80%.',
+  'No hacer nada, ya es hacer algo.',
+];
+const FRAMEWORK_STRATEGY = [
+  { title:'Análisis de compañía', detail:'Mercado, modelo de negocio, competencia, ventajas competitivas, puntos fuertes, puntos flojos, directiva, recompras y ventas, regulación y terceros.' },
+  { title:'Análisis de situación financiera', detail:'Caja, inversiones y endeudamiento.' },
+  { title:'Historial de sucesos relevantes', detail:'Los últimos 10 años.' },
+  { title:'Valor razonable', detail:'Triangulado.' },
+  { title:'Margen de seguridad', detail:null },
+  { title:'Situación técnica', detail:'200 días vs 40, volumen, figuras.' },
+  { title:'Salida de la posición', detail:'Cuándo, en qué condiciones, con qué motivos, en qué tiempo, a qué importe.' },
+  { title:'Revisión de la tesis', detail:'Cuándo hay que revisarla o qué eventos disparan las acciones de revisión.' },
+];
+
+function renderFrameworkModal(){
+  if(!frameworkModalOpen) return '';
+  return `<div class="modal-backdrop" id="framework-backdrop">
+    <div class="modal-card" style="max-width:640px;padding:26px 30px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+        <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:18px;margin:0;">Framework de inversión</h2>
+        <button id="framework-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
+      </div>
+
+      <div style="margin-bottom:22px;">
+        <div style="font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:10px;">Reglas</div>
+        <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;">
+          ${FRAMEWORK_RULES.map(r=>`<li style="font-size:12.5px;line-height:1.5;">${esc(r)}</li>`).join('')}
+        </ol>
+      </div>
+
+      <div>
+        <div style="font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:10px;">Estrategia para invertir en este framework</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          ${FRAMEWORK_STRATEGY.map(s=>`<div style="padding:10px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
+            <div style="font-size:12.5px;font-weight:700;">${esc(s.title)}</div>
+            ${s.detail ? `<div style="font-size:11.5px;color:var(--text-dim);margin-top:3px;line-height:1.5;">${esc(s.detail)}</div>` : ''}
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function wireFrameworkModal(app){
+  const openBtn = document.getElementById('framework-open-btn');
+  if(openBtn) openBtn.addEventListener('click', (e) => { e.stopPropagation(); frameworkModalOpen = true; render(currentScenario); });
+  const closeBtn = document.getElementById('framework-close');
+  if(closeBtn) closeBtn.addEventListener('click', () => { frameworkModalOpen = false; render(currentScenario); });
+  const backdrop = document.getElementById('framework-backdrop');
+  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ frameworkModalOpen = false; render(currentScenario); } });
+}
+
 function renderModal(){
   if(!selectedId) return '';
   const p = portfolio.positions.find(x=>x.id===selectedId);
@@ -2412,10 +2470,13 @@ function marketStatusBadge(){
 
 function topNavBar(){
   return `<div style="height:76px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 4px;margin-bottom:22px;border-bottom:1px solid var(--border);gap:12px;">
-    <button id="logo-home-btn" title="Ir a inicio" style="cursor:pointer;background:none;border:none;display:flex;align-items:center;gap:12px;padding:6px 4px;flex-shrink:0;">
-      ${walletbookIcon(46)}
-      <span style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:29px;color:var(--text);letter-spacing:-.01em;">Walletbook</span>
-    </button>
+    <div style="display:flex;align-items:center;gap:14px;min-width:0;flex-shrink:0;">
+      <button id="logo-home-btn" title="Ir a inicio" style="cursor:pointer;background:none;border:none;display:flex;align-items:center;gap:12px;padding:6px 4px;flex-shrink:0;">
+        ${walletbookIcon(46)}
+        <span style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:29px;color:var(--text);letter-spacing:-.01em;">Walletbook</span>
+      </button>
+      <button id="framework-open-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);font-weight:600;white-space:nowrap;">Framework</button>
+    </div>
     <div style="display:flex;align-items:center;gap:10px;min-width:0;">
       ${marketStatusBadge()}
       ${stockFinderBlock()}
@@ -2710,6 +2771,7 @@ function renderMyPortfoliosScreen(){
       </div>
     </div>
     ${renderViewOverlay()}
+    ${renderFrameworkModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -2718,6 +2780,7 @@ function renderMyPortfoliosScreen(){
   wireDialog(app);
   wireStockFinderModal(app);
   wireViewOverlay(app);
+  wireFrameworkModal(app);
   wirePortfolioCards(app);
 }
 
@@ -2745,6 +2808,7 @@ function renderHomeScreen(){
     </div>
     ${renderScreenerBuilderModal()}
     ${renderViewOverlay()}
+    ${renderFrameworkModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -2805,6 +2869,7 @@ function renderHomeScreen(){
 
   wirePortfolioCards(app);
   wireViewOverlay(app);
+  wireFrameworkModal(app);
 }
 
 function renderExploreScreen(){
@@ -2873,6 +2938,7 @@ function renderExploreScreen(){
       ${body}
     </div>
     ${renderViewOverlay()}
+    ${renderFrameworkModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -2881,6 +2947,7 @@ function renderExploreScreen(){
   wireDialog(app);
   wireStockFinderModal(app);
   wireViewOverlay(app);
+  wireFrameworkModal(app);
 
   app.querySelectorAll('.explore-filter-pill').forEach(btn=>btn.addEventListener('click', () => {
     exploreCategoryFilter = btn.getAttribute('data-cat') || null;
@@ -2976,6 +3043,7 @@ function renderAccountScreen(){
       ${body}
     </div>
     ${renderViewOverlay()}
+    ${renderFrameworkModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -2984,6 +3052,7 @@ function renderAccountScreen(){
   wireDialog(app);
   wireStockFinderModal(app);
   wireViewOverlay(app);
+  wireFrameworkModal(app);
 
   const accountThemeBtn = document.getElementById('account-theme-toggle');
   if(accountThemeBtn) accountThemeBtn.addEventListener('click', () => {
@@ -3132,6 +3201,7 @@ function renderCalendarScreen(){
       </div>`}
     </div>
     ${renderViewOverlay()}
+    ${renderFrameworkModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -3140,6 +3210,7 @@ function renderCalendarScreen(){
   wireDialog(app);
   wireStockFinderModal(app);
   wireViewOverlay(app);
+  wireFrameworkModal(app);
 
   app.querySelectorAll('.cal-day-cell').forEach(btn=>btn.addEventListener('click', () => {
     calendarSelectedDay = btn.getAttribute('data-date');
@@ -3329,6 +3400,7 @@ function renderScreenersScreen(){
     </div>
     ${renderScreenerBuilderModal()}
     ${renderViewOverlay()}
+    ${renderFrameworkModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -3337,6 +3409,7 @@ function renderScreenersScreen(){
   wireDialog(app);
   wireStockFinderModal(app);
   wireViewOverlay(app);
+  wireFrameworkModal(app);
   wireScreenerBuilder(app);
 
   const createBtn = document.getElementById('screener-create-btn');
@@ -3771,6 +3844,7 @@ function renderStockViewerScreen(){
       ${body}
     </div>
     ${renderViewOverlay()}
+    ${renderFrameworkModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -3779,6 +3853,7 @@ function renderStockViewerScreen(){
   wireDialog(app);
   wireStockFinderModal(app);
   wireViewOverlay(app);
+  wireFrameworkModal(app);
 
   const input = document.getElementById('stockviewer-input');
   const suggestionsBox = document.getElementById('stockviewer-suggestions');
@@ -3999,6 +4074,7 @@ function render(scenario){
   ${renderAddPositionModal()}
   ${renderPortfolioNewsModal()}
   ${renderViewOverlay()}
+    ${renderFrameworkModal()}
   ${renderDialog()}
   ${renderStatusToast()}`;
 
@@ -4250,6 +4326,7 @@ function render(scenario){
   wireStockFinderModal(app);
 
   wireViewOverlay(app);
+  wireFrameworkModal(app);
 }
 
 function renderLogin(){
