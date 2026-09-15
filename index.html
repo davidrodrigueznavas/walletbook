@@ -213,6 +213,7 @@ const EVENT_TYPE = {
   dividendo: 'Dividendo',
   junta: 'Junta de accionistas',
   split: 'Split / contrasplit',
+  nota_posicion: 'Nota Posición',
   otro: 'Otro',
 };
 const SCREENER_METRIC = {
@@ -1126,6 +1127,7 @@ function calendarEventRow(e){
           ${e.source==='accion'?`<span style="font-size:10.5px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.position_name||'')}${e.ticker?' · '+esc(e.ticker):''}</span>`:''}
         </div>
         <div style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.title)}</div>
+        ${e.notes ? `<div style="font-size:10.5px;color:var(--text-dim);margin-top:2px;">${esc(e.notes)}</div>` : ''}
         ${pf ? `<div style="font-size:10px;color:var(--text-faint);margin-top:2px;">${esc(pf.name)}</div>` : ''}
       </div>
     </div>
@@ -2099,6 +2101,13 @@ function renderModal(){
         <div><div style="font-size:14px;color:${gp===null?'var(--text-dim)':(gp>=0?'var(--green)':'var(--red)')};">${gp===null?'—':(gp>=0?'+':'')+fmtPct(gp)}</div><div style="font-size:9px;color:var(--text-faint);">GANANCIA</div></div>
       </div>
 
+      ${p.ticker ? `<div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
+        <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Qué hace la empresa${modalCompanyState.source==='alphavantage'?' <span style="text-transform:none;letter-spacing:0;">· Alpha Vantage, en inglés</span>':''}</div>
+        ${modalCompanyState.loading ? `<div style="font-size:11.5px;color:var(--text-faint);">Consultando…</div>`
+          : modalCompanyState.error ? `<div style="font-size:11px;color:var(--text-faint);">${modalCompanyState.error}</div>`
+          : `<div style="font-size:12px;color:var(--text-dim);line-height:1.5;max-height:96px;overflow-y:auto;padding-right:6px;">${esc(modalCompanyState.summary||'')}</div>`}
+      </div>` : ''}
+
       <div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${investedOf(p)<=0?'0':'6px'};">
           <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;">Eventos de esta posición</div>
@@ -2107,29 +2116,26 @@ function renderModal(){
         ${investedOf(p)<=0 ? `<div style="font-size:11px;color:var(--text-faint);">Solo se pueden añadir eventos a posiciones ya invertidas.</div>` : `
         ${positionEventsLoading ? `<div style="font-size:11px;color:var(--text-faint);">Cargando…</div>` : (positionEvents.length ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:${positionEventFormOpen?'12px':'0'};">
           ${positionEvents.map(e=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 9px;border-radius:7px;background:var(--panel);border:1px solid var(--border-soft);">
-            <div style="font-size:11.5px;">${calendarEventTypeBadge(e.event_type)} <span style="margin-left:6px;">${esc(e.title)}</span><span style="color:var(--text-faint);"> · ${e.event_date}</span></div>
+            <div style="font-size:11.5px;min-width:0;">
+              ${calendarEventTypeBadge(e.event_type)} <span style="margin-left:6px;">${esc(e.title)}</span><span style="color:var(--text-faint);"> · ${e.event_date}</span>
+              ${e.notes ? `<div style="font-size:10.5px;color:var(--text-dim);margin-top:3px;">${esc(e.notes)}</div>` : ''}
+            </div>
             <button class="posevent-delete-btn" data-id="${e.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;flex-shrink:0;">×</button>
           </div>`).join('')}
         </div>` : (!positionEventFormOpen ? `<div style="font-size:11px;color:var(--text-faint);">Sin eventos todavía.</div>` : ''))}
-        ${positionEventFormOpen ? `<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;align-items:end;">
+        ${positionEventFormOpen ? `<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;align-items:end;margin-bottom:8px;">
           <div class="field"><label>Título</label><input id="posevent-title" placeholder="ej. Resultados Q4" autocomplete="off"/></div>
           <div class="field"><label>Tipo</label><select id="posevent-type">
             ${Object.entries(EVENT_TYPE).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
           </select></div>
           <div class="field"><label>Fecha</label><input type="date" id="posevent-date" autocomplete="off"/></div>
         </div>
+        <div class="field" style="margin-bottom:8px;"><label>Notas (opcional)</label><textarea id="posevent-notes" rows="2" placeholder="Detalles adicionales…" style="width:100%;box-sizing:border-box;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;line-height:1.5;padding:8px 10px;resize:vertical;"></textarea></div>
         ${positionEventFormError ? `<div style="color:var(--red);font-size:11px;margin-top:8px;">${positionEventFormError}</div>` : ''}
         <div style="display:flex;justify-content:flex-end;margin-top:10px;">
           <button id="posevent-save-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:6px 14px;font-size:11.5px;font-weight:600;">Guardar evento</button>
         </div>` : ''}`}
       </div>
-
-      ${p.ticker ? `<div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
-        <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Qué hace la empresa${modalCompanyState.source==='alphavantage'?' <span style="text-transform:none;letter-spacing:0;">· Alpha Vantage, en inglés</span>':''}</div>
-        ${modalCompanyState.loading ? `<div style="font-size:11.5px;color:var(--text-faint);">Consultando…</div>`
-          : modalCompanyState.error ? `<div style="font-size:11px;color:var(--text-faint);">${modalCompanyState.error}</div>`
-          : `<div style="font-size:12px;color:var(--text-dim);line-height:1.5;max-height:96px;overflow-y:auto;padding-right:6px;">${esc(modalCompanyState.summary||'')}</div>`}
-      </div>` : ''}
 
       <div class="modal-two-col" style="display:grid;grid-template-columns:1.15fr 1fr;gap:24px;align-items:stretch;">
         <div style="display:flex;flex-direction:column;">
@@ -3070,6 +3076,7 @@ function renderCalendarScreen(){
         <option value="">— Elegir —</option>
         ${(calendarPositionOptions||[]).map(p=>`<option value="${p.id}">${esc(p.name)}${p.ticker?' ('+esc(p.ticker)+')':''}</option>`).join('')}
       </select></div>` : ''}
+      <div class="field" style="margin-bottom:10px;"><label>Notas (opcional)</label><textarea id="cal-notes" rows="2" placeholder="Detalles adicionales…" style="width:100%;box-sizing:border-box;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;line-height:1.5;padding:8px 10px;resize:vertical;"></textarea></div>
       <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-dim);margin-bottom:12px;cursor:pointer;">
         <input type="checkbox" id="cal-notify" checked/> Avisarme por email el día del evento
       </label>
@@ -3155,6 +3162,7 @@ function renderCalendarScreen(){
     const date = document.getElementById('cal-date').value;
     const type = document.getElementById('cal-type').value;
     const notify = document.getElementById('cal-notify').checked;
+    const notes = document.getElementById('cal-notes').value.trim();
     const showErr = (msg) => {
       calendarFormError = msg;
       const el = document.getElementById('cal-form-error');
@@ -3182,6 +3190,7 @@ function renderCalendarScreen(){
       source: calendarFormSource,
       event_date: date,
       notify_email: notify,
+      notes: notes || null,
     });
     if(error){ console.error(error); showErr('Error al guardar: ' + (error.message||'revisa la conexión')); return; }
     calendarFormOpen = false;
@@ -4097,6 +4106,7 @@ function render(scenario){
     const title = document.getElementById('posevent-title').value.trim();
     const type = document.getElementById('posevent-type').value;
     const date = document.getElementById('posevent-date').value;
+    const notes = document.getElementById('posevent-notes').value.trim();
     if(!title){ positionEventFormError = 'Falta el título.'; render(currentScenario); return; }
     if(!date){ positionEventFormError = 'Falta la fecha.'; render(currentScenario); return; }
     const { error } = await supabase.from('calendar_events').insert({
@@ -4110,6 +4120,7 @@ function render(scenario){
       source: 'accion',
       event_date: date,
       notify_email: true,
+      notes: notes || null,
     });
     if(error){ positionEventFormError = 'No se pudo guardar el evento.'; render(currentScenario); return; }
     positionEventFormOpen = false; positionEventFormError = null;
