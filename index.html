@@ -226,6 +226,10 @@ const SCREENER_METRIC = {
   market_cap: {label:'Capitalización (miles de M$)', fmt:v=>v.toFixed(1), get:r=> r.market_cap ? r.market_cap/1e9 : null},
   revenue_growth: {label:'Crecimiento ingresos YoY (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=> r.revenue_growth!=null ? r.revenue_growth*100 : null},
   eps_growth: {label:'Crecimiento beneficios (EPS) YoY (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=> r.eps_growth!=null ? r.eps_growth*100 : null},
+  gross_margin: {label:'Margen bruto (%)', fmt:v=>v.toFixed(1)+'%', get:r=>r.gross_margin},
+  eps_growth_5y: {label:'Crecimiento EPS 5 años (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=>r.eps_growth_5y},
+  debt_to_equity: {label:'Deuda / Equity', fmt:v=>v.toFixed(2), get:r=>r.debt_to_equity},
+  performance_1y: {label:'Rendimiento a 1 año (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=>r.performance_1y},
   last_price: {label:'Precio ($)', fmt:v=>v.toFixed(2), get:r=>r.last_price},
 };
 const SCREENER_OPERATOR = { gt:'mayor que', lt:'menor que' };
@@ -1043,6 +1047,10 @@ async function loadScreenerUniverse(){
     market_cap: num(row.sp500_fundamentals?.market_cap),
     revenue_growth: num(row.sp500_fundamentals?.revenue_growth),
     eps_growth: num(row.sp500_fundamentals?.eps_growth),
+    gross_margin: num(row.sp500_fundamentals?.gross_margin),
+    eps_growth_5y: num(row.sp500_fundamentals?.eps_growth_5y),
+    debt_to_equity: num(row.sp500_fundamentals?.debt_to_equity),
+    performance_1y: num(row.sp500_fundamentals?.performance_1y),
     fundamentals_updated_at: row.sp500_fundamentals?.updated_at || null,
   }));
   screenerUniverseLoading = false;
