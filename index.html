@@ -2167,6 +2167,7 @@ function renderModal(){
   const p = portfolio.positions.find(x=>x.id===selectedId);
   if(!p) return '';
   const gp = gainPctOf(p);
+  const gainEur = gp===null ? null : currentValueOf(p) - investedOf(p) - compraCommissionOf(p);
   const sens = SENS[p.sector] || {};
   const sc = SCENARIOS.find(s=>s.key===currentScenario);
   const resp = sc ? sectorResponse(sens, sc.f) : null;
@@ -2192,7 +2193,11 @@ function renderModal(){
         <div><div style="font-size:14px;">${fmtEUR(investedOf(p))}</div><div style="font-size:9px;color:var(--text-faint);">INVERTIDO</div></div>
         <div><div style="font-size:14px;">${fmtEUR(currentValueOf(p))}</div><div style="font-size:9px;color:var(--text-faint);">VALOR ACTUAL</div></div>
         <div><div style="font-size:14px;">${p.current_price ? p.current_price.toLocaleString('es-ES')+' '+(p.currency||'') : '—'}</div><div style="font-size:9px;color:var(--text-faint);">COTIZACIÓN</div></div>
-        <div><div style="font-size:14px;color:${gp===null?'var(--text-dim)':(gp>=0?'var(--green)':'var(--red)')};">${gp===null?'—':(gp>=0?'+':'')+fmtPct(gp)}</div><div style="font-size:9px;color:var(--text-faint);">GANANCIA</div></div>
+        <div>
+          <div style="font-size:14px;color:${gp===null?'var(--text-dim)':(gp>=0?'var(--green)':'var(--red)')};">${gainEur===null?'—':(gainEur>=0?'+':'')+fmtEUR(gainEur)}</div>
+          <div style="font-size:9px;color:var(--text-faint);">GANANCIA</div>
+          ${gp!==null ? `<div style="font-size:10px;color:${gp>=0?'var(--green)':'var(--red)'};margin-top:1px;">${gp>=0?'+':''}${fmtPct(gp)}</div>` : ''}
+        </div>
       </div>
 
       <div style="display:flex;gap:10px;margin-bottom:16px;">
