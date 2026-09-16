@@ -336,11 +336,11 @@ let profile = null;
 let exploreList = null, exploreLoading = false, exploreDetailId = null, exploreDetailPositions = null, exploreCategoryFilter = null;
 let positionRules = [], positionRulesLoading = false, ruleFormOpen = false, ruleFormError = null, ruleEditingId = null;
 let recompraFormOpen = false, recompraFormError = null, recompraFormType = 'compra';
-let positionEvents = [], positionEventsLoading = false, positionEventFormOpen = false, positionEventFormError = null;
+let positionEvents = [], positionEventsLoading = false, positionEventFormOpen = false, positionEventFormError = null, positionEventEditingId = null;
 let calendarViewYear = new Date().getFullYear(), calendarViewMonth = new Date().getMonth(), calendarSelectedDay = new Date().toISOString().slice(0,10);
 let allRulesData = null, allRulesLoading = false;
 let calendarEvents = null, calendarEventsLoading = false, calendarPositionOptions = null;
-let calendarFormOpen = false, calendarFormError = null, calendarFormSource = 'propio';
+let calendarFormOpen = false, calendarFormError = null, calendarFormSource = 'propio', calendarEditingId = null;
 let screeners = null, screenersLoading = false, screenerUniverse = null, screenerUniverseLoading = false;
 let screenerBuilderOpen = false, screenerBuilderName = '', screenerBuilderConditions = [], screenerBuilderError = null;
 let screenerDetailId = null;
@@ -1141,7 +1141,10 @@ function calendarEventRow(e){
         ${pf ? `<div style="font-size:10px;color:var(--text-faint);margin-top:2px;">${esc(pf.name)}</div>` : ''}
       </div>
     </div>
-    <button class="calendar-event-delete-btn" data-id="${e.id}" title="Eliminar" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;flex-shrink:0;">×</button>
+    <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+      <button class="calendar-event-edit-btn" data-id="${e.id}" title="Editar" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:11px;font-weight:600;padding:2px 6px;">Editar</button>
+      <button class="calendar-event-delete-btn" data-id="${e.id}" title="Eliminar" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;">×</button>
+    </div>
   </div>`;
 }
 
@@ -2073,6 +2076,35 @@ function wireAddPositionModal(app){
       if(evErr) console.error('Error al insertar evento de calendario', evErr);
     }
 
+    // Busca automáticamente en Yahoo Finance la próxima fecha de resultados y de
+    // dividendo, y las guarda como eventos — así no hay que rellenarlas a mano.
+    // No bloquea el alta si Yahoo falla o no tiene el dato.
+    if(ticker){
+      try {
+        const calRes = await callEdgeFunction('ticker-calendar', {ticker});
+        if(calRes && calRes.ok){
+          const autoEvents = [];
+          if(calRes.earningsDate && eventType !== 'resultados') autoEvents.push({ event_type:'resultados', event_date: calRes.earningsDate, title: `Resultados — ${name}` });
+          if(calRes.exDividendDate && eventType !== 'dividendo') autoEvents.push({ event_type:'dividendo', event_date: calRes.exDividendDate, title: `Dividendo — ${name}` });
+          for(const ev of autoEvents){
+            const { error: autoEvErr } = await supabase.from('calendar_events').insert({
+              owner_id: session.user.id,
+              position_id: row.id,
+              position_name: name,
+              ticker,
+              portfolio_id: portfolioId,
+              title: ev.title,
+              event_type: ev.event_type,
+              source: 'accion',
+              event_date: ev.event_date,
+              notify_email: true,
+            });
+            if(autoEvErr) console.error('Error al insertar evento automático', autoEvErr);
+          }
+        }
+      } catch(e){ console.error('Error al buscar eventos automáticos de calendario', e); }
+    }
+
     addPositionOpen = false;
     markDirty();
     await loadAll();
@@ -2234,23 +2266,29 @@ function renderModal(){
               ${calendarEventTypeBadge(e.event_type)} <span style="margin-left:6px;">${esc(e.title)}</span><span style="color:var(--text-faint);"> · ${e.event_date}</span>
               ${e.notes ? `<div style="font-size:10.5px;color:var(--text-dim);margin-top:3px;">${esc(e.notes)}</div>` : ''}
             </div>
-            <button class="posevent-delete-btn" data-id="${e.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;flex-shrink:0;">×</button>
+            <div style="display:flex;align-items:center;gap:2px;flex-shrink:0;">
+              <button class="posevent-edit-btn" data-id="${e.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:10.5px;font-weight:600;padding:0 4px;">Editar</button>
+              <button class="posevent-delete-btn" data-id="${e.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;">×</button>
+            </div>
           </div>`).join('')}
         </div>` : (!positionEventFormOpen ? `<div style="font-size:11px;color:var(--text-faint);">Sin eventos todavía.</div>` : ''))}
-        ${positionEventFormOpen ? `<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;align-items:end;margin-bottom:8px;">
-          <div class="field"><label>Título</label><input id="posevent-title" placeholder="ej. Resultados Q4" autocomplete="off"/></div>
+        ${positionEventFormOpen ? (() => {
+          const editingPosEvent = positionEventEditingId ? positionEvents.find(e=>e.id===positionEventEditingId) : null;
+          return `<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;align-items:end;margin-bottom:8px;">
+          <div class="field"><label>Título</label><input id="posevent-title" placeholder="ej. Resultados Q4" value="${esc(editingPosEvent?.title||'')}" autocomplete="off"/></div>
           <div class="field"><label>Tipo</label><select id="posevent-type">
             ${investedOf(p)>0
-              ? Object.entries(EVENT_TYPE).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')
+              ? Object.entries(EVENT_TYPE).map(([k,v])=>`<option value="${k}" ${editingPosEvent?.event_type===k?'selected':''}>${v}</option>`).join('')
               : `<option value="nota_posicion">${EVENT_TYPE.nota_posicion}</option>`}
           </select></div>
-          <div class="field"><label>Fecha</label><input type="date" id="posevent-date" autocomplete="off"/></div>
+          <div class="field"><label>Fecha</label><input type="date" id="posevent-date" value="${editingPosEvent?.event_date||''}" autocomplete="off"/></div>
         </div>
-        <div class="field" style="margin-bottom:8px;"><label>Notas (opcional)</label><textarea id="posevent-notes" rows="2" placeholder="Detalles adicionales…" style="width:100%;box-sizing:border-box;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;line-height:1.5;padding:8px 10px;resize:vertical;"></textarea></div>
+        <div class="field" style="margin-bottom:8px;"><label>Notas (opcional)</label><textarea id="posevent-notes" rows="2" placeholder="Detalles adicionales…" style="width:100%;box-sizing:border-box;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;line-height:1.5;padding:8px 10px;resize:vertical;">${esc(editingPosEvent?.notes||'')}</textarea></div>
         ${positionEventFormError ? `<div style="color:var(--red);font-size:11px;margin-top:8px;">${positionEventFormError}</div>` : ''}
         <div style="display:flex;justify-content:flex-end;margin-top:10px;">
-          <button id="posevent-save-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:6px 14px;font-size:11.5px;font-weight:600;">Guardar evento</button>
-        </div>` : ''}
+          <button id="posevent-save-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:6px 14px;font-size:11.5px;font-weight:600;">${positionEventEditingId?'Guardar cambios':'Guardar evento'}</button>
+        </div>`;
+        })() : ''}
       </div>
 
       <div class="modal-two-col" style="display:grid;grid-template-columns:1.15fr 1fr;gap:24px;align-items:stretch;">
@@ -3188,17 +3226,19 @@ function renderCalendarScreen(){
   const selectedEvents = eventsByDay[calendarSelectedDay] || [];
   const selectedLabel = calendarSelectedDay ? new Date(calendarSelectedDay+'T00:00:00').toLocaleDateString('es-ES',{weekday:'long', day:'numeric', month:'long'}) : '';
 
+  const editingEvent = calendarEditingId ? (calendarEvents||[]).find(ev=>ev.id===calendarEditingId) : null;
   const agenda = `<div style="margin-top:22px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
       <div style="font-size:12.5px;font-weight:700;text-transform:capitalize;">${selectedLabel}</div>
       <button id="cal-add-toggle" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);white-space:nowrap;">${calendarFormOpen?'Cancelar':'+ Añadir evento'}</button>
     </div>
     ${calendarFormOpen ? `<div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:16px;">
+      ${calendarEditingId ? `<div style="font-size:10.5px;color:var(--accent-text);font-weight:600;margin-bottom:10px;">Editando evento</div>` : ''}
       <div class="modal-fields-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-        <div class="field"><label>Título</label><input id="cal-title" placeholder="ej. Resultados Q3" autocomplete="off"/></div>
-        <div class="field"><label>Fecha</label><input id="cal-date" type="date" value="${calendarSelectedDay||''}" autocomplete="off"/></div>
+        <div class="field"><label>Título</label><input id="cal-title" placeholder="ej. Resultados Q3" value="${esc(editingEvent?.title||'')}" autocomplete="off"/></div>
+        <div class="field"><label>Fecha</label><input id="cal-date" type="date" value="${editingEvent?.event_date||calendarSelectedDay||''}" autocomplete="off"/></div>
         <div class="field"><label>Tipo de evento</label><select id="cal-type">
-          ${Object.entries(EVENT_TYPE).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
+          ${Object.entries(EVENT_TYPE).map(([k,v])=>`<option value="${k}" ${editingEvent?.event_type===k?'selected':''}>${v}</option>`).join('')}
         </select></div>
         <div class="field">
           <label>Origen</label>
@@ -3210,16 +3250,16 @@ function renderCalendarScreen(){
       </div>
       ${calendarFormSource==='accion' ? `<div class="field" style="margin-bottom:10px;"><label>Acción</label><select id="cal-position">
         <option value="">— Elegir —</option>
-        ${(calendarPositionOptions||[]).map(p=>`<option value="${p.id}">${esc(p.name)}${p.ticker?' ('+esc(p.ticker)+')':''}</option>`).join('')}
+        ${(calendarPositionOptions||[]).map(p=>`<option value="${p.id}" ${editingEvent?.position_id===p.id?'selected':''}>${esc(p.name)}${p.ticker?' ('+esc(p.ticker)+')':''}</option>`).join('')}
       </select></div>` : ''}
-      <div class="field" style="margin-bottom:10px;"><label>Notas (opcional)</label><textarea id="cal-notes" rows="2" placeholder="Detalles adicionales…" style="width:100%;box-sizing:border-box;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;line-height:1.5;padding:8px 10px;resize:vertical;"></textarea></div>
+      <div class="field" style="margin-bottom:10px;"><label>Notas (opcional)</label><textarea id="cal-notes" rows="2" placeholder="Detalles adicionales…" style="width:100%;box-sizing:border-box;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;line-height:1.5;padding:8px 10px;resize:vertical;">${esc(editingEvent?.notes||'')}</textarea></div>
       <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-dim);margin-bottom:12px;cursor:pointer;">
-        <input type="checkbox" id="cal-notify" checked/> Avisarme por email el día del evento
+        <input type="checkbox" id="cal-notify" ${(editingEvent ? editingEvent.notify_email : true) ? 'checked' : ''}/> Avisarme por email el día del evento
       </label>
       <div id="cal-form-error" style="color:var(--red);font-size:11.5px;margin-bottom:10px;display:${calendarFormError?'block':'none'};">${calendarFormError||''}</div>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button id="cal-form-cancel" class="pill-btn" style="border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);padding:8px 16px;font-size:12.5px;">Cancelar</button>
-        <button id="cal-form-save" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:8px 16px;font-size:12.5px;font-weight:600;">Guardar</button>
+        <button id="cal-form-save" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);padding:8px 16px;font-size:12.5px;font-weight:600;">${calendarEditingId?'Guardar cambios':'Guardar'}</button>
       </div>
     </div>` : ''}
     ${selectedEvents.length ? `<div style="display:flex;flex-direction:column;gap:8px;">${selectedEvents.map(calendarEventRow).join('')}</div>` : `<div style="font-size:12px;color:var(--text-faint);">Sin eventos este día.</div>`}
@@ -3288,16 +3328,27 @@ function renderCalendarScreen(){
 
   const addToggle = document.getElementById('cal-add-toggle');
   if(addToggle) addToggle.addEventListener('click', () => {
-    calendarFormOpen = !calendarFormOpen; calendarFormError = null; calendarFormSource = 'propio';
+    calendarFormOpen = !calendarFormOpen; calendarFormError = null; calendarFormSource = 'propio'; calendarEditingId = null;
     render(null);
   });
+  app.querySelectorAll('.calendar-event-edit-btn').forEach(btn=>btn.addEventListener('click', () => {
+    const id = btn.getAttribute('data-id');
+    const ev = (calendarEvents||[]).find(e=>e.id===id);
+    if(!ev) return;
+    calendarEditingId = id;
+    calendarFormOpen = true;
+    calendarFormError = null;
+    calendarFormSource = ev.source;
+    calendarSelectedDay = ev.event_date;
+    render(null);
+  }));
   const srcPropioBtn = document.getElementById('cal-source-propio');
   if(srcPropioBtn) srcPropioBtn.addEventListener('click', () => { calendarFormSource = 'propio'; render(null); });
   const srcAccionBtn = document.getElementById('cal-source-accion');
   if(srcAccionBtn) srcAccionBtn.addEventListener('click', () => { calendarFormSource = 'accion'; render(null); });
 
   const cancelBtn = document.getElementById('cal-form-cancel');
-  if(cancelBtn) cancelBtn.addEventListener('click', () => { calendarFormOpen = false; calendarFormError = null; render(null); });
+  if(cancelBtn) cancelBtn.addEventListener('click', () => { calendarFormOpen = false; calendarFormError = null; calendarEditingId = null; render(null); });
 
   const saveBtn = document.getElementById('cal-form-save');
   if(saveBtn) saveBtn.addEventListener('click', async () => {
@@ -3322,8 +3373,7 @@ function renderCalendarScreen(){
       ticker = pos ? pos.ticker : null;
       portfolioIdForEvent = pos ? pos.portfolio_id : null;
     }
-    const { error } = await supabase.from('calendar_events').insert({
-      owner_id: session.user.id,
+    const row = {
       position_id: positionId,
       position_name: positionName,
       ticker,
@@ -3334,9 +3384,13 @@ function renderCalendarScreen(){
       event_date: date,
       notify_email: notify,
       notes: notes || null,
-    });
+    };
+    const { error } = calendarEditingId
+      ? await supabase.from('calendar_events').update(row).eq('id', calendarEditingId)
+      : await supabase.from('calendar_events').insert({ ...row, owner_id: session.user.id });
     if(error){ console.error(error); showErr('Error al guardar: ' + (error.message||'revisa la conexión')); return; }
     calendarFormOpen = false;
+    calendarEditingId = null;
     calendarSelectedDay = date;
     await loadCalendarEvents();
     render(null);
@@ -4143,7 +4197,7 @@ function render(scenario){
     }
     ruleFormOpen = false; ruleFormError = null; positionRules = []; positionRulesLoading = true;
     recompraFormOpen = false; recompraFormError = null; recompraFormType = 'compra';
-    positionEventFormOpen = false; positionEventFormError = null; positionEvents = []; positionEventsLoading = true;
+    positionEventFormOpen = false; positionEventFormError = null; positionEventEditingId = null; positionEvents = []; positionEventsLoading = true;
     render(currentScenario);
     if(pos && pos.ticker) loadModalChart(pos.ticker, modalRange);
     if(pos && pos.ticker && !pos.business_summary) loadModalCompanyInfo(pos);
@@ -4195,9 +4249,9 @@ function render(scenario){
   }));
 
   const closeBtn = document.getElementById('modal-close');
-  if(closeBtn) closeBtn.addEventListener('click', () => { selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; recompraFormOpen = false; recompraFormError = null; positionEventFormOpen = false; positionEventFormError = null; render(currentScenario); });
+  if(closeBtn) closeBtn.addEventListener('click', () => { selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; recompraFormOpen = false; recompraFormError = null; positionEventFormOpen = false; positionEventFormError = null; positionEventEditingId = null; render(currentScenario); });
   const backdrop = document.getElementById('modal-backdrop');
-  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; recompraFormOpen = false; recompraFormError = null; positionEventFormOpen = false; positionEventFormError = null; render(currentScenario); } });
+  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; recompraFormOpen = false; recompraFormError = null; positionEventFormOpen = false; positionEventFormError = null; positionEventEditingId = null; render(currentScenario); } });
 
   [document.getElementById('recompra-add-toggle'), document.getElementById('venta-add-toggle')].forEach(btn => {
     if(!btn) return;
@@ -4254,9 +4308,15 @@ function render(scenario){
 
   const posEventAddToggle = document.getElementById('posevent-add-toggle');
   if(posEventAddToggle) posEventAddToggle.addEventListener('click', () => {
-    positionEventFormOpen = !positionEventFormOpen; positionEventFormError = null;
+    positionEventFormOpen = !positionEventFormOpen; positionEventFormError = null; positionEventEditingId = null;
     render(currentScenario);
   });
+  app.querySelectorAll('.posevent-edit-btn').forEach(btn=>btn.addEventListener('click', () => {
+    positionEventEditingId = btn.getAttribute('data-id');
+    positionEventFormOpen = true;
+    positionEventFormError = null;
+    render(currentScenario);
+  }));
   const posEventSaveBtn = document.getElementById('posevent-save-btn');
   if(posEventSaveBtn) posEventSaveBtn.addEventListener('click', async () => {
     const pos = portfolio.positions.find(p=>p.id===selectedId);
@@ -4267,8 +4327,7 @@ function render(scenario){
     const notes = document.getElementById('posevent-notes').value.trim();
     if(!title){ positionEventFormError = 'Falta el título.'; render(currentScenario); return; }
     if(!date){ positionEventFormError = 'Falta la fecha.'; render(currentScenario); return; }
-    const { error } = await supabase.from('calendar_events').insert({
-      owner_id: session.user.id,
+    const row = {
       position_id: pos.id,
       position_name: pos.name,
       ticker: pos.ticker || null,
@@ -4279,9 +4338,12 @@ function render(scenario){
       event_date: date,
       notify_email: true,
       notes: notes || null,
-    });
+    };
+    const { error } = positionEventEditingId
+      ? await supabase.from('calendar_events').update(row).eq('id', positionEventEditingId)
+      : await supabase.from('calendar_events').insert({ ...row, owner_id: session.user.id });
     if(error){ positionEventFormError = 'No se pudo guardar el evento.'; render(currentScenario); return; }
-    positionEventFormOpen = false; positionEventFormError = null;
+    positionEventFormOpen = false; positionEventFormError = null; positionEventEditingId = null;
     await loadPositionEvents(pos.id);
     calendarEvents = null; // se refresca de nuevo en el home/calendario cuando se visiten
     render(currentScenario);
