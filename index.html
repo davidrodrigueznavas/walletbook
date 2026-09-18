@@ -241,6 +241,7 @@ const SCREENER_METRIC = {
   debt_to_equity: {label:'Deuda / Equity', fmt:v=>v.toFixed(2), get:r=>r.debt_to_equity},
   performance_1y: {label:'Rendimiento a 1 año (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=>r.performance_1y},
   last_price: {label:'Precio ($)', fmt:v=>v.toFixed(2), get:r=>r.last_price},
+  drawdown_90d_pct: {label:'Caída desde máximo 90d (%)', fmt:v=>v.toFixed(1)+'%', get:r=>r.drawdown_90d_pct},
 };
 const SCREENER_OPERATOR = { gt:'mayor que', lt:'menor que' };
 const SCREENER_UNIVERSE = {
@@ -249,6 +250,7 @@ const SCREENER_UNIVERSE = {
   sp600: { label:'S&P 600 (small caps EEUU)', short:'S&P 600', color:'#9B6BD9' },
   russell2000: { label:'Russell 2000 (small caps EEUU)', short:'Russell 2000', color:'#E0A030' },
   stoxx600: { label:'Stoxx 600 (Europa)', short:'Stoxx 600', color:'#4AAE00' },
+  reserva_valor: { label:'Reserva de Valor (BTC/oro/plata)', short:'Reserva Valor', color:'#E3B15C' },
 };
 function indexBadge(indexName){
   const u = SCREENER_UNIVERSE[indexName];
@@ -1068,6 +1070,8 @@ async function loadScreenerUniverse(){
     sma200: num(row.screener_metrics?.sma200),
     week52_high: num(row.screener_metrics?.week52_high),
     week52_low: num(row.screener_metrics?.week52_low),
+    high_90d: num(row.screener_metrics?.high_90d),
+    drawdown_90d_pct: num(row.screener_metrics?.drawdown_90d_pct),
     metrics_updated_at: row.screener_metrics?.updated_at || null,
     pe_ratio: num(row.screener_fundamentals?.pe_ratio),
     market_cap: num(row.screener_fundamentals?.market_cap),
