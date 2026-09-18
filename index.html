@@ -2074,6 +2074,7 @@ function wireAddPositionModal(app){
     const commission = num(document.getElementById('addpos-commission').value);
     const date = document.getElementById('addpos-date').value;
     const horizon = document.getElementById('addpos-horizon').value.trim();
+    const pendingInvestment = num(document.getElementById('addpos-pending').value);
 
     const showAddPosError = (msg) => {
       addPositionError = msg;
@@ -2100,7 +2101,7 @@ function wireAddPositionModal(app){
       purchase_date: date || null,
       horizon: horizon || null,
       currency: currencyForTicker(ticker),
-      pending_investment: 0,
+      pending_investment: pendingInvestment ?? 0,
     };
     if(addPositionCompanyInfo && addPositionSelected && addPositionSelected.symbol === ticker){
       row.business_summary = addPositionCompanyInfo.summary || null;
@@ -2393,9 +2394,10 @@ function renderModal(){
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:${recompraFormOpen?'14px':'0'};">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
-            <div style="font-size:11.5px;"><b>Compra inicial</b>${p.invested?` · ${fmtEUR(num(p.invested))} a ${p.price?fmtNum(num(p.price))+'€':'—'}`:' · sin importe'}${p.date?' · '+p.date:''}</div>
-          </div>
+          ${p.invested ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
+            <div style="font-size:11.5px;"><b>Compra inicial</b> · ${fmtEUR(num(p.invested))} a ${p.price?fmtNum(num(p.price))+'€':'—'}${p.date?' · '+p.date:''}</div>
+          </div>` : ''}
+          ${!p.invested && !(p.recompras||[]).length ? `<div style="font-size:11px;color:var(--text-faint);padding:4px 2px;">Sin compras todavía — esta posición está en watchlist/pendiente de invertir.</div>` : ''}
           ${(p.recompras||[]).map(r=>{
             const isVenta = r.type === 'venta';
             return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
@@ -2511,6 +2513,7 @@ function renderAddPositionModal(){
         <div class="field"><label>Comisión broker (€)</label><input id="addpos-commission" placeholder="0" autocomplete="off"/></div>
         <div class="field"><label>Fecha compra</label><input id="addpos-date" type="date" autocomplete="off"/></div>
         <div class="field"><label>Horizonte (opcional)</label><input id="addpos-horizon" placeholder="ej. 2029" autocomplete="off"/></div>
+        <div class="field"><label>Pendiente invertir (€)</label><input id="addpos-pending" placeholder="0" autocomplete="off"/></div>
       </div>
 
       <div style="margin-top:8px;padding-top:14px;border-top:1px solid var(--border-soft);">
