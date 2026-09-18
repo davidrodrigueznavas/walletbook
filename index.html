@@ -116,9 +116,6 @@
     .modal-card { padding: 18px 16px !important; max-height: 94vh !important; }
 
     .home-portfolio-card { min-height: auto !important; }
-
-    .market-status-badge { padding: 6px 8px !important; }
-    .market-status-badge-label { display: none !important; }
   }
 </style>
 </head>
@@ -2624,15 +2621,15 @@ function walletbookIcon(size){
 }
 
 // Un tramo horario por sesión; los mercados con pausa de mediodía (ej. Japón)
-// llevan dos tramos. No tiene en cuenta festivos de cada bolsa.
-const MARKET_SESSIONS = [
-  { key:'eeuu', label:'EEUU/Canadá', tz:'America/New_York', sessions:[[9*60+30,16*60]],
-    title:'NYSE/Nasdaq/TSX (también cubre las posiciones taiwanesas via ADR, que cotizan en EEUU): 9:30-16:00, hora de Nueva York, días laborables.' },
-  { key:'europa', label:'Europa', tz:'Europe/Madrid', sessions:[[9*60,17*60+30]],
-    title:'Principales bolsas europeas (Xetra, Euronext, BME, LSE...): 9:00-17:30, hora centroeuropea, días laborables.' },
-  { key:'japon', label:'Japón', tz:'Asia/Tokyo', sessions:[[9*60,11*60+30],[12*60+30,15*60+30]],
-    title:'Bolsa de Tokio: 9:00-11:30 y 12:30-15:30, hora de Japón (con pausa de mediodía), días laborables.' },
-];
+// llevan dos tramos. No tiene en cuenta festivos de cada bolsa. 'cripto' no
+// tiene entrada aquí a propósito: no cierra nunca, no necesita sesión.
+const MARKET_SESSION_BY_KEY = {
+  eeuu: { tz:'America/New_York', sessions:[[9*60+30,16*60]], hours:'NYSE/Nasdaq: 9:30-16:00, hora de Nueva York, días laborables.' },
+  canada: { tz:'America/New_York', sessions:[[9*60+30,16*60]], hours:'TSX comparte huso horario y horario con NYSE/Nasdaq: 9:30-16:00 hora de Nueva York (los festivos pueden diferir entre EEUU y Canadá, no se tienen en cuenta).' },
+  taiwan: { tz:'America/New_York', sessions:[[9*60+30,16*60]], hours:'Se asume ADR (cotiza en EEUU, no en la bolsa de Taiwán): 9:30-16:00, hora de Nueva York.' },
+  europa: { tz:'Europe/Madrid', sessions:[[9*60,17*60+30]], hours:'Principales bolsas europeas (Xetra, Euronext, BME, LSE...): 9:00-17:30, hora centroeuropea, días laborables.' },
+  japon: { tz:'Asia/Tokyo', sessions:[[9*60,11*60+30],[12*60+30,15*60+30]], hours:'Bolsa de Tokio: 9:00-11:30 y 12:30-15:30, hora de Japón (con pausa de mediodía), días laborables.' },
+};
 function marketSessionStatus(tz, sessions){
   const now = new Date();
   const fmt = new Intl.DateTimeFormat('en-US', { timeZone:tz, hour:'2-digit', minute:'2-digit', hourCycle:'h23', weekday:'short' });
@@ -2643,14 +2640,29 @@ function marketSessionStatus(tz, sessions){
   const open = isWeekday && sessions.some(([start,end]) => minutesNow >= start && minutesNow < end);
   return { open, label: open ? 'Abierto' : 'Cerrado' };
 }
-function marketStatusBadge(){
-  return `<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-    ${MARKET_SESSIONS.map(m => {
-      const st = marketSessionStatus(m.tz, m.sessions);
-      return `<div class="market-status-badge" title="${esc(m.title)}" style="cursor:help;display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:14px;border:1px solid ${st.open?'var(--green-border)':'var(--border)'};background:${st.open?'var(--green-soft)':'var(--panel-2)'};font-size:11px;font-weight:600;color:${st.open?'var(--green)':'var(--text-faint)'};white-space:nowrap;">
-        <span style="width:7px;height:7px;border-radius:50%;background:${st.open?'var(--green)':'var(--text-faint)'};flex-shrink:0;"></span><span class="market-status-badge-label">${m.label} · ${st.label}</span>
-      </div>`;
-    }).join('')}
+// Clúster de círculos solapados (estilo "avatares"), uno por cada mercado que
+// realmente hay en la cartera — nada de mercados que no uses. El color es el
+// mismo que ya identifica a ese mercado en el resto de la app (MARKET[...]);
+// el brillo/opacidad indica si está abierto ahora mismo. Cripto siempre se
+// pinta "abierto" (24/7).
+function marketStatusCluster(){
+  const marketsHeld = [...new Set((portfolio.positions||[]).map(p => p.market).filter(Boolean))];
+  if(!marketsHeld.length) return '';
+  const order = ['eeuu','europa','japon','canada','taiwan','cripto'];
+  marketsHeld.sort((a,b) => order.indexOf(a) - order.indexOf(b));
+  const items = marketsHeld.map(mk => {
+    const color = MARKET[mk]?.color || '#6E7177';
+    const label = MARKET[mk]?.label || mk;
+    if(mk === 'cripto'){
+      return { mk, color, open: true, title: `${label}: mercado 24/7, nunca cierra.` };
+    }
+    const sess = MARKET_SESSION_BY_KEY[mk];
+    if(!sess) return { mk, color, open: null, title: label };
+    const st = marketSessionStatus(sess.tz, sess.sessions);
+    return { mk, color, open: st.open, title: `${label}: ${st.label} ahora. ${sess.hours}` };
+  });
+  return `<div style="display:flex;align-items:center;flex-shrink:0;">
+    ${items.map((it,i) => `<div title="${esc(it.title)}" style="cursor:help;width:22px;height:22px;border-radius:50%;background:${it.color};border:2px solid var(--panel);margin-left:${i>0?'-7px':'0'};z-index:${items.length-i};position:relative;opacity:${it.open===false?'0.35':'1'};box-shadow:${it.open?'0 0 0 2px '+it.color+'40':'none'};transition:opacity .15s;"></div>`).join('')}
   </div>`;
 }
 
@@ -2661,7 +2673,7 @@ function topNavBar(){
       <span style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:29px;color:var(--text);letter-spacing:-.01em;">Walletbook</span>
     </button>
     <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-      ${marketStatusBadge()}
+      ${marketStatusCluster()}
       <button id="framework-open-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);font-weight:600;white-space:nowrap;">Framework</button>
       ${stockFinderBlock()}
       ${menuBlock()}
