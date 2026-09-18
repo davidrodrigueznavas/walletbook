@@ -2623,9 +2623,9 @@ function walletbookIcon(size){
 // Un tramo horario por sesión; Japón tiene pausa de mediodía, por eso lleva
 // dos tramos. No tiene en cuenta festivos de cada bolsa.
 const MARKET_SESSION_BY_KEY = {
-  canada: { tz:'America/New_York', sessions:[[9*60+30,16*60]], label:'Canadá', hours:'TSX: 9:30-16:00, hora de Nueva York, días laborables.' },
-  europa: { tz:'Europe/Madrid', sessions:[[9*60,17*60+30]], label:'Europa', hours:'Principales bolsas europeas (Xetra, Euronext, BME, LSE...): 9:00-17:30, hora centroeuropea, días laborables.' },
-  japon: { tz:'Asia/Tokyo', sessions:[[9*60,11*60+30],[12*60+30,15*60+30]], label:'Japón', hours:'Bolsa de Tokio: 9:00-11:30 y 12:30-15:30, hora de Japón (con pausa de mediodía), días laborables.' },
+  canada: { tz:'America/New_York', sessions:[[9*60+30,16*60]], label:'Canadá', flag:'🇨🇦', hours:'TSX: 9:30-16:00, hora de Nueva York, días laborables.' },
+  europa: { tz:'Europe/Madrid', sessions:[[9*60,17*60+30]], label:'Europa', flag:'🇪🇺', hours:'Principales bolsas europeas (Xetra, Euronext, BME, LSE...): 9:00-17:30, hora centroeuropea, días laborables.' },
+  japon: { tz:'Asia/Tokyo', sessions:[[9*60,11*60+30],[12*60+30,15*60+30]], label:'Japón', flag:'🇯🇵', hours:'Bolsa de Tokio: 9:00-11:30 y 12:30-15:30, hora de Japón (con pausa de mediodía), días laborables.' },
 };
 function fmtCountdown(mins){
   if(mins==null) return '';
@@ -2669,15 +2669,16 @@ function marketStatusWidget(){
   const items = Object.entries(MARKET_SESSION_BY_KEY).map(([mk, sess]) => {
     const st = marketCountdown(sess.tz, sess.sessions);
     const countdownText = st.open ? `cierra en ${fmtCountdown(st.minutesUntil)}` : `abre en ${fmtCountdown(st.minutesUntil)}`;
-    return { mk, label: sess.label, open: st.open, countdownText };
+    return { mk, label: sess.label, flag: sess.flag, open: st.open, countdownText };
   });
   return `<div style="position:relative;flex-shrink:0;">
-    <button id="market-panel-toggle" title="Horario de mercados" style="cursor:pointer;background:var(--panel-2);border:1px solid var(--border);border-radius:14px;padding:6px 10px;display:flex;align-items:center;gap:5px;">
-      ${items.map(it => `<span style="width:7px;height:7px;border-radius:50%;background:${it.open?'var(--green)':'var(--red)'};flex-shrink:0;"></span>`).join('')}
+    <button id="market-panel-toggle" class="pill-btn" title="Horario de mercados" style="border:1px solid var(--border);background:var(--panel-2);display:flex;align-items:center;gap:6px;">
+      ${items.map(it => `<span style="width:8px;height:8px;border-radius:50%;background:${it.open?'var(--green)':'var(--red)'};flex-shrink:0;"></span>`).join('')}
     </button>
     ${marketPanelOpen ? `<div id="market-panel-dropdown" style="position:absolute;top:38px;right:0;min-width:220px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);z-index:60;padding:6px;box-sizing:border-box;">
       ${items.map(it => `<div style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;">
         <span style="width:8px;height:8px;border-radius:50%;background:${it.open?'var(--green)':'var(--red)'};flex-shrink:0;"></span>
+        <span style="font-size:14px;flex-shrink:0;">${it.flag}</span>
         <span style="font-size:12.5px;font-weight:600;flex:1;">${esc(it.label)}</span>
         <span style="font-size:11px;color:var(--text-faint);white-space:nowrap;">${it.countdownText}</span>
       </div>`).join('')}
