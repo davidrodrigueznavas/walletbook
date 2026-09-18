@@ -1285,6 +1285,19 @@ function currencyForTicker(ticker){
   return 'USD';
 }
 const SUFFIX_MARKET = { '.T':'japon', '.DE':'europa', '.PA':'europa', '.MI':'europa', '.AS':'europa', '.L':'europa', '.MC':'europa', '.ST':'europa', '.TO':'canada', '.V':'canada', '.TW':'taiwan', '.TWO':'taiwan' };
+const SUFFIX_EXCHANGE = {
+  '.T':'Bolsa de Tokio', '.DE':'Xetra (Alemania)', '.PA':'Euronext París', '.MI':'Borsa Italiana (Milán)',
+  '.AS':'Euronext Ámsterdam', '.SW':'SIX Swiss Exchange', '.CO':'Nasdaq Copenhague', '.MC':'BME (Madrid)',
+  '.ST':'Nasdaq Estocolmo', '.L':'London Stock Exchange', '.BR':'Euronext Bruselas', '.HE':'Nasdaq Helsinki',
+  '.OL':'Bolsa de Oslo', '.IR':'Euronext Dublín', '.LS':'Euronext Lisboa', '.LU':'Bolsa de Luxemburgo',
+  '.WA':'Bolsa de Varsovia', '.AT':'Bolsa de Atenas', '.VI':'Bolsa de Viena', '.TA':'Bolsa de Tel Aviv',
+  '.HK':'Bolsa de Hong Kong', '.TO':'Toronto Stock Exchange', '.V':'TSX Venture', '.TW':'Bolsa de Taiwán', '.TWO':'Bolsa de Taiwán (OTC)',
+};
+function exchangeForTicker(ticker){
+  if(!ticker) return '';
+  for(const suf in SUFFIX_EXCHANGE){ if(ticker.endsWith(suf)) return SUFFIX_EXCHANGE[suf]; }
+  return 'NYSE/Nasdaq';
+}
 function marketForTicker(ticker, exchange){
   if(!ticker) return '';
   for(const suf in SUFFIX_MARKET){ if(ticker.endsWith(suf)) return SUFFIX_MARKET[suf]; }
@@ -2238,7 +2251,7 @@ function renderModal(){
             <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:500;font-size:20px;margin:0;">${esc(p.name)}</h2>
             <span style="font-family:'Calibri','Carlito',sans-serif;font-size:12px;color:var(--text-faint);">${esc(p.ticker)||''}</span>
           </div>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${esc(p.sector)}${p.cluster?' · '+esc(p.cluster):''}${p.tier?(' · '+(TIER[p.tier]?.label||esc(p.tier))):''}</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${esc(p.sector)}${p.cluster?' · '+esc(p.cluster):''}${p.tier?(' · '+(TIER[p.tier]?.label||esc(p.tier))):''}${p.ticker?' · '+esc(exchangeForTicker(p.ticker)):''}</div>
           ${(p.strategies||[]).length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${(p.strategies||[]).map(k=>`<span style="font-size:9.5px;font-weight:600;padding:2px 8px;border-radius:9px;background:var(--accent-soft);color:var(--accent-text);">${STRATEGY[k]?.label||k}</span>`).join('')}</div>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:14px;">
