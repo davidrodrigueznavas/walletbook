@@ -784,7 +784,7 @@ function renderMarketIndicators(){
 }
 
 let stockViewerQuery = '', stockViewerSearchToken = 0;
-let stockViewerTicker = null, stockViewerQuoteLoading = false, stockViewerQuoteError = null, stockViewerQuote = null;
+let stockViewerTicker = null, stockViewerName = null, stockViewerQuoteLoading = false, stockViewerQuoteError = null, stockViewerQuote = null;
 let stockViewerDividends = [], stockViewerEstimates = null;
 let stockViewerChartLoading = false, stockViewerChartError = null, stockViewerChartPoints = null;
 let stockViewerWeeklyPoints = null;
@@ -898,8 +898,9 @@ async function loadStockViewerChart(ticker){
   stockViewerChartLoading = false;
 }
 
-async function selectStockViewerTicker(symbol){
+async function selectStockViewerTicker(symbol, name){
   stockViewerTicker = symbol;
+  stockViewerName = name || null;
   stockViewerQuery = symbol;
   render(null);
   await Promise.all([loadStockViewerQuote(symbol), loadStockViewerChart(symbol)]);
@@ -1495,9 +1496,9 @@ function computeTotals(){
 }
 
 function computeCAGR(totals){
-  const withDate = portfolio.positions.filter(p=>p.date && investedOf(p)>0);
+  const withDate = portfolio.positions.filter(p=>p.purchase_date && investedOf(p)>0);
   if(!withDate.length || totals.invested<=0) return {days:0, value:null};
-  const earliest = withDate.reduce((min,p)=>p.date<min?p.date:min, withDate[0].date);
+  const earliest = withDate.reduce((min,p)=>p.purchase_date<min?p.purchase_date:min, withDate[0].purchase_date);
   const days = Math.max(1, Math.round((new Date() - new Date(earliest+'T00:00:00')) / 86400000));
   if(days < 30 || totals.value<=0) return {days, value:null};
   const ratio = totals.value/totals.invested;
@@ -1517,12 +1518,12 @@ function effectiveHistory(){
   // Además de los snapshots guardados, arrancamos la curva en la fecha de
   // compra más antigua: ese día, por definición, valor = invertido (0 de
   // ganancia), sin necesidad de precios históricos.
-  const withDate = portfolio.positions.filter(p => p.date && investedOf(p) > 0);
+  const withDate = portfolio.positions.filter(p => p.purchase_date && investedOf(p) > 0);
   const combined = history.slice();
   if(withDate.length){
-    const earliest = withDate.reduce((min, p) => p.date < min ? p.date : min, withDate[0].date);
+    const earliest = withDate.reduce((min, p) => p.purchase_date < min ? p.purchase_date : min, withDate[0].purchase_date);
     if(!combined.some(h => h.date === earliest)){
-      const investedAtEarliest = withDate.filter(p => p.date === earliest).reduce((a, p) => a + investedOf(p), 0);
+      const investedAtEarliest = withDate.filter(p => p.purchase_date === earliest).reduce((a, p) => a + investedOf(p), 0);
       combined.push({date: earliest, invested: Math.round(investedAtEarliest), value: Math.round(investedAtEarliest)});
     }
   }
@@ -2374,10 +2375,10 @@ function renderModal(){
           </div>` : '<div style="flex:1;"></div>'}
 
           <div class="modal-fields-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;flex-shrink:0;">
-            <div class="field"><label>Invertido (€)</label><input data-id="${p.id}" data-field="invested" value="${p.invested??''}" placeholder="0" autocomplete="off"/></div>
+            <div class="field"><label>Invertido (€)</label><input value="${fmtEUR(investedOf(p))}" disabled title="Se calcula solo desde el historial de compras/ventas ejecutadas (las órdenes abiertas no cuentan) — para cambiarlo, añade/edita/borra una compra o venta abajo." style="opacity:.7;cursor:not-allowed;"/></div>
             <div class="field"><label>Precio compra (€)</label><input data-id="${p.id}" data-field="price" value="${p.price??''}" placeholder="ej. 512,30" autocomplete="off"/></div>
             <div class="field"><label>Comisión broker (€)</label><input data-id="${p.id}" data-field="commission" value="${p.commission??''}" placeholder="0" autocomplete="off"/></div>
-            <div class="field"><label>Fecha compra</label><input type="date" data-id="${p.id}" data-field="date" value="${p.date??''}" autocomplete="off"/></div>
+            <div class="field"><label>Fecha compra</label><input type="date" data-id="${p.id}" data-field="date" value="${p.purchase_date??''}" autocomplete="off"/></div>
             <div class="field"><label>Horizonte</label><input data-id="${p.id}" data-field="horizon" value="${p.horizon??''}" placeholder="ej. 2029" autocomplete="off"/></div>
             <div class="field"><label>Pendiente invertir (€)</label><input data-id="${p.id}" data-field="pending_investment" value="${p.pending_investment??pendingInvestmentFor(p)}" placeholder="ej. 500" autocomplete="off"/></div>
           </div>
@@ -2405,7 +2406,7 @@ function renderModal(){
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:${recompraFormOpen?'14px':'0'};">
           ${p.invested ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
-            <div style="font-size:11.5px;"><b>Compra inicial</b> · ${fmtEUR(num(p.invested))} a ${p.price?fmtNum(num(p.price))+'€':'—'}${p.date?' · '+p.date:''}</div>
+            <div style="font-size:11.5px;"><b>Compra inicial</b> · ${fmtEUR(num(p.invested))} a ${p.price?fmtNum(num(p.price))+'€':'—'}${p.purchase_date?' · '+p.purchase_date:''}</div>
           </div>` : ''}
           ${!p.invested && !(p.recompras||[]).length ? `<div style="font-size:11px;color:var(--text-faint);padding:4px 2px;">Sin compras todavía — esta posición está en watchlist/pendiente de invertir.</div>` : ''}
           ${(p.recompras||[]).map(r=>{
@@ -2425,10 +2426,10 @@ function renderModal(){
           <input type="checkbox" id="recompra-pending" ${recompraFormPending?'checked':''}/>
           Es una orden abierta (todavía no ejecutada — precio/importe objetivo)
         </label>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;align-items:end;">
-          <div class="field"><label>${recompraFormPending?(recompraFormType==='venta'?'Importe objetivo (€)':'Importe objetivo (€)'):(recompraFormType==='venta'?'Importe vendido (€)':'Importe (€)')}</label><input id="recompra-invested" placeholder="ej. 300" autocomplete="off"/></div>
+        <div style="display:grid;grid-template-columns:${recompraFormPending?'1fr 1fr 1fr':'1fr 1fr 1fr 1fr'};gap:8px;align-items:end;">
+          <div class="field"><label>${recompraFormPending?'Importe objetivo (€)':(recompraFormType==='venta'?'Importe vendido (€)':'Importe (€)')}</label><input id="recompra-invested" placeholder="ej. 300" autocomplete="off"/></div>
           <div class="field"><label>${recompraFormPending?'Precio objetivo':(recompraFormType==='venta'?'Precio venta':'Precio')}</label><input id="recompra-price" placeholder="ej. 480,50" autocomplete="off"/></div>
-          <div class="field"><label>${recompraFormPending?'Fecha límite (opcional)':'Fecha'}</label><input type="date" id="recompra-date" autocomplete="off"/></div>
+          ${recompraFormPending?'':`<div class="field"><label>Fecha</label><input type="date" id="recompra-date" autocomplete="off"/></div>`}
           <div class="field"><label>Comisión (€)</label><input id="recompra-commission" placeholder="0" autocomplete="off"/></div>
         </div>
         ${recompraFormError ? `<div style="color:var(--red);font-size:11px;margin-top:8px;">${recompraFormError}</div>` : ''}
@@ -2741,7 +2742,7 @@ function wireStockFinderModal(app){
           teardownStockFinderOutsideClose();
           stockFinderOpen = false;
           currentScreen = 'visor';
-          selectStockViewerTicker(r.symbol);
+          selectStockViewerTicker(r.symbol, r.name);
         }));
       }, 300);
     });
@@ -3531,7 +3532,7 @@ function renderScreenerBuilderModal(){
 }
 
 function renderScreenerMatchRow(row){
-  return `<button class="screener-match-row" data-ticker="${esc(row.ticker)}" style="cursor:pointer;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);font-family:inherit;width:100%;">
+  return `<button class="screener-match-row" data-ticker="${esc(row.ticker)}" data-name="${esc(row.name)}" style="cursor:pointer;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);font-family:inherit;width:100%;">
     <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px;">
       ${indexBadge(row.index_name)}
       <b>${esc(row.ticker)}</b> <span style="color:var(--text-faint);font-size:11px;overflow:hidden;text-overflow:ellipsis;">${esc(row.name)}</span>
@@ -3650,8 +3651,9 @@ function renderScreenersScreen(){
 
   app.querySelectorAll('.screener-match-row').forEach(btn => btn.addEventListener('click', () => {
     const ticker = btn.getAttribute('data-ticker');
+    const name = btn.getAttribute('data-name');
     currentScreen = 'visor';
-    selectStockViewerTicker(ticker);
+    selectStockViewerTicker(ticker, name);
   }));
 }
 
@@ -4090,7 +4092,7 @@ function renderStockViewerScreen(){
         e.preventDefault();
         const r = results[Number(btn.getAttribute('data-idx'))];
         suggestionsBox.innerHTML = '';
-        selectStockViewerTicker(r.symbol);
+        selectStockViewerTicker(r.symbol, r.name);
       }));
     }, 300);
   });
@@ -4163,7 +4165,7 @@ function renderStockViewerScreen(){
       visorAddPickerOutsideCloseHandler = null;
     }
     visorAddPickerOpen = false;
-    const sel = { symbol: stockViewerTicker, name: q ? q.name : stockViewerTicker, exchange: q ? q.exchange : null };
+    const sel = { symbol: stockViewerTicker, name: stockViewerName || (q ? q.name : null) || stockViewerTicker, exchange: q ? q.exchange : null };
     portfolioId = pf.id;
     activePortfolioName = pf.name;
     currentScreen = 'portfolio';
@@ -4381,7 +4383,8 @@ function render(scenario){
     if(!pos) return;
     const invested = num(document.getElementById('recompra-invested').value);
     const price = num(document.getElementById('recompra-price').value);
-    const date = document.getElementById('recompra-date').value;
+    const dateInput = document.getElementById('recompra-date');
+    const date = dateInput ? dateInput.value : '';
     const commission = num(document.getElementById('recompra-commission').value);
     const isVenta = recompraFormType === 'venta';
     const isPending = recompraFormPending;
