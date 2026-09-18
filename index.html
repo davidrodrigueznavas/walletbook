@@ -114,8 +114,21 @@
     .modal-fields-grid { grid-template-columns: 1fr 1fr !important; }
     .account-fields-grid { grid-template-columns: 1fr !important; }
     .modal-card { padding: 18px 16px !important; max-height: 94vh !important; }
+    .modal-header-row h2 { font-size: 17px !important; }
+    .modal-kpi-grid { grid-template-columns: 1fr 1fr !important; gap: 12px !important; }
+    .recompra-form-grid { grid-template-columns: 1fr 1fr !important; }
+    .posevent-form-grid { grid-template-columns: 1fr !important; }
 
     .home-portfolio-card { min-height: auto !important; }
+
+    /* ---- Barra superior: pasa a envolver en dos líneas y encoge el widget de mercados ---- */
+    #topnav { height: auto !important; flex-wrap: wrap !important; row-gap: 10px !important; padding-bottom: 10px !important; }
+    #topnav-brand-text { display: none !important; }
+    #topnav-right { flex: 1 1 100% !important; justify-content: flex-end !important; flex-wrap: wrap !important; row-gap: 8px !important; }
+    #framework-open-btn { padding: 6px 10px !important; }
+    #market-panel-toggle { padding: 6px 8px !important; gap: 6px !important; }
+    #stockfinder-input { width: 130px !important; }
+    #stockfinder-suggestions { width: min(280px, 90vw) !important; }
   }
 </style>
 </head>
@@ -2269,23 +2282,23 @@ function renderModal(){
   const resp = sc ? sectorResponse(sens, sc.f) : null;
   return `<div class="modal-backdrop" id="modal-backdrop">
     <div class="modal-card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
-        <div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span style="width:8px;height:8px;border-radius:50%;background:${MARKET[p.market]?.color||'#6E7177'};display:inline-block;"></span>
+      <div class="modal-header-row" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;gap:10px;">
+        <div style="min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${MARKET[p.market]?.color||'#6E7177'};display:inline-block;flex-shrink:0;"></span>
             <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:500;font-size:20px;margin:0;">${esc(p.name)}</h2>
             <span style="font-family:'Calibri','Carlito',sans-serif;font-size:12px;color:var(--text-faint);">${esc(p.ticker)||''}</span>
           </div>
           <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${esc(p.sector)}${p.cluster?' · '+esc(p.cluster):''}${p.tier?(' · '+(TIER[p.tier]?.label||esc(p.tier))):''}${p.ticker?' · '+esc(exchangeForTicker(p.ticker)):''}</div>
           ${(p.strategies||[]).length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${(p.strategies||[]).map(k=>`<span style="font-size:9.5px;font-weight:600;padding:2px 8px;border-radius:9px;background:var(--accent-soft);color:var(--accent-text);">${STRATEGY[k]?.label||k}</span>`).join('')}</div>` : ''}
         </div>
-        <div style="display:flex;align-items:center;gap:14px;">
-          <button id="modal-delete" style="cursor:pointer;background:none;border:none;color:var(--red);font-size:11px;padding:2px 0;">Eliminar posición</button>
+        <div style="display:flex;align-items:center;gap:14px;flex-shrink:0;">
+          <button id="modal-delete" style="cursor:pointer;background:none;border:none;color:var(--red);font-size:11px;padding:2px 0;white-space:nowrap;">Eliminar posición</button>
           <button id="modal-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:12px;margin:14px 0;text-align:center;">
+      <div class="modal-kpi-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:12px;margin:14px 0;text-align:center;">
         <div><div style="font-size:14px;">${fmtEUR(investedOf(p))}</div><div style="font-size:9px;color:var(--text-faint);">INVERTIDO</div></div>
         <div><div style="font-size:14px;">${fmtEUR(currentValueOf(p))}</div><div style="font-size:9px;color:var(--text-faint);">VALOR ACTUAL</div></div>
         <div>
@@ -2340,7 +2353,7 @@ function renderModal(){
         </div>` : (!positionEventFormOpen ? `<div style="font-size:11px;color:var(--text-faint);">Sin eventos todavía.</div>` : ''))}
         ${positionEventFormOpen ? (() => {
           const editingPosEvent = positionEventEditingId ? positionEvents.find(e=>e.id===positionEventEditingId) : null;
-          return `<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;align-items:end;margin-bottom:8px;">
+          return `<div class="posevent-form-grid" style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;align-items:end;margin-bottom:8px;">
           <div class="field"><label>Título</label><input id="posevent-title" placeholder="ej. Resultados Q4" value="${esc(editingPosEvent?.title||'')}" autocomplete="off"/></div>
           <div class="field"><label>Tipo</label><select id="posevent-type">
             ${investedOf(p)>0
@@ -2424,7 +2437,7 @@ function renderModal(){
           </div>`;
           }).join('')}
         </div>
-        ${recompraFormOpen ? `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;align-items:end;margin-bottom:${recompraFormPending?'4px':'0'};">
+        ${recompraFormOpen ? `<div class="recompra-form-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;align-items:end;margin-bottom:${recompraFormPending?'4px':'0'};">
           <div class="field"><label>${recompraFormPending?'Importe objetivo (€)':(recompraFormType==='venta'?'Importe vendido (€)':'Importe (€)')}</label><input id="recompra-invested" placeholder="ej. 300" autocomplete="off"/></div>
           <div class="field"><label>${recompraFormPending?'Precio objetivo':(recompraFormType==='venta'?'Precio venta':'Precio')}</label><input id="recompra-price" placeholder="ej. 480,50" autocomplete="off"/></div>
           <div class="field"><label>${recompraFormPending?'Fecha límite (opcional)':'Fecha'}</label><input type="date" id="recompra-date" autocomplete="off"/></div>
@@ -2715,12 +2728,12 @@ function wireMarketPanel(app){
 }
 
 function topNavBar(){
-  return `<div style="height:76px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 4px;margin-bottom:22px;border-bottom:1px solid var(--border);gap:12px;">
+  return `<div id="topnav" style="height:76px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 4px;margin-bottom:22px;border-bottom:1px solid var(--border);gap:12px;">
     <button id="logo-home-btn" title="Ir a inicio" style="cursor:pointer;background:none;border:none;display:flex;align-items:center;gap:12px;padding:6px 4px;flex-shrink:0;">
       ${walletbookIcon(46)}
-      <span style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:29px;color:var(--text);letter-spacing:-.01em;">Walletbook</span>
+      <span id="topnav-brand-text" style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:29px;color:var(--text);letter-spacing:-.01em;">Walletbook</span>
     </button>
-    <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+    <div id="topnav-right" style="display:flex;align-items:center;gap:10px;min-width:0;">
       ${marketStatusWidget()}
       <button id="framework-open-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);font-weight:600;white-space:nowrap;">Framework</button>
       ${stockFinderBlock()}
