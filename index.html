@@ -352,7 +352,7 @@ let frameworkModalOpen = false;
 let profile = null;
 let exploreList = null, exploreLoading = false, exploreDetailId = null, exploreDetailPositions = null, exploreCategoryFilter = null;
 let positionRules = [], positionRulesLoading = false, ruleFormOpen = false, ruleFormError = null, ruleEditingId = null;
-let recompraFormOpen = false, recompraFormError = null, recompraFormType = 'compra';
+let recompraFormOpen = false, recompraFormError = null, recompraFormType = 'compra', recompraFormPending = false;
 let positionEvents = [], positionEventsLoading = false, positionEventFormOpen = false, positionEventFormError = null, positionEventEditingId = null;
 let calendarViewYear = new Date().getFullYear(), calendarViewMonth = new Date().getMonth(), calendarSelectedDay = new Date().toISOString().slice(0,10);
 let allRulesData = null, allRulesLoading = false;
@@ -1404,7 +1404,7 @@ function computeLotsAndRealized(p){
     if(basePrice && basePrice>0) lots.push({invested:baseInv, price:basePrice, date:p.purchase_date||''});
     else noPriceAmount += baseInv;
   }
-  (p.recompras||[]).filter(r => r.type !== 'venta').forEach(r => {
+  (p.recompras||[]).filter(r => r.type !== 'venta' && r.status !== 'pendiente').forEach(r => {
     const inv = num(r.invested), price = num(r.price);
     if(inv && inv>0){
       if(price && price>0) lots.push({invested:inv, price, date:r.purchase_date||''});
@@ -1413,7 +1413,7 @@ function computeLotsAndRealized(p){
   });
   lots.sort((a,b) => (a.date||'').localeCompare(b.date||''));
   const remaining = lots.map(l => ({ shares: l.invested/l.price, price: l.price }));
-  const ventas = (p.recompras||[]).filter(r => r.type === 'venta' && num(r.invested)>0 && num(r.price)>0).sort((a,b) => (a.purchase_date||'').localeCompare(b.purchase_date||''));
+  const ventas = (p.recompras||[]).filter(r => r.type === 'venta' && r.status !== 'pendiente' && num(r.invested)>0 && num(r.price)>0).sort((a,b) => (a.purchase_date||'').localeCompare(b.purchase_date||''));
   let realizedGain = 0;
   ventas.forEach(v => {
     const salePrice = num(v.price);
@@ -1451,14 +1451,17 @@ function pendingInvestmentFor(p){
 function commissionOf(p){
   const base = num(p.commission);
   const baseAmt = base!==null ? base : 0;
-  return baseAmt + (p.recompras||[]).reduce((sum,r) => sum + (num(r.commission)||0), 0);
+  return baseAmt + (p.recompras||[]).filter(r => r.status !== 'pendiente').reduce((sum,r) => sum + (num(r.commission)||0), 0);
 }
 // Solo las comisiones de compra (inicial + recompras) — las de venta ya se
 // restan dentro de realizedGainOf, así que aquí no se contarían dos veces.
 function compraCommissionOf(p){
   const base = num(p.commission);
   const baseAmt = base!==null ? base : 0;
-  return baseAmt + (p.recompras||[]).filter(r => r.type !== 'venta').reduce((sum,r) => sum + (num(r.commission)||0), 0);
+  return baseAmt + (p.recompras||[]).filter(r => r.type !== 'venta' && r.status !== 'pendiente').reduce((sum,r) => sum + (num(r.commission)||0), 0);
+}
+function openOrdersOf(p, type){
+  return (p.recompras||[]).filter(r => r.status === 'pendiente' && r.type === type);
 }
 function currentValueOf(p){
   const cur = num(p.current_price_eur);
@@ -1883,10 +1886,17 @@ function renderPositionCard(p, sc){
   const hasOverdueEvent = inv>0 && (p.events||[]).some(e => e.event_date < todayStr);
   const cardBg = hasOverdueEvent ? 'var(--red-soft)' : resp==='pos' ? 'var(--green-soft)' : resp==='neg' ? 'var(--red-soft)' : 'var(--panel-2)';
   const cardBorder = hasOverdueEvent ? 'var(--red-border)' : resp==='pos' ? 'var(--green-border)' : resp==='neg' ? 'var(--red-border)' : 'var(--border)';
-  const validationRow = (isPending || inv>0) ? `<div style="display:flex;gap:3px;margin-top:2px;">
-    <span title="Validación fundamental${p.fundamental_validated?' hecha':' pendiente'}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:${p.fundamental_validated?'var(--green-soft)':'var(--panel)'};color:${p.fundamental_validated?'var(--green)':'var(--text-faint)'};border:1px solid ${p.fundamental_validated?'var(--green-border)':'var(--border-soft)'};">F</span>
-    <span title="Validación técnica${p.technical_validated?' hecha':' pendiente'}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:${p.technical_validated?'var(--green-soft)':'var(--panel)'};color:${p.technical_validated?'var(--green)':'var(--text-faint)'};border:1px solid ${p.technical_validated?'var(--green-border)':'var(--border-soft)'};">T</span>
+  const showValidation = isPending || inv>0;
+  const openBuyOrders = openOrdersOf(p, 'compra');
+  const openSellOrders = openOrdersOf(p, 'venta');
+  const buyOrderPrice = openBuyOrders.length===1 ? fmtNum(num(openBuyOrders[0].price)) : null;
+  const sellOrderPrice = openSellOrders.length===1 ? fmtNum(num(openSellOrders[0].price)) : null;
+  const validationRow = (showValidation || openBuyOrders.length || openSellOrders.length) ? `<div style="display:flex;gap:3px;margin-top:2px;flex-wrap:wrap;">
+    ${showValidation ? `<span title="Validación fundamental${p.fundamental_validated?' hecha':' pendiente'}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:${p.fundamental_validated?'var(--green-soft)':'var(--panel)'};color:${p.fundamental_validated?'var(--green)':'var(--text-faint)'};border:1px solid ${p.fundamental_validated?'var(--green-border)':'var(--border-soft)'};">F</span>
+    <span title="Validación técnica${p.technical_validated?' hecha':' pendiente'}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:${p.technical_validated?'var(--green-soft)':'var(--panel)'};color:${p.technical_validated?'var(--green)':'var(--text-faint)'};border:1px solid ${p.technical_validated?'var(--green-border)':'var(--border-soft)'};">T</span>` : ''}
     ${hasOverdueEvent ? `<span title="Hay un evento pasado sin revisar" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:var(--red-soft);color:var(--red);border:1px solid var(--red-border);">⚠</span>` : ''}
+    ${openBuyOrders.length ? `<span title="Orden de compra abierta${buyOrderPrice?` a ${buyOrderPrice}€`:''}${openBuyOrders.length>1?` (${openBuyOrders.length} órdenes)`:''}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:var(--accent-soft);color:var(--accent-text);border:1px solid var(--accent-border);">↗${buyOrderPrice?buyOrderPrice+'€':'compra'}</span>` : ''}
+    ${openSellOrders.length ? `<span title="Orden de venta abierta${sellOrderPrice?` a ${sellOrderPrice}€`:''}${openSellOrders.length>1?` (${openSellOrders.length} órdenes)`:''}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:var(--red-soft);color:var(--red);border:1px solid var(--red-border);">↘${sellOrderPrice?sellOrderPrice+'€':'venta'}</span>` : ''}
   </div>` : '';
   return `<div class="pf-card" data-id="${p.id}" style="background:${cardBg};border:1px solid ${cardBorder};border-radius:6px;padding:4px 7px;cursor:pointer;min-width:0;overflow:hidden;box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:5px;">
@@ -2400,24 +2410,30 @@ function renderModal(){
           ${!p.invested && !(p.recompras||[]).length ? `<div style="font-size:11px;color:var(--text-faint);padding:4px 2px;">Sin compras todavía — esta posición está en watchlist/pendiente de invertir.</div>` : ''}
           ${(p.recompras||[]).map(r=>{
             const isVenta = r.type === 'venta';
-            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border-soft);">
+            const isPending = r.status === 'pendiente';
+            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:${isPending?'var(--panel)':'var(--panel-2)'};border:1px ${isPending?'dashed':'solid'} var(--border-soft);">
             <div style="font-size:11.5px;">
               <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:1px 6px;border-radius:6px;margin-right:6px;background:${isVenta?'var(--red-soft)':'var(--accent-soft)'};color:${isVenta?'var(--red)':'var(--accent-text)'};border:1px solid ${isVenta?'var(--red-border)':'var(--accent-border)'};">${isVenta?'Venta':'Compra'}</span>
-              ${fmtEUR(num(r.invested)||0)} a ${r.price?fmtNum(num(r.price))+'€':'—'}${r.purchase_date?' · '+r.purchase_date:''}${r.commission?' · comisión '+fmtEUR(num(r.commission)):''}
+              ${isPending ? `<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:1px 6px;border-radius:6px;margin-right:6px;background:var(--panel-2);color:var(--text-faint);border:1px solid var(--border-soft);">Orden abierta</span>` : ''}
+              ${fmtEUR(num(r.invested)||0)} ${isPending?'objetivo ':''}a ${r.price?fmtNum(num(r.price))+'€':'—'}${r.purchase_date?' · '+r.purchase_date:''}${r.commission?' · comisión '+fmtEUR(num(r.commission)):''}
             </div>
-            <button class="recompra-delete-btn" data-id="${r.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;flex-shrink:0;">×</button>
+            <button class="recompra-delete-btn" data-id="${r.id}" title="${isPending?'Cancelar orden':'Eliminar'}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;flex-shrink:0;">×</button>
           </div>`;
           }).join('')}
         </div>
-        ${recompraFormOpen ? `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;align-items:end;">
-          <div class="field"><label>${recompraFormType==='venta'?'Importe vendido (€)':'Importe (€)'}</label><input id="recompra-invested" placeholder="ej. 300" autocomplete="off"/></div>
-          <div class="field"><label>${recompraFormType==='venta'?'Precio venta':'Precio'}</label><input id="recompra-price" placeholder="ej. 480,50" autocomplete="off"/></div>
-          <div class="field"><label>Fecha</label><input type="date" id="recompra-date" autocomplete="off"/></div>
+        ${recompraFormOpen ? `<label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;cursor:pointer;font-size:11.5px;color:var(--text-dim);">
+          <input type="checkbox" id="recompra-pending" ${recompraFormPending?'checked':''}/>
+          Es una orden abierta (todavía no ejecutada — precio/importe objetivo)
+        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;align-items:end;">
+          <div class="field"><label>${recompraFormPending?(recompraFormType==='venta'?'Importe objetivo (€)':'Importe objetivo (€)'):(recompraFormType==='venta'?'Importe vendido (€)':'Importe (€)')}</label><input id="recompra-invested" placeholder="ej. 300" autocomplete="off"/></div>
+          <div class="field"><label>${recompraFormPending?'Precio objetivo':(recompraFormType==='venta'?'Precio venta':'Precio')}</label><input id="recompra-price" placeholder="ej. 480,50" autocomplete="off"/></div>
+          <div class="field"><label>${recompraFormPending?'Fecha límite (opcional)':'Fecha'}</label><input type="date" id="recompra-date" autocomplete="off"/></div>
           <div class="field"><label>Comisión (€)</label><input id="recompra-commission" placeholder="0" autocomplete="off"/></div>
         </div>
         ${recompraFormError ? `<div style="color:var(--red);font-size:11px;margin-top:8px;">${recompraFormError}</div>` : ''}
         <div style="display:flex;justify-content:flex-end;margin-top:10px;">
-          <button id="recompra-save-btn" class="pill-btn" style="border:1px solid ${recompraFormType==='venta'?'var(--red-border)':'var(--accent-border)'};background:${recompraFormType==='venta'?'var(--red-soft)':'var(--accent-soft)'};color:${recompraFormType==='venta'?'var(--red)':'var(--accent-text)'};padding:6px 14px;font-size:11.5px;font-weight:600;">${recompraFormType==='venta'?'Guardar venta':'Guardar compra'}</button>
+          <button id="recompra-save-btn" class="pill-btn" style="border:1px solid ${recompraFormType==='venta'?'var(--red-border)':'var(--accent-border)'};background:${recompraFormType==='venta'?'var(--red-soft)':'var(--accent-soft)'};color:${recompraFormType==='venta'?'var(--red)':'var(--accent-text)'};padding:6px 14px;font-size:11.5px;font-weight:600;">${recompraFormPending?(recompraFormType==='venta'?'Guardar orden de venta':'Guardar orden de compra'):(recompraFormType==='venta'?'Guardar venta':'Guardar compra')}</button>
         </div>` : ''}
       </div>
 
@@ -4286,7 +4302,7 @@ function render(scenario){
       modalCompanyState = {loading:false, error:null, summary:null};
     }
     ruleFormOpen = false; ruleFormError = null; positionRules = []; positionRulesLoading = true;
-    recompraFormOpen = false; recompraFormError = null; recompraFormType = 'compra';
+    recompraFormOpen = false; recompraFormError = null; recompraFormType = 'compra'; recompraFormPending = false;
     positionEventFormOpen = false; positionEventFormError = null; positionEventEditingId = null; positionEvents = []; positionEventsLoading = true;
     render(currentScenario);
     if(pos && pos.ticker) loadModalChart(pos.ticker, modalRange);
@@ -4341,7 +4357,7 @@ function render(scenario){
   const closeBtn = document.getElementById('modal-close');
   if(closeBtn) closeBtn.addEventListener('click', () => { selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; recompraFormOpen = false; recompraFormError = null; positionEventFormOpen = false; positionEventFormError = null; positionEventEditingId = null; render(currentScenario); });
   const backdrop = document.getElementById('modal-backdrop');
-  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; recompraFormOpen = false; recompraFormError = null; positionEventFormOpen = false; positionEventFormError = null; positionEventEditingId = null; render(currentScenario); } });
+  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ selectedId = null; modalChartToken++; modalCompanyToken++; ruleFormOpen = false; ruleFormError = null; ruleEditingId = null; recompraFormOpen = false; recompraFormError = null; recompraFormPending = false; positionEventFormOpen = false; positionEventFormError = null; positionEventEditingId = null; render(currentScenario); } });
 
   [document.getElementById('recompra-add-toggle'), document.getElementById('venta-add-toggle')].forEach(btn => {
     if(!btn) return;
@@ -4350,8 +4366,14 @@ function render(scenario){
       if(recompraFormOpen && recompraFormType === type){ recompraFormOpen = false; }
       else { recompraFormOpen = true; recompraFormType = type; }
       recompraFormError = null;
+      recompraFormPending = false;
       render(currentScenario);
     });
+  });
+  const recompraPendingCheckbox = document.getElementById('recompra-pending');
+  if(recompraPendingCheckbox) recompraPendingCheckbox.addEventListener('change', () => {
+    recompraFormPending = recompraPendingCheckbox.checked;
+    render(currentScenario);
   });
   const recompraSaveBtn = document.getElementById('recompra-save-btn');
   if(recompraSaveBtn) recompraSaveBtn.addEventListener('click', async () => {
@@ -4362,18 +4384,20 @@ function render(scenario){
     const date = document.getElementById('recompra-date').value;
     const commission = num(document.getElementById('recompra-commission').value);
     const isVenta = recompraFormType === 'venta';
-    if(invested===null || invested<=0){ recompraFormError = isVenta ? 'Indica el importe vendido.' : 'Indica el importe de la recompra.'; render(currentScenario); return; }
-    if(price===null || price<=0){ recompraFormError = isVenta ? 'Indica el precio de venta.' : 'Indica el precio de la recompra.'; render(currentScenario); return; }
+    const isPending = recompraFormPending;
+    if(invested===null || invested<=0){ recompraFormError = isVenta ? 'Indica el importe objetivo de la venta.' : 'Indica el importe de la recompra.'; render(currentScenario); return; }
+    if(price===null || price<=0){ recompraFormError = isVenta ? 'Indica el precio objetivo de venta.' : 'Indica el precio de la recompra.'; render(currentScenario); return; }
     if(isVenta){
       const sharesToSell = invested/price;
       const heldShares = heldSharesOf(pos);
-      if(sharesToSell > heldShares + 1e-6){ recompraFormError = 'No puedes vender más de lo que tienes en esta posición.'; render(currentScenario); return; }
+      if(sharesToSell > heldShares + 1e-6){ recompraFormError = 'No puedes programar vender más de lo que tienes en esta posición.'; render(currentScenario); return; }
     }
     const { error } = await supabase.from('position_recompras').insert({
-      position_id: pos.id, owner_id: session.user.id, invested, price, purchase_date: date || null, commission, type: recompraFormType
+      position_id: pos.id, owner_id: session.user.id, invested, price, purchase_date: date || null, commission,
+      type: recompraFormType, status: isPending ? 'pendiente' : 'ejecutada',
     });
     if(error){ recompraFormError = isVenta ? 'No se pudo guardar la venta.' : 'No se pudo guardar la recompra.'; render(currentScenario); return; }
-    recompraFormOpen = false; recompraFormError = null;
+    recompraFormOpen = false; recompraFormError = null; recompraFormPending = false;
     markDirty();
     await loadAll();
     render(currentScenario);
