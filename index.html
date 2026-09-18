@@ -2671,10 +2671,11 @@ function marketStatusWidget(){
     const countdownText = st.open ? `cierra en ${fmtCountdown(st.minutesUntil)}` : `abre en ${fmtCountdown(st.minutesUntil)}`;
     return { mk, label: sess.label, flag: sess.flag, open: st.open, countdownText };
   });
-  return `<div style="position:relative;flex-shrink:0;">
-    <button id="market-panel-toggle" class="pill-btn" title="Horario de mercados" style="border:1px solid var(--border);background:var(--panel-2);display:flex;align-items:center;gap:5px;">
-      ${items.map(it => `<span style="display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;font-size:11px;line-height:1;border:2px solid ${it.open?'var(--green)':'var(--red)'};opacity:${it.open?'1':'0.55'};flex-shrink:0;">${it.flag}</span>`).join('')}
-    </button>
+  return `<div id="market-panel-wrap" style="position:relative;flex-shrink:0;display:flex;align-items:center;gap:4px;">
+    ${items.map(it => `<button class="market-panel-toggle-item pill-btn" title="Horario de mercados" style="border:1px solid var(--border);background:var(--panel-2);display:flex;align-items:center;gap:6px;">
+      <span style="width:9px;height:9px;border-radius:50%;background:${it.open?'var(--green)':'var(--red)'};flex-shrink:0;"></span>
+      <span style="font-size:13px;line-height:1;flex-shrink:0;">${it.flag}</span>
+    </button>`).join('')}
     ${marketPanelOpen ? `<div id="market-panel-dropdown" style="position:absolute;top:38px;right:0;min-width:220px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);z-index:60;padding:6px;box-sizing:border-box;">
       ${items.map(it => `<div style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;">
         <span style="width:8px;height:8px;border-radius:50%;background:${it.open?'var(--green)':'var(--red)'};flex-shrink:0;"></span>
@@ -2686,16 +2687,14 @@ function marketStatusWidget(){
   </div>`;
 }
 function wireMarketPanel(app){
-  const toggle = document.getElementById('market-panel-toggle');
-  if(toggle) toggle.addEventListener('click', (e) => {
+  app.querySelectorAll('.market-panel-toggle-item').forEach(toggle => toggle.addEventListener('click', (e) => {
     e.stopPropagation();
     marketPanelOpen = !marketPanelOpen;
     if(marketPanelOpen){
       if(!marketPanelOutsideCloseHandler){
         marketPanelOutsideCloseHandler = (ev) => {
-          const panel = document.getElementById('market-panel-dropdown');
-          const btn = document.getElementById('market-panel-toggle');
-          if((panel && panel.contains(ev.target)) || (btn && btn.contains(ev.target))) return;
+          const wrap = document.getElementById('market-panel-wrap');
+          if(wrap && wrap.contains(ev.target)) return;
           document.removeEventListener('click', marketPanelOutsideCloseHandler);
           marketPanelOutsideCloseHandler = null;
           marketPanelOpen = false;
@@ -2708,7 +2707,7 @@ function wireMarketPanel(app){
       marketPanelOutsideCloseHandler = null;
     }
     render(currentScenario);
-  });
+  }));
 }
 
 function topNavBar(){
