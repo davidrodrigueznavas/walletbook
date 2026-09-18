@@ -2640,14 +2640,29 @@ function marketSessionStatus(tz, sessions){
   const open = isWeekday && sessions.some(([start,end]) => minutesNow >= start && minutesNow < end);
   return { open, label: open ? 'Abierto' : 'Cerrado' };
 }
+// Mercados distintos entre TODAS las posiciones del usuario (no solo la
+// cartera abierta ahora) — se carga una vez por sesión, independiente de en
+// qué pantalla estés, para que el clúster de abajo se vea en todas partes.
+let allMarketsHeld = null, allMarketsHeldLoading = false;
+async function loadAllMarketsHeld(){
+  if(allMarketsHeld) return;
+  allMarketsHeldLoading = true;
+  const { data, error } = await supabase.from('positions').select('market').is('deleted_at', null);
+  if(error){ console.error(error); allMarketsHeld = []; allMarketsHeldLoading = false; return; }
+  allMarketsHeld = [...new Set((data||[]).map(r => r.market).filter(Boolean))];
+  allMarketsHeldLoading = false;
+}
 // Clúster de círculos solapados (estilo "avatares"), uno por cada mercado que
-// realmente hay en la cartera — nada de mercados que no uses. El color es el
+// realmente tienes en cartera — nada de mercados que no uses. El color es el
 // mismo que ya identifica a ese mercado en el resto de la app (MARKET[...]);
 // el brillo/opacidad indica si está abierto ahora mismo. Cripto siempre se
 // pinta "abierto" (24/7).
 function marketStatusCluster(){
-  const marketsHeld = [...new Set((portfolio.positions||[]).map(p => p.market).filter(Boolean))];
-  if(!marketsHeld.length) return '';
+  if(allMarketsHeld === null && !allMarketsHeldLoading){
+    loadAllMarketsHeld().then(() => render(currentScenario));
+  }
+  if(!allMarketsHeld || !allMarketsHeld.length) return '';
+  const marketsHeld = allMarketsHeld.slice();
   const order = ['eeuu','europa','japon','canada','taiwan','cripto'];
   marketsHeld.sort((a,b) => order.indexOf(a) - order.indexOf(b));
   const items = marketsHeld.map(mk => {
@@ -4733,7 +4748,7 @@ supabase.auth.onAuthStateChange(async (event, s) => {
     currentScreen = 'home';
     render(null);
   } else {
-    portfolio = {positions:[]}; history = []; portfolioId = null; currentScreen = null; profile = null;
+    portfolio = {positions:[]}; history = []; portfolioId = null; currentScreen = null; profile = null; allMarketsHeld = null;
     authMode = 'login';
     renderLogin();
   }
