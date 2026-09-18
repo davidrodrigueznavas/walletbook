@@ -147,7 +147,7 @@ async function callEdgeFunction(name, params){
 const MARKET = {
   eeuu:{label:'EEUU',color:'#5B8DEF'}, europa:{label:'Europa',color:'#2FBF9F'},
   japon:{label:'Japón',color:'#E8776C'}, canada:{label:'Canadá',color:'#B79CED'},
-  taiwan:{label:'Taiwán (ADR)',color:'#8A94A0'}
+  taiwan:{label:'Taiwán (ADR)',color:'#8A94A0'}, cripto:{label:'Cripto',color:'#F7931A'}
 };
 const TIER = {
   nucleo:{label:'Núcleo · bajo riesgo',color:'#4ADE80'},
@@ -309,7 +309,8 @@ const SENS = {
   'Consumo discrecional':{recession:-2,oil:-1,rates:-1,luxury:2,china:-1},
   'Salud':{recession:2,pandemic:1,regulation:-1},
   'Pagos / fintech':{recession:-1,crypto:-1},
-  'Infraestructura / agua':{rates:-1,climate:1}
+  'Infraestructura / agua':{rates:-1,climate:1},
+  'Criptomonedas':{crypto:-3,rates:-1,recession:-1,regulation:-1,dollar:-1}
 };
 const SCENARIOS = [
   {key:'ai_down',label:'Corrección en IA',f:{ai:-2}},
@@ -1293,13 +1294,21 @@ const SUFFIX_EXCHANGE = {
   '.WA':'Bolsa de Varsovia', '.AT':'Bolsa de Atenas', '.VI':'Bolsa de Viena', '.TA':'Bolsa de Tel Aviv',
   '.HK':'Bolsa de Hong Kong', '.TO':'Toronto Stock Exchange', '.V':'TSX Venture', '.TW':'Bolsa de Taiwán', '.TWO':'Bolsa de Taiwán (OTC)',
 };
+const CRYPTO_TICKER_RE = /-(USD|EUR|USDT|USDC|GBP)$/i;
+function isCryptoTicker(ticker, exchange){
+  if(!ticker) return false;
+  if((exchange||'').toLowerCase() === 'cripto') return true;
+  return CRYPTO_TICKER_RE.test(ticker);
+}
 function exchangeForTicker(ticker){
   if(!ticker) return '';
+  if(isCryptoTicker(ticker)) return 'Mercado cripto (24/7, sin cierre)';
   for(const suf in SUFFIX_EXCHANGE){ if(ticker.endsWith(suf)) return SUFFIX_EXCHANGE[suf]; }
   return 'NYSE/Nasdaq';
 }
 function marketForTicker(ticker, exchange){
   if(!ticker) return '';
+  if(isCryptoTicker(ticker, exchange)) return 'cripto';
   for(const suf in SUFFIX_MARKET){ if(ticker.endsWith(suf)) return SUFFIX_MARKET[suf]; }
   const ex = (exchange || '').toLowerCase();
   if(ex.includes('toronto') || ex.includes('tsx')) return 'canada';
@@ -2031,8 +2040,11 @@ function wireAddPositionModal(app){
         if(nameInput) nameInput.value = r.name;
         const marketSelect = document.getElementById('addpos-market');
         if(marketSelect){ const m = marketForTicker(r.symbol, r.exchange); if(m) marketSelect.value = m; }
+        const sectorSelectNow = document.getElementById('addpos-sector');
+        if(sectorSelectNow && !sectorSelectNow.value && isCryptoTicker(r.symbol, r.exchange)) sectorSelectNow.value = 'Criptomonedas';
         suggestionsBox.innerHTML = '';
         const symbol = r.symbol;
+        if(isCryptoTicker(r.symbol, r.exchange)) return; // no tiene sentido pedir "qué hace la empresa" para una criptomoneda
         callEdgeFunction('company-info', {ticker: symbol}).then(info => {
           if(addPositionSelected !== r) return; // el usuario ya eligió otro ticker
           if(!info || !info.ok) return;
@@ -2288,7 +2300,7 @@ function renderModal(){
         </button>
       </div>
 
-      ${p.ticker ? `<div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
+      ${(p.ticker && !isCryptoTicker(p.ticker)) ? `<div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
         <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Qué hace la empresa${modalCompanyState.source==='alphavantage'?' <span style="text-transform:none;letter-spacing:0;">· Alpha Vantage, en inglés</span>':''}</div>
         ${modalCompanyState.loading ? `<div style="font-size:11.5px;color:var(--text-faint);">Consultando…</div>`
           : modalCompanyState.error ? `<div style="font-size:11px;color:var(--text-faint);">${modalCompanyState.error}</div>`
@@ -2471,7 +2483,7 @@ function renderAddPositionModal(){
 
       <div class="field" style="margin-bottom:4px;position:relative;">
         <label>Ticker</label>
-        <input id="addpos-ticker" placeholder="ej. AAPL, SAP.DE, 7203.T" value="${sel?sel.symbol:''}" autocomplete="off"/>
+        <input id="addpos-ticker" placeholder="ej. AAPL, SAP.DE, 7203.T, BTC-USD" value="${sel?sel.symbol:''}" autocomplete="off"/>
         <div id="addpos-suggestions" style="position:absolute;top:100%;left:0;right:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 12px 32px rgba(0,0,0,0.25);z-index:10;overflow:hidden;"></div>
       </div>
       <div style="font-size:10px;color:var(--text-faint);margin-bottom:14px;">${sel ? `Seleccionado: ${sel.symbol} — ${sel.exchange||''}` : 'Escribe al menos 2 letras para buscar en Yahoo Finance.'}</div>
@@ -4015,7 +4027,7 @@ function renderStockViewerScreen(){
       <div style="margin-bottom:22px;">
         <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:26px;margin:0 0 14px;">Visor de acciones</h1>
         <div style="position:relative;max-width:420px;">
-          <input id="stockviewer-input" placeholder="Busca un ticker: AAPL, SAN.MC, 7203.T…" value="${stockViewerQuery.replace(/"/g,'&quot;')}" autocomplete="off" style="width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:10px 14px;box-sizing:border-box;"/>
+          <input id="stockviewer-input" placeholder="Busca un ticker: AAPL, SAN.MC, 7203.T, BTC-USD…" value="${stockViewerQuery.replace(/"/g,'&quot;')}" autocomplete="off" style="width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:10px 14px;box-sizing:border-box;"/>
           <div id="stockviewer-suggestions" style="position:absolute;top:100%;left:0;right:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 12px 32px rgba(0,0,0,0.25);z-index:10;overflow:hidden;margin-top:4px;"></div>
         </div>
       </div>
@@ -4265,7 +4277,7 @@ function render(scenario){
     const pos = portfolio.positions.find(p=>p.id===selectedId);
     if(pos && pos.business_summary){
       modalCompanyState = {loading:false, error:null, summary:pos.business_summary, source:pos.business_summary_source};
-    } else if(pos && pos.ticker){
+    } else if(pos && pos.ticker && !isCryptoTicker(pos.ticker)){
       modalCompanyState = {loading:true, error:null, summary:null};
     } else {
       modalCompanyState = {loading:false, error:null, summary:null};
@@ -4275,7 +4287,7 @@ function render(scenario){
     positionEventFormOpen = false; positionEventFormError = null; positionEventEditingId = null; positionEvents = []; positionEventsLoading = true;
     render(currentScenario);
     if(pos && pos.ticker) loadModalChart(pos.ticker, modalRange);
-    if(pos && pos.ticker && !pos.business_summary) loadModalCompanyInfo(pos);
+    if(pos && pos.ticker && !pos.business_summary && !isCryptoTicker(pos.ticker)) loadModalCompanyInfo(pos);
     loadPositionRules(selectedId).then(() => render(currentScenario));
     loadPositionEvents(selectedId).then(() => render(currentScenario));
   }));
