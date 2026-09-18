@@ -2620,65 +2620,94 @@ function walletbookIcon(size){
   </svg>`;
 }
 
-// Un tramo horario por sesión; los mercados con pausa de mediodía (ej. Japón)
-// llevan dos tramos. No tiene en cuenta festivos de cada bolsa. 'cripto' no
-// tiene entrada aquí a propósito: no cierra nunca, no necesita sesión.
+// Un tramo horario por sesión; Japón tiene pausa de mediodía, por eso lleva
+// dos tramos. No tiene en cuenta festivos de cada bolsa.
 const MARKET_SESSION_BY_KEY = {
-  eeuu: { tz:'America/New_York', sessions:[[9*60+30,16*60]], hours:'NYSE/Nasdaq: 9:30-16:00, hora de Nueva York, días laborables.' },
-  canada: { tz:'America/New_York', sessions:[[9*60+30,16*60]], hours:'TSX comparte huso horario y horario con NYSE/Nasdaq: 9:30-16:00 hora de Nueva York (los festivos pueden diferir entre EEUU y Canadá, no se tienen en cuenta).' },
-  taiwan: { tz:'America/New_York', sessions:[[9*60+30,16*60]], hours:'Se asume ADR (cotiza en EEUU, no en la bolsa de Taiwán): 9:30-16:00, hora de Nueva York.' },
-  europa: { tz:'Europe/Madrid', sessions:[[9*60,17*60+30]], hours:'Principales bolsas europeas (Xetra, Euronext, BME, LSE...): 9:00-17:30, hora centroeuropea, días laborables.' },
-  japon: { tz:'Asia/Tokyo', sessions:[[9*60,11*60+30],[12*60+30,15*60+30]], hours:'Bolsa de Tokio: 9:00-11:30 y 12:30-15:30, hora de Japón (con pausa de mediodía), días laborables.' },
+  canada: { tz:'America/New_York', sessions:[[9*60+30,16*60]], label:'Canadá', hours:'TSX: 9:30-16:00, hora de Nueva York, días laborables.' },
+  europa: { tz:'Europe/Madrid', sessions:[[9*60,17*60+30]], label:'Europa', hours:'Principales bolsas europeas (Xetra, Euronext, BME, LSE...): 9:00-17:30, hora centroeuropea, días laborables.' },
+  japon: { tz:'Asia/Tokyo', sessions:[[9*60,11*60+30],[12*60+30,15*60+30]], label:'Japón', hours:'Bolsa de Tokio: 9:00-11:30 y 12:30-15:30, hora de Japón (con pausa de mediodía), días laborables.' },
 };
-function marketSessionStatus(tz, sessions){
+function fmtCountdown(mins){
+  if(mins==null) return '';
+  const h = Math.floor(mins/60), m = mins%60;
+  return h>0 ? `${h}h ${m}min` : `${m}min`;
+}
+// Devuelve si está abierto ahora y cuántos minutos faltan para el próximo
+// cambio de estado (para cerrar si está abierto, para abrir si está cerrado).
+// Busca hacia delante hasta 7 días para saltar fines de semana; no tiene en
+// cuenta festivos de cada bolsa (mismo criterio que el resto de la app).
+function marketCountdown(tz, sessions){
   const now = new Date();
   const fmt = new Intl.DateTimeFormat('en-US', { timeZone:tz, hour:'2-digit', minute:'2-digit', hourCycle:'h23', weekday:'short' });
-  const map = {};
-  fmt.formatToParts(now).forEach(p => { map[p.type] = p.value; });
-  const isWeekday = map.weekday !== 'Sat' && map.weekday !== 'Sun';
-  const minutesNow = Number(map.hour)*60 + Number(map.minute);
-  const open = isWeekday && sessions.some(([start,end]) => minutesNow >= start && minutesNow < end);
-  return { open, label: open ? 'Abierto' : 'Cerrado' };
-}
-// Mercados distintos entre TODAS las posiciones del usuario (no solo la
-// cartera abierta ahora) — se carga una vez por sesión, independiente de en
-// qué pantalla estés, para que el clúster de abajo se vea en todas partes.
-let allMarketsHeld = null, allMarketsHeldLoading = false;
-async function loadAllMarketsHeld(){
-  if(allMarketsHeld) return;
-  allMarketsHeldLoading = true;
-  const { data, error } = await supabase.from('positions').select('market').is('deleted_at', null);
-  if(error){ console.error(error); allMarketsHeld = []; allMarketsHeldLoading = false; return; }
-  allMarketsHeld = [...new Set((data||[]).map(r => r.market).filter(Boolean))];
-  allMarketsHeldLoading = false;
-}
-// Clúster de círculos solapados (estilo "avatares"), uno por cada mercado que
-// realmente tienes en cartera — nada de mercados que no uses. El color es el
-// mismo que ya identifica a ese mercado en el resto de la app (MARKET[...]);
-// el brillo/opacidad indica si está abierto ahora mismo. Cripto siempre se
-// pinta "abierto" (24/7).
-function marketStatusCluster(){
-  if(allMarketsHeld === null && !allMarketsHeldLoading){
-    loadAllMarketsHeld().then(() => render(currentScenario));
+  const partsAt = (offsetDays) => {
+    const map = {};
+    fmt.formatToParts(new Date(now.getTime() + offsetDays*86400000)).forEach(p => { map[p.type] = p.value; });
+    return { weekday: map.weekday, minutes: Number(map.hour)*60 + Number(map.minute) };
+  };
+  const isWeekday = (wd) => wd !== 'Sat' && wd !== 'Sun';
+  const today = partsAt(0);
+  if(isWeekday(today.weekday)){
+    const active = sessions.find(([s,e]) => today.minutes >= s && today.minutes < e);
+    if(active) return { open:true, minutesUntil: active[1] - today.minutes };
   }
-  if(!allMarketsHeld || !allMarketsHeld.length) return '';
-  const marketsHeld = allMarketsHeld.slice();
-  const order = ['eeuu','europa','japon','canada','taiwan','cripto'];
-  marketsHeld.sort((a,b) => order.indexOf(a) - order.indexOf(b));
-  const items = marketsHeld.map(mk => {
-    const color = MARKET[mk]?.color || '#6E7177';
-    const label = MARKET[mk]?.label || mk;
-    if(mk === 'cripto'){
-      return { mk, color, open: true, title: `${label}: mercado 24/7, nunca cierra.` };
+  for(let d = 0; d <= 7; d++){
+    const p = d === 0 ? today : partsAt(d);
+    if(!isWeekday(p.weekday)) continue;
+    const upcoming = sessions.filter(([s]) => d > 0 || s > today.minutes).sort((a,b) => a[0]-b[0]);
+    if(upcoming.length){
+      const start = upcoming[0][0];
+      return { open:false, minutesUntil: d===0 ? (start - today.minutes) : (d*24*60 - today.minutes + start) };
     }
-    const sess = MARKET_SESSION_BY_KEY[mk];
-    if(!sess) return { mk, color, open: null, title: label };
-    const st = marketSessionStatus(sess.tz, sess.sessions);
-    return { mk, color, open: st.open, title: `${label}: ${st.label} ahora. ${sess.hours}` };
+  }
+  return { open:false, minutesUntil:null };
+}
+let marketPanelOpen = false, marketPanelOutsideCloseHandler = null;
+// Trigger compacto (tira de puntos verde/rojo) + panel desplegable con la
+// lista de Canadá/Europa/Japón, cada uno con su cuenta atrás hasta que abra
+// o cierre. Fijo a estos 3 mercados a propósito, no depende de la cartera.
+function marketStatusWidget(){
+  const items = Object.entries(MARKET_SESSION_BY_KEY).map(([mk, sess]) => {
+    const st = marketCountdown(sess.tz, sess.sessions);
+    const countdownText = st.open ? `cierra en ${fmtCountdown(st.minutesUntil)}` : `abre en ${fmtCountdown(st.minutesUntil)}`;
+    return { mk, label: sess.label, open: st.open, countdownText };
   });
-  return `<div style="display:flex;align-items:center;flex-shrink:0;">
-    ${items.map((it,i) => `<div title="${esc(it.title)}" style="cursor:help;width:22px;height:22px;border-radius:50%;background:${it.color};border:2px solid var(--panel);margin-left:${i>0?'-7px':'0'};z-index:${items.length-i};position:relative;opacity:${it.open===false?'0.35':'1'};box-shadow:${it.open?'0 0 0 2px '+it.color+'40':'none'};transition:opacity .15s;"></div>`).join('')}
+  return `<div style="position:relative;flex-shrink:0;">
+    <button id="market-panel-toggle" title="Horario de mercados" style="cursor:pointer;background:var(--panel-2);border:1px solid var(--border);border-radius:14px;padding:6px 10px;display:flex;align-items:center;gap:5px;">
+      ${items.map(it => `<span style="width:7px;height:7px;border-radius:50%;background:${it.open?'var(--green)':'var(--red)'};flex-shrink:0;"></span>`).join('')}
+    </button>
+    ${marketPanelOpen ? `<div id="market-panel-dropdown" style="position:absolute;top:38px;right:0;min-width:220px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);z-index:60;padding:6px;box-sizing:border-box;">
+      ${items.map(it => `<div style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${it.open?'var(--green)':'var(--red)'};flex-shrink:0;"></span>
+        <span style="font-size:12.5px;font-weight:600;flex:1;">${esc(it.label)}</span>
+        <span style="font-size:11px;color:var(--text-faint);white-space:nowrap;">${it.countdownText}</span>
+      </div>`).join('')}
+    </div>` : ''}
   </div>`;
+}
+function wireMarketPanel(app){
+  const toggle = document.getElementById('market-panel-toggle');
+  if(toggle) toggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    marketPanelOpen = !marketPanelOpen;
+    if(marketPanelOpen){
+      if(!marketPanelOutsideCloseHandler){
+        marketPanelOutsideCloseHandler = (ev) => {
+          const panel = document.getElementById('market-panel-dropdown');
+          const btn = document.getElementById('market-panel-toggle');
+          if((panel && panel.contains(ev.target)) || (btn && btn.contains(ev.target))) return;
+          document.removeEventListener('click', marketPanelOutsideCloseHandler);
+          marketPanelOutsideCloseHandler = null;
+          marketPanelOpen = false;
+          render(currentScenario);
+        };
+        document.addEventListener('click', marketPanelOutsideCloseHandler);
+      }
+    } else if(marketPanelOutsideCloseHandler){
+      document.removeEventListener('click', marketPanelOutsideCloseHandler);
+      marketPanelOutsideCloseHandler = null;
+    }
+    render(currentScenario);
+  });
 }
 
 function topNavBar(){
@@ -2688,7 +2717,7 @@ function topNavBar(){
       <span style="font-family:'Fraunces',serif;font-optical-sizing:auto;font-weight:900;font-size:29px;color:var(--text);letter-spacing:-.01em;">Walletbook</span>
     </button>
     <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-      ${marketStatusCluster()}
+      ${marketStatusWidget()}
       <button id="framework-open-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);font-weight:600;white-space:nowrap;">Framework</button>
       ${stockFinderBlock()}
       ${menuBlock()}
@@ -2992,6 +3021,7 @@ function renderMyPortfoliosScreen(){
   wireStockFinderModal(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireMarketPanel(app);
   wirePortfolioCards(app);
 }
 
@@ -3081,6 +3111,7 @@ function renderHomeScreen(){
   wirePortfolioCards(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireMarketPanel(app);
 }
 
 function renderExploreScreen(){
@@ -3159,6 +3190,7 @@ function renderExploreScreen(){
   wireStockFinderModal(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireMarketPanel(app);
 
   app.querySelectorAll('.explore-filter-pill').forEach(btn=>btn.addEventListener('click', () => {
     exploreCategoryFilter = btn.getAttribute('data-cat') || null;
@@ -3264,6 +3296,7 @@ function renderAccountScreen(){
   wireStockFinderModal(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireMarketPanel(app);
 
   const accountThemeBtn = document.getElementById('account-theme-toggle');
   if(accountThemeBtn) accountThemeBtn.addEventListener('click', () => {
@@ -3424,6 +3457,7 @@ function renderCalendarScreen(){
   wireStockFinderModal(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireMarketPanel(app);
 
   app.querySelectorAll('.cal-day-cell').forEach(btn=>btn.addEventListener('click', () => {
     calendarSelectedDay = btn.getAttribute('data-date');
@@ -3654,6 +3688,7 @@ function renderScreenersScreen(){
   wireStockFinderModal(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireMarketPanel(app);
   wireScreenerBuilder(app);
 
   const createBtn = document.getElementById('screener-create-btn');
@@ -4102,6 +4137,7 @@ function renderStockViewerScreen(){
   wireStockFinderModal(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireMarketPanel(app);
 
   const input = document.getElementById('stockviewer-input');
   const suggestionsBox = document.getElementById('stockviewer-suggestions');
@@ -4604,6 +4640,7 @@ function render(scenario){
 
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireMarketPanel(app);
 }
 
 function renderLogin(){
@@ -4748,7 +4785,7 @@ supabase.auth.onAuthStateChange(async (event, s) => {
     currentScreen = 'home';
     render(null);
   } else {
-    portfolio = {positions:[]}; history = []; portfolioId = null; currentScreen = null; profile = null; allMarketsHeld = null;
+    portfolio = {positions:[]}; history = []; portfolioId = null; currentScreen = null; profile = null;
     authMode = 'login';
     renderLogin();
   }
