@@ -2568,20 +2568,34 @@ function walletbookIcon(size){
   </svg>`;
 }
 
-function usMarketStatus(){
+// Un tramo horario por sesión; los mercados con pausa de mediodía (ej. Japón)
+// llevan dos tramos. No tiene en cuenta festivos de cada bolsa.
+const MARKET_SESSIONS = [
+  { key:'eeuu', label:'EEUU/Canadá', tz:'America/New_York', sessions:[[9*60+30,16*60]],
+    title:'NYSE/Nasdaq/TSX (también cubre las posiciones taiwanesas via ADR, que cotizan en EEUU): 9:30-16:00, hora de Nueva York, días laborables.' },
+  { key:'europa', label:'Europa', tz:'Europe/Madrid', sessions:[[9*60,17*60+30]],
+    title:'Principales bolsas europeas (Xetra, Euronext, BME, LSE...): 9:00-17:30, hora centroeuropea, días laborables.' },
+  { key:'japon', label:'Japón', tz:'Asia/Tokyo', sessions:[[9*60,11*60+30],[12*60+30,15*60+30]],
+    title:'Bolsa de Tokio: 9:00-11:30 y 12:30-15:30, hora de Japón (con pausa de mediodía), días laborables.' },
+];
+function marketSessionStatus(tz, sessions){
   const now = new Date();
-  const fmt = new Intl.DateTimeFormat('en-US', { timeZone:'America/New_York', hour:'2-digit', minute:'2-digit', hourCycle:'h23', weekday:'short' });
+  const fmt = new Intl.DateTimeFormat('en-US', { timeZone:tz, hour:'2-digit', minute:'2-digit', hourCycle:'h23', weekday:'short' });
   const map = {};
   fmt.formatToParts(now).forEach(p => { map[p.type] = p.value; });
   const isWeekday = map.weekday !== 'Sat' && map.weekday !== 'Sun';
   const minutesNow = Number(map.hour)*60 + Number(map.minute);
-  const open = isWeekday && minutesNow >= 9*60+30 && minutesNow < 16*60;
-  return { open, label: open ? 'Mercado abierto' : 'Mercado cerrado' };
+  const open = isWeekday && sessions.some(([start,end]) => minutesNow >= start && minutesNow < end);
+  return { open, label: open ? 'Abierto' : 'Cerrado' };
 }
 function marketStatusBadge(){
-  const st = usMarketStatus();
-  return `<div class="market-status-badge" title="Bolsa de EE.UU. (NYSE/Nasdaq): 9:30-16:00, hora de Nueva York, días laborables. No tiene en cuenta festivos del mercado." style="cursor:help;display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:14px;border:1px solid ${st.open?'var(--green-border)':'var(--border)'};background:${st.open?'var(--green-soft)':'var(--panel-2)'};font-size:11px;font-weight:600;color:${st.open?'var(--green)':'var(--text-faint)'};white-space:nowrap;flex-shrink:0;">
-    <span style="width:7px;height:7px;border-radius:50%;background:${st.open?'var(--green)':'var(--text-faint)'};flex-shrink:0;"></span><span class="market-status-badge-label">${st.label}</span>
+  return `<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+    ${MARKET_SESSIONS.map(m => {
+      const st = marketSessionStatus(m.tz, m.sessions);
+      return `<div class="market-status-badge" title="${esc(m.title)}" style="cursor:help;display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:14px;border:1px solid ${st.open?'var(--green-border)':'var(--border)'};background:${st.open?'var(--green-soft)':'var(--panel-2)'};font-size:11px;font-weight:600;color:${st.open?'var(--green)':'var(--text-faint)'};white-space:nowrap;">
+        <span style="width:7px;height:7px;border-radius:50%;background:${st.open?'var(--green)':'var(--text-faint)'};flex-shrink:0;"></span><span class="market-status-badge-label">${m.label} · ${st.label}</span>
+      </div>`;
+    }).join('')}
   </div>`;
 }
 
