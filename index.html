@@ -173,7 +173,8 @@ const RULE_METRIC = {
   weight_deviation: {label:'Desviación del peso objetivo', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+' pp'},
   annualized_return: {label:'Rentabilidad anualizada', fmt:v=>(v>=0?'+':'')+fmtPct(v)},
   holding_age_days: {label:'Antigüedad de la posición', fmt:v=>Math.round(v)+' días'},
-  horizon_proximity_years: {label:'Años hasta el horizonte', fmt:v=>Math.round(v)+' años'}
+  horizon_proximity_years: {label:'Años hasta el horizonte', fmt:v=>Math.round(v)+' años'},
+  drawdown_90d_pct: {label:'Caída desde máximo 90d (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%'}
 };
 const METRIC_INFO = {
   marketCap: 'Valor total de mercado de la empresa (precio × nº de acciones). Mayor tamaño suele implicar más estabilidad, pero también menos margen de crecimiento porcentual.',
@@ -243,7 +244,6 @@ const SCREENER_METRIC = {
   debt_to_equity: {label:'Deuda / Equity', fmt:v=>v.toFixed(2), get:r=>r.debt_to_equity},
   performance_1y: {label:'Rendimiento a 1 año (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=>r.performance_1y},
   last_price: {label:'Precio ($)', fmt:v=>v.toFixed(2), get:r=>r.last_price},
-  drawdown_90d_pct: {label:'Caída desde máximo 90d (%)', fmt:v=>v.toFixed(1)+'%', get:r=>r.drawdown_90d_pct},
 };
 const SCREENER_OPERATOR = { gt:'mayor que', lt:'menor que' };
 const SCREENER_UNIVERSE = {
@@ -252,9 +252,6 @@ const SCREENER_UNIVERSE = {
   sp600: { label:'S&P 600 (small caps EEUU)', short:'S&P 600', color:'#9B6BD9' },
   russell2000: { label:'Russell 2000 (small caps EEUU)', short:'Russell 2000', color:'#E0A030' },
   stoxx600: { label:'Stoxx 600 (Europa)', short:'Stoxx 600', color:'#4AAE00' },
-  reserva_valor_btc: { label:'Reserva de Valor · BTC', short:'RdV BTC', color:'#F7931A' },
-  reserva_valor_oro: { label:'Reserva de Valor · Oro', short:'RdV Oro', color:'#E3B15C' },
-  reserva_valor_plata: { label:'Reserva de Valor · Plata', short:'RdV Plata', color:'#B0B4BA' },
 };
 function indexBadge(indexName){
   const u = SCREENER_UNIVERSE[indexName];
@@ -288,6 +285,7 @@ function ruleMetricValue(metric, p, portfolioValue){
       if(!y || isNaN(y)) return null;
       return y - new Date().getFullYear();
     }
+    case 'drawdown_90d_pct': return p.ticker && reservaValorDrawdown[p.ticker]!=null ? reservaValorDrawdown[p.ticker] : null;
     default: return null;
   }
 }
@@ -969,10 +967,23 @@ async function loadPortfolioNews(){
 
 async function loadPositionRules(positionId){
   positionRulesLoading = true;
-  const { data, error } = await supabase.from('rules').select('*').eq('position_id', positionId).eq('owner_id', session.user.id).order('created_at');
-  if(error) console.error(error);
-  positionRules = data || [];
+  const [rulesRes] = await Promise.all([
+    supabase.from('rules').select('*').eq('position_id', positionId).eq('owner_id', session.user.id).order('created_at'),
+    loadReservaValorDrawdown(),
+  ]);
+  if(rulesRes.error) console.error(rulesRes.error);
+  positionRules = rulesRes.data || [];
   positionRulesLoading = false;
+}
+
+// Los tickers de Reserva de Valor no tienen su % de caída en la propia posición,
+// vive en screener_metrics (lo rellena el cron screener-refresh-reserva-valor) —
+// se carga aparte y se consulta por ticker desde ruleMetricValue().
+async function loadReservaValorDrawdown(){
+  const { data, error } = await supabase.from('screener_metrics').select('ticker, drawdown_90d_pct').in('ticker', ['BTC-USD','IGLN.L','WSLV.L']);
+  if(error){ console.error(error); return; }
+  reservaValorDrawdown = {};
+  (data||[]).forEach(r => { if(r.drawdown_90d_pct!=null) reservaValorDrawdown[r.ticker] = num(r.drawdown_90d_pct); });
 }
 
 async function loadPositionEvents(positionId){
@@ -1007,7 +1018,8 @@ async function loadAllRulesData(){
   allRulesLoading = true;
   const [rulesRes, positionsRes] = await Promise.all([
     supabase.from('rules').select('*').eq('owner_id', session.user.id).order('created_at', { ascending:false }),
-    supabase.from('positions').select('id, portfolio_id, invested, price, current_price_eur, target_weight, purchase_date, horizon').eq('owner_id', session.user.id).is('deleted_at', null)
+    supabase.from('positions').select('id, ticker, portfolio_id, invested, price, current_price_eur, target_weight, purchase_date, horizon').eq('owner_id', session.user.id).is('deleted_at', null),
+    loadReservaValorDrawdown(),
   ]);
   if(rulesRes.error) console.error(rulesRes.error);
   if(positionsRes.error) console.error(positionsRes.error);
@@ -1825,6 +1837,7 @@ async function loadPortfolioId(){
 
 let portfolioStrategies = {}; // portfolio_id -> array de claves de estrategia distintas entre sus posiciones
 let portfolioSummaries = {}; // portfolio_id -> {invested, value, gainPct}, para las cards de "Mis carteras"
+let reservaValorDrawdown = {}; // ticker -> % caída desde máximo 90d (screener_metrics), para la regla 'drawdown_90d_pct'
 async function loadPortfolios(){
   if(!session){ portfolios = []; return; }
   const { data, error } = await supabase.from('portfolios').select('*').eq('owner_id', session.user.id).is('deleted_at', null).order('created_at');
