@@ -1517,6 +1517,15 @@ function computeTotals(){
   const gain = value-invested-compraCommission;
   return {invested, value, gain, gainPct: invested>0 ? gain/invested*100 : 0, withData, total: portfolio.positions.length, commission};
 }
+// Mismo cálculo que computeTotals(), pero para una lista de posiciones cualquiera
+// (se usa para resumir cada cartera en las cards de "Mis carteras", sin tener que
+// activarla como cartera actual).
+function computePortfolioSummary(positions){
+  let invested=0, value=0, compraCommission=0;
+  positions.forEach(p => { invested+=investedOf(p); value+=currentValueOf(p); compraCommission+=compraCommissionOf(p); });
+  const gain = value-invested-compraCommission;
+  return { invested, value, gainPct: invested>0 ? gain/invested*100 : 0 };
+}
 
 function computeCAGR(totals){
   const withDate = portfolio.positions.filter(p=>p.purchase_date && investedOf(p)>0);
@@ -1815,13 +1824,16 @@ async function loadPortfolioId(){
 }
 
 let portfolioStrategies = {}; // portfolio_id -> array de claves de estrategia distintas entre sus posiciones
+let portfolioSummaries = {}; // portfolio_id -> {invested, value, gainPct}, para las cards de "Mis carteras"
 async function loadPortfolios(){
   if(!session){ portfolios = []; return; }
   const { data, error } = await supabase.from('portfolios').select('*').eq('owner_id', session.user.id).is('deleted_at', null).order('created_at');
   if(error){ console.error(error); return; }
   portfolios = data || [];
 
-  const { data: posRows, error: posErr } = await supabase.from('positions').select('portfolio_id, strategies').is('deleted_at', null);
+  const { data: posRows, error: posErr } = await supabase.from('positions')
+    .select('id, portfolio_id, strategies, invested, price, current_price_eur, purchase_date, commission')
+    .is('deleted_at', null);
   if(!posErr){
     const map = {};
     (posRows||[]).forEach(row => {
@@ -1830,6 +1842,11 @@ async function loadPortfolios(){
       row.strategies.forEach(k => map[row.portfolio_id].add(k));
     });
     portfolioStrategies = Object.fromEntries(Object.entries(map).map(([k,v])=>[k,[...v]]));
+
+    const positions = await attachRecompras((posRows||[]).map(r => ({ ...r })));
+    const byPortfolio = {};
+    positions.forEach(p => { (byPortfolio[p.portfolio_id] = byPortfolio[p.portfolio_id]||[]).push(p); });
+    portfolioSummaries = Object.fromEntries(Object.entries(byPortfolio).map(([id,list])=>[id, computePortfolioSummary(list)]));
   }
 }
 
@@ -2973,6 +2990,14 @@ function renderPortfolioCardHTML(p){
     </div>` : ''}
     <div style="font-size:15px;font-weight:600;padding-right:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:8px;">${esc(p.name)}</div>
     <div style="font-size:12px;color:var(--text-faint);line-height:1.4;min-height:32px;">${p.description ? esc(p.description) : '<span style="opacity:.5;">Sin descripción</span>'}</div>
+    ${(() => {
+      const s = portfolioSummaries[p.id];
+      if(!s || s.invested<=0) return `<div style="font-size:11px;color:var(--text-faint);margin-top:10px;opacity:.6;">Sin inversión todavía</div>`;
+      return `<div style="display:flex;gap:18px;margin-top:10px;">
+        <div><div style="font-size:14px;font-weight:600;">${fmtEUR(s.invested)}</div><div style="font-size:9px;color:var(--text-faint);">INVERTIDO</div></div>
+        <div><div style="font-size:14px;font-weight:600;color:${s.gainPct>=0?'var(--green)':'var(--red)'};">${s.gainPct>=0?'+':''}${fmtPct(s.gainPct)}</div><div style="font-size:9px;color:var(--text-faint);">RENDIMIENTO</div></div>
+      </div>`;
+    })()}
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-soft);min-height:20px;">
       ${(portfolioStrategies[p.id]||[]).length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${(portfolioStrategies[p.id]||[]).map(k=>`<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:8px;background:var(--panel-2);color:var(--text-dim);border:1px solid var(--border);">${STRATEGY[k]?.label||k}</span>`).join('')}</div>` : `<span style="font-size:10px;color:var(--text-faint);opacity:.6;">Sin estrategia asignada</span>`}
     </div>
