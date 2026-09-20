@@ -932,6 +932,14 @@ function fmtNewsDate(iso){
   return d.toLocaleDateString('es-ES', {day:'numeric', month:'short'});
 }
 
+// El buscador de noticias de Yahoo no indexa nada bajo el ticker exacto de estos
+// activos (comprobado: "BTC-USD"/"IGLN.L"/"WSLV.L" devuelven 0 resultados) — hay
+// que buscar por un término que sí tenga cobertura real de noticias.
+const NEWS_QUERY_ALIAS = {
+  'BTC-USD': 'Bitcoin',
+  'IGLN.L': 'GLD',
+  'WSLV.L': 'SLV',
+};
 async function loadPortfolioNews(){
   const token = ++portfolioNewsToken;
   portfolioNewsLoading = true; portfolioNewsError = null; portfolioNews = null;
@@ -943,7 +951,7 @@ async function loadPortfolioNews(){
   }
   try{
     const results = await Promise.all(withTicker.map(p =>
-      callEdgeFunction('ticker-news', {q: p.ticker}).catch(() => null)
+      callEdgeFunction('ticker-news', {q: NEWS_QUERY_ALIAS[p.ticker] || p.ticker}).catch(() => null)
     ));
     if(token !== portfolioNewsToken) return;
     const seen = new Set();
