@@ -1406,7 +1406,7 @@ function gainChip(g, size){
   const label = g==null ? '—' : (g>=0?'+':'')+g+'%';
   return `<div style="font-family:'Manrope',system-ui,sans-serif;font-weight:800;font-size:${size}px;padding:5px 13px;border-radius:20px;background:${bg};border:1px solid ${border};color:${color};white-space:nowrap;flex-shrink:0;">${label}</div>`;
 }
-function num(v){ if(v===null||v===undefined) return null; let s=String(v).trim(); if(s==='') return null; s=s.replace('€','').replace('$','').replace(/\s/g,''); if(s.includes(',')&&s.includes('.')){ s=s.replace(/\./g,'').replace(',','.'); } else if(s.includes(',')){ s=s.replace(',','.'); } const n=parseFloat(s); return isNaN(n)?null:n; }
+function num(v){ if(v===null||v===undefined) return null; let s=String(v).trim(); if(s==='') return null; s=s.replace('€','').replace('$','').replace(/\s/g,''); if(s.includes(',')&&s.includes('.')){ s=s.replace(/\./g,'').replace(',','.'); } else if(s.includes(',')){ s=s.replace(',','.'); } else if(/^-?[1-9]\d{0,2}(\.\d{3})+$/.test(s)){ s=s.replace(/\./g,''); } const n=parseFloat(s); return isNaN(n)?null:n; }
 
 // Cada posición puede tener varias compras: la original (campos invested/price
 // en la propia fila) más N recompras (tabla position_recompras), cada una a su
