@@ -532,7 +532,7 @@ function renderLiquidityCard(){
     const deltaColor = d => d==null ? 'var(--text-dim)' : d>=0 ? 'var(--green)' : 'var(--red)';
     const weekDelta = l.netLiquidityWeekAgoB!=null ? l.netLiquidityB - l.netLiquidityWeekAgoB : null;
     const monthDelta = l.netLiquidityMonthAgoB!=null ? l.netLiquidityB - l.netLiquidityMonthAgoB : null;
-    const fmtDeltaShort = d => d==null ? '—' : (d>=0?'+':'')+d.toLocaleString('es-ES',{maximumFractionDigits:0});
+    const fmtDeltaShort = d => d==null ? '—' : (d>=0?'+':'')+d.toLocaleString('es-ES',{maximumFractionDigits:1, minimumFractionDigits:1});
     const metricRow = (label, tip, current, weekAgo, monthAgo) => {
       const wd = weekAgo!=null ? current - weekAgo : null;
       const md = monthAgo!=null ? current - monthAgo : null;
@@ -540,7 +540,7 @@ function renderLiquidityCard(){
         <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);flex-shrink:0;" title="${tip}">${label}</span>
         <span style="text-align:right;white-space:nowrap;">
           <span style="font-weight:700;">${fmtUsdB(current)}</span>
-          <span style="font-size:9px;color:var(--text-faint);">(<b style="color:${deltaColor(wd)};">${fmtDeltaShort(wd)}</b>/<b style="color:${deltaColor(md)};">${fmtDeltaShort(md)}</b>)</span>
+          <span style="font-size:9px;color:var(--text-faint);"> (s: <b style="color:${deltaColor(wd)};">${fmtDeltaShort(wd)}</b> · m: <b style="color:${deltaColor(md)};">${fmtDeltaShort(md)}</b>)</span>
         </span>
       </div>`;
     };
