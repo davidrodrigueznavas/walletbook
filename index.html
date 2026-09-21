@@ -4447,7 +4447,7 @@ function renderStockViewerScreen(){
 // coincide con el que fija el propio listener y este no vuelve a disparar.
 function syncHashFromState(){
   const wanted = hashForState({ screen: currentScreen, portfolioId, ticker: stockViewerTicker });
-  if(location.hash !== wanted) history.pushState(null, '', wanted);
+  if(location.hash !== wanted) window.history.pushState(null, '', wanted);
 }
 
 function render(scenario){
