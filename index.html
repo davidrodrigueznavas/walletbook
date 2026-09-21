@@ -4102,49 +4102,67 @@ function renderShortInterestBlock(si, loading){
     trendHtml = `${arrow} ${Math.abs(trendPct).toFixed(0)}% vs quincena anterior (${si.priorMonthDate}) · `;
   }
   const fmtSharesM = n => n==null ? '—' : (n/1e6).toLocaleString('es-ES',{maximumFractionDigits:1})+'M';
-  const fmtHistDate = iso => new Date(iso+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'}).replace('.','');
-
-  // Mini-gráfico de evolución (más antiguo -> más reciente) de las últimas
-  // quincenas, con un punto por dato: al pasar el ratón encima de cada punto
-  // se ve la fecha y las acciones en corto de esa quincena (title de SVG).
-  let sparklineHtml = '';
-  if(si.history && si.history.length>=2){
-    const pts = si.history.slice().reverse();
-    const values = pts.map(h=>h.sharesShort);
-    const min = Math.min(...values), max = Math.max(...values);
-    const range = (max-min) || 1;
-    const w = 120, h = 34, pad = 5;
-    const stepX = (w-pad*2) / (pts.length-1);
-    const coords = pts.map((p,i)=>({
-      x: pad + i*stepX,
-      y: pad + (h-pad*2) * (1 - (p.sharesShort-min)/range),
-      p,
-    }));
-    const pathD = coords.map((c,i)=> (i===0?'M':'L')+c.x.toFixed(1)+','+c.y.toFixed(1)).join(' ');
-    const dots = coords.map((c,i)=>{
-      const isLast = i===coords.length-1;
-      return `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="7" fill="transparent" style="cursor:help;"><title>${fmtHistDate(c.p.date)}: ${fmtSharesM(c.p.sharesShort)} acciones en corto</title></circle>` +
-        `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${isLast?2.6:1.6}" fill="${isLast?color:'var(--text-faint)'}"/>`;
-    }).join('');
-    sparklineHtml = `<div style="flex-shrink:0;">
-      <svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="overflow:visible;display:block;">
-        <path d="${pathD}" fill="none" stroke="var(--text-faint)" stroke-width="1.4"/>
-        ${dots}
-      </svg>
-      <div style="font-size:8px;color:var(--text-faint);text-align:center;margin-top:2px;">últimas ${pts.length} quincenas</div>
-    </div>`;
-  }
+  const hasChart = si.history && si.history.length>=2;
 
   return `<div>
     <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="% del float (las acciones que de verdad se pueden negociar; no cuentan las bloqueadas de fundadores, directivos o inversores con acuerdos de bloqueo) que están prestadas y sin devolver ahora mismo — el acumulado real de apuestas en contra abiertas. Se publica 2 veces al mes, con ~8 días hábiles de retraso.">Short interest oficial</div>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:4px;">
-      <div>
-        <div style="font-size:18px;font-weight:700;color:${color};">${pct.toFixed(1)}% <span style="font-size:12px;font-weight:600;color:var(--text-dim);">· ${fmtSharesM(si.sharesShort)} acciones</span></div>
-        <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">${trendHtml}dato del CORTE del ${si.date}</div>
-      </div>
-      ${sparklineHtml}
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:4px;">
+      <div style="font-size:18px;font-weight:700;color:${color};">${pct.toFixed(1)}% <span style="font-size:12px;font-weight:600;color:var(--text-dim);">· ${fmtSharesM(si.sharesShort)} acciones</span></div>
+      <div id="si-hist-legend" style="font-size:9.5px;color:var(--text-dim);font-weight:600;white-space:nowrap;"></div>
     </div>
+    <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">${trendHtml}dato del CORTE del ${si.date}</div>
+    ${hasChart ? `<div id="si-hist-chart" style="height:120px;margin-top:8px;border-radius:6px;overflow:hidden;"></div>` : ''}
   </div>`;
+}
+
+// Grafico real (Lightweight Charts, la misma libreria del visualizador de
+// precio) con la evolucion de acciones en corto de las ultimas quincenas:
+// ejes con escala en ambos lados, cuadricula, fondo propio distinto de la
+// card, y leyenda con el valor exacto al pasar el raton (subscribeCrosshairMove,
+// mismo patron que el grafico de precio). Se llama tras cada render() porque
+// el contenedor se sustituye entero via innerHTML.
+let shortInterestChartInstance = null;
+function wireShortInterestChart(){
+  if(shortInterestChartInstance){ try{ shortInterestChartInstance.remove(); }catch(e){} shortInterestChartInstance = null; }
+  const container = document.getElementById('si-hist-chart');
+  if(!container || typeof LightweightCharts === 'undefined') return;
+  const si = currentScreen === 'visor' ? stockViewerOfficialShortInterest : modalOfficialShortInterest;
+  if(!si || !si.available || !si.history || si.history.length < 2) return;
+
+  const pct = si.shortPercentOfFloat;
+  const dark = theme === 'dark';
+  const lineColor = pct>=20 ? (dark?'#F87171':'#D3453B') : pct>=10 ? (dark?'#E9E9EB':'#202124') : (dark?'#4ADE80':'#1E9E5A');
+  const textColor = dark ? '#9CA0A8' : '#5B5F66';
+  const gridColor = dark ? '#26282D' : '#E8E9EC';
+  const bgColor = dark ? '#1E2024' : '#FFFFFF'; // var(--panel) -- distinto del panel-2 de fondo de la card
+
+  const chart = LightweightCharts.createChart(container, {
+    layout: { background:{color:bgColor}, textColor, fontSize:10, fontFamily:'Calibri, Carlito, sans-serif' },
+    grid: { vertLines:{color:gridColor}, horzLines:{color:gridColor} },
+    rightPriceScale: { borderColor:gridColor },
+    timeScale: { borderColor:gridColor, visible:true },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    autoSize: true,
+  });
+  const series = chart.addAreaSeries({
+    lineColor, topColor:lineColor+'38', bottomColor:lineColor+'00', lineWidth:2,
+    priceFormat: { type:'custom', formatter: v => v.toLocaleString('es-ES',{maximumFractionDigits:1})+'M' },
+  });
+  const data = si.history.slice().reverse().map(h => ({ time:h.date, value: h.sharesShort/1e6 }));
+  series.setData(data);
+  chart.timeScale().fitContent();
+
+  const legendEl = document.getElementById('si-hist-legend');
+  if(legendEl){
+    chart.subscribeCrosshairMove(param => {
+      if(!param || !param.time){ legendEl.textContent = ''; return; }
+      const d = data.find(x => x.time === param.time);
+      if(!d){ legendEl.textContent = ''; return; }
+      const dt = new Date(d.time+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'}).replace('.','');
+      legendEl.textContent = `${dt}: ${d.value.toLocaleString('es-ES',{maximumFractionDigits:1})}M acciones`;
+    });
+  }
+  shortInterestChartInstance = chart;
 }
 
 // Envuelve las dos fuentes juntas, con una línea que deja explícito que son
@@ -4407,6 +4425,7 @@ function renderStockViewerScreen(){
     render(null);
   });
   wireStockViewerChart();
+  wireShortInterestChart();
 
   const visorAddBtn = document.getElementById('visor-addpos-btn');
   if(visorAddBtn) visorAddBtn.addEventListener('click', async (e) => {
@@ -4874,6 +4893,7 @@ function render(scenario){
     render(currentScenario);
   });
   wireAddPositionModal(app);
+  wireShortInterestChart();
 
   const portfolioNewsBtn = document.getElementById('portfolio-news-btn');
   if(portfolioNewsBtn) portfolioNewsBtn.addEventListener('click', async () => {
