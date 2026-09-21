@@ -145,6 +145,7 @@ import {
   RESERVA_VALOR_BASE, RESERVA_VALOR_TRIGGERS, MONTHLY_PLAN, DATA_SOURCES, MARKET_SESSION_BY_KEY,
 } from './js/config.js';
 import { esc, fmtEUR, fmtNum, fmtPct, gainChip, num } from './js/helpers.js';
+import { hashForState, parseHash } from './js/router.js';
 
 const SUPABASE_URL = 'https://nnuzwapiqqfjmgirvlnb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_SPHRvrce3FBbS11D5IxpUg_GVAp-l0Z';
@@ -4438,8 +4439,20 @@ function renderStockViewerScreen(){
   }));
 }
 
+// Refleja currentScreen/portfolioId/stockViewerTicker en la URL (hash) cada
+// vez que se pinta. Si el hash resultante ya es el mismo no se toca, así que
+// asignar location.hash aquí y escuchar 'hashchange' más abajo no se
+// realimenta en bucle: cuando la navegación normal (clic en una cartera, en
+// el menú...) ya deja el estado en el valor "nuevo", el hash calculado
+// coincide con el que fija el propio listener y este no vuelve a disparar.
+function syncHashFromState(){
+  const wanted = hashForState({ screen: currentScreen, portfolioId, ticker: stockViewerTicker });
+  if(location.hash !== wanted) history.pushState(null, '', wanted);
+}
+
 function render(scenario){
   if(!session) return; // una operación asíncrona pendiente terminó después de cerrar sesión; no repintar la app
+  syncHashFromState();
   if(currentScreen === 'explorar'){
     renderExploreScreen();
     return;
@@ -4975,6 +4988,70 @@ function renderLogin(){
   });
 }
 
+// Reconstruye el estado de pantalla a partir de una ruta ya parseada
+// (location.hash) — se usa tanto al cargar/recargar la página con un hash ya
+// puesto como al pulsar atrás/adelante. Solo cubre pantallas de nivel
+// superior; si la cartera del hash no existe (o ya no es accesible), cae a
+// home en vez de dejar la pantalla a medias.
+async function goToRoute(route){
+  if(route.screen === 'portfolio' && route.portfolioId){
+    const target = portfolios.find(p => p.id === route.portfolioId);
+    if(!target){ await goHome(); return; }
+    portfolioId = route.portfolioId;
+    activePortfolioName = target.name;
+    currentScreen = 'portfolio';
+    selectedId = null;
+    diversificationFilter = null;
+    document.getElementById('app').innerHTML = 'Cargando…';
+    await loadAll();
+    render(null);
+    autoUpdateQuotes();
+  } else if(route.screen === 'visor' && route.ticker){
+    currentScreen = 'visor';
+    await selectStockViewerTicker(route.ticker, null);
+  } else if(route.screen === 'mis-carteras'){
+    currentScreen = 'mis-carteras'; selectedId = null; diversificationFilter = null;
+    render(null);
+    await loadPortfolios();
+    render(null);
+  } else if(route.screen === 'explorar'){
+    currentScreen = 'explorar';
+    exploreDetailId = null; exploreDetailPositions = null; exploreCategoryFilter = null; exploreLoading = true;
+    render(null);
+    await loadExploreList();
+    render(null);
+  } else if(route.screen === 'cuenta'){
+    currentScreen = 'cuenta'; allRulesLoading = true;
+    render(null);
+    await loadAllRulesData();
+    render(null);
+  } else if(route.screen === 'screeners'){
+    currentScreen = 'screeners';
+    render(null);
+  } else if(route.screen === 'calendario'){
+    currentScreen = 'calendario'; calendarEventsLoading = true;
+    render(null);
+    await loadCalendarEvents();
+    render(null);
+  } else {
+    await goHome();
+  }
+}
+
+// Atrás/adelante del navegador, o el usuario tecleando/pegando una URL con
+// hash. Si el hash ya coincide con el estado actual no hace nada — evita que
+// el pushState de syncHashFromState() (al navegar por la UI normal) acabe
+// disparando una recarga redundante de la misma pantalla.
+function handleHashNavigation(){
+  if(!session) return; // en la pantalla de login no hay nada que enrutar
+  const route = parseHash(location.hash);
+  const current = { screen: currentScreen, portfolioId, ticker: stockViewerTicker };
+  if(hashForState(route) === hashForState(current)) return;
+  goToRoute(route);
+}
+window.addEventListener('popstate', handleHashNavigation);
+window.addEventListener('hashchange', handleHashNavigation);
+
 let lastRenderedForSession = undefined;
 supabase.auth.onAuthStateChange(async (event, s) => {
   session = s;
@@ -4994,8 +5071,13 @@ supabase.auth.onAuthStateChange(async (event, s) => {
     await loadPortfolios();
     await loadProfile();
     if(authMode === 'recovery') return; // un evento PASSWORD_RECOVERY tomó el control mientras cargábamos
-    currentScreen = 'home';
-    render(null);
+    const initialRoute = parseHash(location.hash);
+    if(initialRoute.screen === 'home'){
+      currentScreen = 'home';
+      render(null);
+    } else {
+      await goToRoute(initialRoute);
+    }
   } else {
     portfolio = {positions:[]}; history = []; portfolioId = null; currentScreen = null; profile = null;
     authMode = 'login';
