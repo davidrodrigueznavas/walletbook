@@ -2537,7 +2537,7 @@ const DATA_SOURCES = [
       { label: 'Métricas técnicas de los screeners (RSI, medias, volumen)', freq: 'Cron cada hora, L-V en horario de mercado' },
       { label: 'Fundamentales de los screeners (PER, capitalización, crecimiento...)', freq: 'Cron cada hora, L-V en horario de mercado — requiere cookie+crumb de Yahoo, en lotes de 100 tickers' },
       { label: 'Máximo de 90 días y % de caída (BTC, oro, plata)', freq: 'Cron cada hora, L-V en horario de mercado' },
-      { label: 'Short interest oficial (visualizador y modal de posición)', freq: 'Se publica solo 2 veces al mes (cortes a mitad y a fin de mes), con ~8 días hábiles de retraso hasta hacerse público. Es la posición real acumulada de acciones prestadas en corto, como % del float — no confundir con el volumen en corto diario de FINRA (más abajo): son dos periodos de datos distintos, no dos formas de medir lo mismo. Solo disponible para acciones, requiere cookie+crumb de Yahoo.' },
+      { label: 'Short interest oficial (visualizador y modal de posición)', freq: 'Se publica solo 2 veces al mes (cortes a mitad y a fin de mes), con ~8 días hábiles de retraso hasta hacerse público. Es la posición real acumulada de acciones prestadas en corto, como % del float. En sencillo: responde a "¿cuánta gente sigue apostando en contra AHORA?" (foto fija) — distinto del volumen en corto diario de FINRA (más abajo), que responde a "¿cuánto se apostó en contra HOY?" (cada día). Es como preguntar cuántos coches hay aparcados en el garaje ahora vs. cuántos entraron hoy: mismo garaje, preguntas distintas. Solo disponible para acciones, requiere cookie+crumb de Yahoo.' },
     ],
   },
   {
@@ -4386,11 +4386,13 @@ function renderShortInterestBlock(si, loading){
 // dos periodos de datos distintos (no dos formas de medir lo mismo).
 function renderShortInterestSection(officialSI, officialLoading, dailySV, dailyLoading){
   return `<div style="display:flex;flex-direction:column;gap:10px;">
+    <div style="font-size:10.5px;color:var(--text-dim);line-height:1.5;background:var(--panel);border:1px solid var(--border-soft);border-radius:6px;padding:8px 10px;">
+      Son dos preguntas distintas: <b>arriba</b>, "¿cuánta gente sigue apostando en contra AHORA?" (una foto fija, cada 2 semanas) · <b>abajo</b>, "¿cuánto se apostó en contra HOY?" (cada día). Como preguntar cuántos coches hay aparcados en el garaje ahora vs. cuántos entraron hoy.
+    </div>
     ${renderShortInterestBlock(officialSI, officialLoading)}
     <div style="border-top:1px solid var(--border-soft);padding-top:10px;">
       ${renderShortVolumeBlock(dailySV, dailyLoading)}
     </div>
-    <div style="font-size:9px;color:var(--text-faint);line-height:1.4;">El de arriba es una foto quincenal de la posición real en corto; el de abajo es la actividad de venta en corto de HOY. Son dos periodos distintos, no dos formas de medir lo mismo.</div>
   </div>`;
 }
 
