@@ -555,7 +555,7 @@ function renderLiquidityCard(){
         <div style="font-size:9px;color:var(--text-faint);margin-top:1px;">sem: <b style="color:${deltaColor(weekDelta)};">${fmtDeltaNum(weekDelta)}</b> · mes: <b style="color:${deltaColor(monthDelta)};">${fmtDeltaNum(monthDelta)}</b> mil M$</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;">
-        ${metricLine('Total Assets', 'Balance total de la Fed. Sube = QE (inyecta liquidez); baja = QT (drena liquidez).', fmtUsdB(l.totalAssetsB), deltaLine(l.totalAssetsWeekAgoB, l.totalAssetsMonthAgoB, l.totalAssetsB))}
+        ${metricLine('Total Assets', 'Balance total de la Fed. La variación de abajo lo confirma: si es positiva (+, en verde) el balance está subiendo = QE, inyecta liquidez. Si es negativa (−, en rojo) el balance está bajando = QT, drena liquidez.', fmtUsdB(l.totalAssetsB), deltaLine(l.totalAssetsWeekAgoB, l.totalAssetsMonthAgoB, l.totalAssetsB))}
         ${metricLine('TGA', 'Treasury General Account: la cuenta corriente del Tesoro en la Fed. Sube = drena liquidez del mercado; baja = la devuelve.', fmtUsdB(l.tgaB), deltaLine(l.tgaWeekAgoB, l.tgaMonthAgoB, l.tgaB))}
         ${metricLine('RRP', 'Reverse Repo: dinero que bancos/fondos monetarios aparcan en la Fed en vez de que circule en el mercado. Sube = absorbe liquidez; baja = la devuelve al sistema.', fmtUsdB(l.rrpB), deltaLine(l.rrpWeekAgoB, l.rrpMonthAgoB, l.rrpB))}
       </div>
