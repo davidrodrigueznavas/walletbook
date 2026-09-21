@@ -2378,6 +2378,10 @@ function wireAddPositionModal(app){
     if(!market){ showAddPosError('Elige un mercado.'); return; }
     if(!sector){ showAddPosError('Elige un sector.'); return; }
     if(invested!==null && invested<0){ showAddPosError('El importe invertido no puede ser negativo.'); return; }
+    if(ticker && (portfolio.positions||[]).some(p => (p.ticker||'').toUpperCase() === ticker)){
+      showAddPosError(`Ya tienes ${ticker} en esta cartera — no se puede añadir la misma acción dos veces.`);
+      return;
+    }
 
     const row = {
       id: crypto.randomUUID(),
