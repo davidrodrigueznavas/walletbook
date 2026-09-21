@@ -1521,7 +1521,7 @@ let portfolioNewsOpen = false, portfolioNewsLoading = false, portfolioNewsError 
 let stockFinderOpen = false, stockFinderSearchToken = 0, stockFinderOutsideCloseHandler = null;
 let visorAddPickerOpen = false, visorAddPickerOutsideCloseHandler = null;
 
-const SUFFIX_CURRENCY = { '.T':'JPY', '.DE':'EUR', '.PA':'EUR', '.MI':'EUR', '.AS':'EUR', '.SW':'CHF', '.CO':'DKK', '.MC':'EUR', '.ST':'SEK' };
+const SUFFIX_CURRENCY = { '.DE':'EUR', '.PA':'EUR', '.MI':'EUR', '.AS':'EUR', '.SW':'CHF', '.CO':'DKK', '.MC':'EUR', '.ST':'SEK' };
 function currencyForTicker(ticker){
   if(!ticker) return 'USD';
   for(const suf in SUFFIX_CURRENCY){ if(ticker.endsWith(suf)) return SUFFIX_CURRENCY[suf]; }
@@ -1529,7 +1529,7 @@ function currencyForTicker(ticker){
 }
 const SUFFIX_MARKET = { '.DE':'europa', '.PA':'europa', '.MI':'europa', '.AS':'europa', '.L':'europa', '.MC':'europa', '.ST':'europa', '.TO':'canada', '.V':'canada', '.TW':'taiwan', '.TWO':'taiwan' };
 const SUFFIX_EXCHANGE = {
-  '.T':'Bolsa de Tokio', '.DE':'Xetra (Alemania)', '.PA':'Euronext París', '.MI':'Borsa Italiana (Milán)',
+  '.DE':'Xetra (Alemania)', '.PA':'Euronext París', '.MI':'Borsa Italiana (Milán)',
   '.AS':'Euronext Ámsterdam', '.SW':'SIX Swiss Exchange', '.CO':'Nasdaq Copenhague', '.MC':'BME (Madrid)',
   '.ST':'Nasdaq Estocolmo', '.L':'London Stock Exchange', '.BR':'Euronext Bruselas', '.HE':'Nasdaq Helsinki',
   '.OL':'Bolsa de Oslo', '.IR':'Euronext Dublín', '.LS':'Euronext Lisboa', '.LU':'Bolsa de Luxemburgo',
@@ -3058,12 +3058,10 @@ function walletbookIcon(size){
   </svg>`;
 }
 
-// Un tramo horario por sesión; Japón tiene pausa de mediodía, por eso lleva
-// dos tramos. No tiene en cuenta festivos de cada bolsa.
+// Un tramo horario por sesión. No tiene en cuenta festivos de cada bolsa.
 const MARKET_SESSION_BY_KEY = {
   eeuu_canada: { tz:'America/New_York', sessions:[[9*60+30,16*60]], label:'EEUU / Canadá', flag:'🇺🇸', hours:'NYSE/Nasdaq/TSX: 9:30-16:00, hora de Nueva York, días laborables.' },
   europa: { tz:'Europe/Madrid', sessions:[[9*60,17*60+30]], label:'Europa', flag:'🇪🇺', hours:'Principales bolsas europeas (Xetra, Euronext, BME, LSE...): 9:00-17:30, hora centroeuropea, días laborables.' },
-  japon: { tz:'Asia/Tokyo', sessions:[[9*60,11*60+30],[12*60+30,15*60+30]], label:'Japón', flag:'🇯🇵', hours:'Bolsa de Tokio: 9:00-11:30 y 12:30-15:30, hora de Japón (con pausa de mediodía), días laborables.' },
 };
 function fmtCountdown(mins){
   if(mins==null) return '';
@@ -3101,8 +3099,8 @@ function marketCountdown(tz, sessions){
 }
 let marketPanelOpen = false, marketPanelOutsideCloseHandler = null;
 // Trigger compacto (tira de puntos verde/rojo) + panel desplegable con la
-// lista de Canadá/Europa/Japón, cada uno con su cuenta atrás hasta que abra
-// o cierre. Fijo a estos 3 mercados a propósito, no depende de la cartera.
+// lista de EEUU/Canadá y Europa, cada uno con su cuenta atrás hasta que abra
+// o cierre. Fijo a estos mercados a propósito, no depende de la cartera.
 function marketStatusWidget(){
   const items = Object.entries(MARKET_SESSION_BY_KEY).map(([mk, sess]) => {
     const st = marketCountdown(sess.tz, sess.sessions);
