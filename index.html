@@ -528,28 +528,33 @@ function renderLiquidityCard(){
     body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">${fedLiquidityError}</div>`;
   } else if(fedLiquidity){
     const l = fedLiquidity;
-    const weekDelta = l.netLiquidityWeekAgoB!=null ? l.netLiquidityB - l.netLiquidityWeekAgoB : null;
-    const monthDelta = l.netLiquidityMonthAgoB!=null ? l.netLiquidityB - l.netLiquidityMonthAgoB : null;
     const fmtDelta = d => d==null ? '—' : (d>=0?'+':'')+fmtUsdB(d);
     const deltaColor = d => d==null ? 'var(--text-dim)' : d>=0 ? 'var(--green)' : 'var(--red)';
+    const weekDelta = l.netLiquidityWeekAgoB!=null ? l.netLiquidityB - l.netLiquidityWeekAgoB : null;
+    const monthDelta = l.netLiquidityMonthAgoB!=null ? l.netLiquidityB - l.netLiquidityMonthAgoB : null;
+    const metricRow = (label, tip, current, weekAgo, monthAgo) => {
+      const wd = weekAgo!=null ? current - weekAgo : null;
+      const md = monthAgo!=null ? current - monthAgo : null;
+      return `<div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="${tip}">${label}</span>
+          <span style="font-weight:700;">${fmtUsdB(current)}</span>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;font-size:9px;color:var(--text-faint);margin-top:1px;">
+          <span>sem: <b style="color:${deltaColor(wd)};">${fmtDelta(wd)}</b></span>
+          <span>mes: <b style="color:${deltaColor(md)};">${fmtDelta(md)}</b></span>
+        </div>
+      </div>`;
+    };
     body = `<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:10px;">
         <div style="font-size:18px;font-weight:800;">${fmtUsdB(l.netLiquidityB)}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Total Assets − TGA − RRP. Sube = QE / liquidez volviendo al sistema (positivo para activos de riesgo); baja = QT / se está absorbiendo. Fuente: FRED, siempre con el último dato real publicado, nunca estimado.">Total Assets</span>
-          <span style="font-weight:700;">${fmtUsdB(l.totalAssetsB)}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Treasury General Account: la cuenta corriente del Tesoro en la Fed. Sube = drena liquidez del mercado; baja = la devuelve.">TGA</span>
-          <span style="font-weight:700;">${fmtUsdB(l.tgaB)}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Reverse Repo: dinero que bancos/fondos monetarios aparcan en la Fed en vez de que circule en el mercado. Sube = absorbe liquidez; baja = la devuelve al sistema.">RRP</span>
-          <span style="font-weight:700;">${fmtUsdB(l.rrpB)}</span>
-        </div>
+        ${metricRow('Total Assets', 'Balance total de la Fed. Sube = QE (inyecta liquidez); baja = QT (drena liquidez).', l.totalAssetsB, l.totalAssetsWeekAgoB, l.totalAssetsMonthAgoB)}
+        ${metricRow('TGA', 'Treasury General Account: la cuenta corriente del Tesoro en la Fed. Sube = drena liquidez del mercado; baja = la devuelve.', l.tgaB, l.tgaWeekAgoB, l.tgaMonthAgoB)}
+        ${metricRow('RRP', 'Reverse Repo: dinero que bancos/fondos monetarios aparcan en la Fed en vez de que circule en el mercado. Sube = absorbe liquidez; baja = la devuelve al sistema.', l.rrpB, l.rrpWeekAgoB, l.rrpMonthAgoB)}
       </div>
-      <div style="font-size:9.5px;color:var(--text-faint);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-soft);">vs hace 1 sem: <b style="color:${deltaColor(weekDelta)};">${fmtDelta(weekDelta)}</b> · vs hace 1 mes: <b style="color:${deltaColor(monthDelta)};">${fmtDelta(monthDelta)}</b></div>
+      <div style="font-size:9.5px;color:var(--text-faint);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-soft);">Liquidez neta — vs sem: <b style="color:${deltaColor(weekDelta)};">${fmtDelta(weekDelta)}</b> · vs mes: <b style="color:${deltaColor(monthDelta)};">${fmtDelta(monthDelta)}</b></div>
       <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">Dato del ${l.asOf}</div>`;
   } else {
     body = '';
@@ -823,41 +828,97 @@ async function loadFedFundsRate(){
   fedFundsLoading = false;
   render(null);
 }
+
+let marketLiquidityIndicator = null, marketLiquidityLoading = false, marketLiquidityError = null;
+async function loadMarketLiquidityIndicator(){
+  if(marketLiquidityLoading) return;
+  marketLiquidityLoading = true; marketLiquidityError = null;
+  try{
+    const [hygRes, iefRes] = await Promise.all([
+      callEdgeFunction('ticker-history', {ticker:'HYG', range:'tecnico'}),
+      callEdgeFunction('ticker-history', {ticker:'IEF', range:'tecnico'}),
+    ]);
+    if(!hygRes.ok || !hygRes.points || hygRes.points.length<51) throw new Error((hygRes&&hygRes.error) || 'Sin datos de HYG.');
+    if(!iefRes.ok || !iefRes.points || iefRes.points.length<51) throw new Error((iefRes&&iefRes.error) || 'Sin datos de IEF.');
+
+    // HYG (bonos high-yield) / IEF (Tesoro EEUU medio plazo): proxy de mercado
+    // de apetito por el riesgo / liquidez — cuando el ratio sube, el mercado
+    // absorbe deuda de más riesgo con facilidad (liquidez amplia); cuando cae
+    // por debajo de su propia media, se suele leer como estrés de crédito.
+    const n = Math.min(hygRes.points.length, iefRes.points.length);
+    const alignedPoints = hygRes.points.slice(hygRes.points.length-n);
+    const hygCloses = alignedPoints.map(p=>p.c);
+    const iefCloses = iefRes.points.slice(iefRes.points.length-n).map(p=>p.c);
+    const ratio = hygCloses.map((v,i) => v/iefCloses[i]);
+    const sma50Arr = computeSMA(ratio, 50);
+    const lastSma = sma50Arr[sma50Arr.length-1];
+    const lastRatio = ratio[ratio.length-1];
+    const pctVsSma = lastSma ? ((lastRatio-lastSma)/lastSma)*100 : null;
+    const score = pctVsSma==null ? null : Math.max(0, Math.min(100, 50 - pctVsSma*12));
+
+    marketLiquidityIndicator = { ratio:lastRatio, sma50:lastSma, pctVsSma, score };
+  } catch(e){
+    marketLiquidityError = (e && e.message) || 'Error al consultar el indicador de liquidez.';
+  }
+  marketLiquidityLoading = false;
+  render(null);
+}
+
 function renderFedFundsCard(){
   if(!fedFundsRate && !fedFundsLoading && !fedFundsError){
     loadFedFundsRate();
   }
+  if(!marketLiquidityIndicator && !marketLiquidityLoading && !marketLiquidityError){
+    loadMarketLiquidityIndicator();
+  }
   const meeting = nextFomcMeeting();
   const daysUntil = meeting ? Math.max(0, Math.round((new Date(meeting.start+'T00:00:00') - new Date()) / 86400000)) : null;
-  let body;
-  if(fedFundsLoading && !fedFundsRate){
-    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">Consultando…</div>`;
-  } else if(fedFundsError && !fedFundsRate){
-    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">${fedFundsError}</div>`;
-  } else if(fedFundsRate){
-    const f = fedFundsRate;
-    body = `<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:10px;">
-        <div style="font-size:20px;font-weight:800;">${f.lower.toFixed(2)}–${f.upper.toFixed(2)}%</div>
+
+  let liqBody;
+  if(marketLiquidityLoading && !marketLiquidityIndicator){
+    liqBody = `<div style="font-size:10.5px;color:var(--text-faint);">Consultando liquidez de mercado…</div>`;
+  } else if(marketLiquidityError && !marketLiquidityIndicator){
+    liqBody = `<div style="font-size:10.5px;color:var(--text-faint);">${marketLiquidityError}</div>`;
+  } else if(marketLiquidityIndicator){
+    const l = marketLiquidityIndicator;
+    const liqBand = l.score>=65 ? {label:'Liquidez amplia', color:'#4ADE80'} : l.score>=35 ? {label:'Liquidez normal', color:'#FBBF24'} : {label:'Estrés de crédito', color:'#DC2626'};
+    liqBody = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="width:44px;height:44px;border-radius:50%;border:3px solid ${liqBand.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${liqBand.color};flex-shrink:0;">${Math.round(l.score)}</div>
+        <div style="font-size:13px;font-weight:700;color:${liqBand.color};">${liqBand.label}</div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Rango objetivo de tipos fijado por el FOMC — sube o baja solo en sus reuniones, no a diario. Fuente: FRED (Reserva Federal de San Luis).">Dato del</span>
-          <span style="font-weight:700;">${f.asOf}</span>
-        </div>
-        ${meeting ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);">Próxima reunión FOMC</span>
-          <span style="font-weight:700;">${fmtMeetingRange(meeting)} · ${daysUntil}d</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="El Summary of Economic Projections ('dot plot') muestra las propias proyecciones de tipos de cada miembro del FOMC, no solo la decisión del día — las reuniones con SEP suelen mover más el mercado.">¿Lleva SEP (dot plot)?</span>
-          <span style="font-weight:700;color:${meeting.sep?'var(--accent-text)':'var(--text-dim)'};">${meeting.sep?'Sí':'No'}</span>
-        </div>` : ''}
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+        <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Ratio HYG (bonos high-yield) / IEF (Tesoro EEUU medio plazo) frente a su propia media de 50 días — proxy de mercado, no el balance real de la Fed. Por encima de su media, el mercado absorbe bien el riesgo; por debajo, estrés de crédito.">HYG/IEF vs media 50d</span>
+        <span style="font-weight:700;color:${l.pctVsSma>=0?'var(--green)':'var(--red)'};">${l.pctVsSma>=0?'+':''}${l.pctVsSma.toFixed(1)}%</span>
       </div>`;
   } else {
-    body = '';
+    liqBody = '';
   }
+
+  let fedBody;
+  if(fedFundsLoading && !fedFundsRate){
+    fedBody = `<div style="font-size:10.5px;color:var(--text-faint);">Consultando tipo de la Fed…</div>`;
+  } else if(fedFundsError && !fedFundsRate){
+    fedBody = `<div style="font-size:10.5px;color:var(--text-faint);">${fedFundsError}</div>`;
+  } else if(fedFundsRate){
+    const f = fedFundsRate;
+    fedBody = `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+        <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Rango objetivo de tipos fijado por el FOMC — sube o baja solo en sus reuniones, no a diario. Fuente: FRED.">Fed Funds Rate</span>
+        <span style="font-weight:700;">${f.lower.toFixed(2)}–${f.upper.toFixed(2)}%</span>
+      </div>
+      ${meeting ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+        <span style="color:var(--text-faint);">Próxima reunión FOMC</span>
+        <span style="font-weight:700;">${fmtMeetingRange(meeting)} · ${daysUntil}d${meeting.sep?' · SEP':''}</span>
+      </div>` : ''}`;
+  } else {
+    fedBody = '';
+  }
+
+  const body = `${liqBody}
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-soft);">
+      ${fedBody}
+    </div>`;
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Precio del dinero (tipo de interés) y calendario de reuniones del FOMC.">Tipo de la Fed y próximo FOMC</div>
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Ratio HYG/IEF (liquidez de mercado, vía Yahoo Finance) + tipo oficial de la Fed y calendario del FOMC (vía FRED).">Liquidez de mercado y Fed</div>
     ${body}
   </div>`;
 }
