@@ -929,6 +929,58 @@ function renderMarketIndicators(){
   </div>`;
 }
 
+let aaiiSentiment = null, aaiiSentimentLoading = false, aaiiSentimentError = null;
+async function loadAaiiSentiment(){
+  if(aaiiSentimentLoading) return;
+  aaiiSentimentLoading = true; aaiiSentimentError = null;
+  try{
+    const res = await callEdgeFunction('aaii-sentiment', {});
+    if(!res.ok) throw new Error(res.error || 'Error al consultar AAII.');
+    aaiiSentiment = res;
+  } catch(e){
+    aaiiSentimentError = (e && e.message) || 'Error al consultar AAII.';
+  }
+  aaiiSentimentLoading = false;
+  render(null);
+}
+function renderAaiiCard(label, value, avg, color, tip){
+  return `<div style="background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;padding:12px 14px;box-sizing:border-box;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="${tip}">${label}</div>
+    <div style="font-size:18px;font-weight:700;color:${color};margin-top:4px;">${value.toFixed(1)}%</div>
+    <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">Media histórica: ${avg.toFixed(1)}%</div>
+  </div>`;
+}
+// Encuesta semanal de la AAII a inversores particulares (bullish/neutral/
+// bearish sobre los próximos 6 meses). Se lee del HTML público de la propia
+// página (no hay CSV/API sin membresía) — ver Edge Function aaii-sentiment.
+function renderAaiiSentimentSection(){
+  if(!aaiiSentiment && !aaiiSentimentLoading && !aaiiSentimentError){
+    loadAaiiSentiment();
+  }
+  let body;
+  if(aaiiSentimentLoading && !aaiiSentiment){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:8px 0;">Consultando AAII…</div>`;
+  } else if(aaiiSentimentError && !aaiiSentiment){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:8px 0;">${aaiiSentimentError}</div>`;
+  } else if(aaiiSentiment){
+    const a = aaiiSentiment;
+    const spread = a.bullish - a.bearish;
+    const spreadColor = spread>=0 ? 'var(--green)' : 'var(--red)';
+    body = `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
+        ${renderAaiiCard('Alcistas (Bullish)', a.bullish, a.bullishAvg, 'var(--green)', 'Porcentaje de inversores particulares encuestados que esperan que el mercado suba en los próximos 6 meses.')}
+        ${renderAaiiCard('Neutrales', a.neutral, a.neutralAvg, 'var(--text-dim)', 'Porcentaje que espera que el mercado se mantenga más o menos igual en los próximos 6 meses.')}
+        ${renderAaiiCard('Bajistas (Bearish)', a.bearish, a.bearishAvg, 'var(--red)', 'Porcentaje que espera que el mercado baje en los próximos 6 meses.')}
+      </div>
+      <div style="font-size:9px;color:var(--text-faint);margin-top:8px;">Spread alcistas−bajistas: <b style="color:${spreadColor};">${spread>=0?'+':''}${spread.toFixed(1)} pp</b> · semana del ${a.weekEnding}</div>`;
+  } else {
+    body = '';
+  }
+  return `<div style="margin-bottom:20px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Encuesta semanal a inversores particulares de la AAII (American Association of Individual Investors) sobre hacia dónde creen que irá el mercado en 6 meses. Se usa como indicador contrarian: extremos de pesimismo (mucho bearish) han precedido subidas del mercado, y extremos de optimismo (mucho bullish) han precedido caídas. Publicada cada jueves desde 1987.">Sentimiento inversor particular (AAII)</div>
+    ${body}
+  </div>`;
+}
+
 let stockViewerQuery = '', stockViewerSearchToken = 0;
 let stockViewerTicker = null, stockViewerName = null, stockViewerQuoteLoading = false, stockViewerQuoteError = null, stockViewerQuote = null;
 let stockViewerShortVolume = null, stockViewerShortVolumeLoading = false;
@@ -2602,6 +2654,12 @@ const DATA_SOURCES = [
       { label: 'Fear & Greed Index (dentro de "Índice de riesgo de mercado")', freq: 'Se actualiza en vivo durante la sesión de mercado en EEUU. Es la media de 7 señales (momentum, amplitud del mercado, put/call ratio, demanda de bonos basura, demanda de refugio seguro, volatilidad y fuerza del precio), no la misma metodología que el aro de la card (que solo mira S&P 500 vs media 40 sem + VIX) — se muestran juntos porque miden lo mismo en espíritu (sentimiento/riesgo del mercado), no porque sean el mismo cálculo.' },
     ],
   },
+  {
+    provider: 'AAII (American Association of Individual Investors)', auth: 'Sin autenticación — leído del HTML público de su página de resultados',
+    items: [
+      { label: 'Sentimiento inversor particular (Alcistas/Neutrales/Bajistas)', freq: 'Encuesta semanal, publicada cada jueves con el dato de la semana que acaba de cerrar (jueves a miércoles). No hay API/CSV público sin membresía de pago — se lee directamente de la página pública de resultados, así que un cambio de diseño en su web podría romper la lectura temporalmente.' },
+    ],
+  },
 ];
 
 function renderHelpModal(){
@@ -3446,6 +3504,7 @@ function renderHomeScreen(){
     <div style="max-width:1200px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
       ${topNavBar()}
       ${renderMarketIndicators()}
+      ${renderAaiiSentimentSection()}
       ${renderCalendarStrip()}
       <div style="margin-bottom:26px;">
         <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mis carteras</h1>
