@@ -2540,7 +2540,7 @@ const DATA_SOURCES = [
     provider: 'FRED (Reserva Federal de San Luis)', auth: 'Sin autenticación — CSV público',
     items: [
       { label: 'Fed Funds Rate (rango objetivo) y calendario FOMC', freq: 'El tipo solo cambia en las reuniones del FOMC (máx. 8 veces al año) — el calendario de fechas está fijo a mano en la app, no viene de FRED.' },
-      { label: 'Liquidez neta de la Fed (Total Assets, TGA, RRP)', freq: 'Total Assets y TGA se publican 1 vez a la semana (H.4.1, los jueves); RRP es diario. La card usa siempre la semana más reciente de Total Assets como fecha de referencia.' },
+      { label: 'Liquidez neta de la Fed (Total Assets, TGA, RRP)', freq: 'Total Assets y TGA se publican 1 vez a la semana (H.4.1, los jueves); RRP es diario. La card usa siempre la semana más reciente de Total Assets como fecha de referencia. Lectura del signo en Total Assets: variación positiva (+, verde) = el balance sube = QE, inyecta liquidez; variación negativa (−, rojo) = el balance baja = QT, drena liquidez.' },
     ],
   },
 ];
