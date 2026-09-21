@@ -2664,7 +2664,7 @@ function renderModal(){
           : `<div style="font-size:12px;color:var(--text-dim);line-height:1.5;max-height:96px;overflow-y:auto;padding-right:6px;">${esc(modalCompanyState.summary||'')}</div>`}
       </div>` : ''}
 
-      ${p.ticker ? `<div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
+      ${p.ticker ? `<div style="margin-bottom:16px;">
         ${renderShortInterestSection(modalOfficialShortInterest, modalOfficialShortInterestLoading, modalShortVolume, modalShortVolumeLoading)}
       </div>` : ''}
 
@@ -4381,9 +4381,11 @@ function renderShortInterestBlock(si, loading){
 // Envuelve las dos fuentes juntas, con una línea que deja explícito que son
 // dos periodos de datos distintos (no dos formas de medir lo mismo).
 function renderShortInterestSection(officialSI, officialLoading, dailySV, dailyLoading){
-  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-    ${renderShortInterestBlock(officialSI, officialLoading)}
-    <div style="border-left:1px solid var(--border-soft);padding-left:16px;">
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div style="background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;padding:12px 14px;box-sizing:border-box;">
+      ${renderShortInterestBlock(officialSI, officialLoading)}
+    </div>
+    <div style="background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;padding:12px 14px;box-sizing:border-box;">
       ${renderShortVolumeBlock(dailySV, dailyLoading)}
     </div>
   </div>`;
@@ -4487,7 +4489,7 @@ function renderStockViewerScreen(){
         ${quoteBody}
       </div>
 
-      <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:20px;">
+      <div style="margin-bottom:20px;">
         ${renderShortInterestSection(stockViewerOfficialShortInterest, stockViewerOfficialShortInterestLoading, stockViewerShortVolume, stockViewerShortVolumeLoading)}
       </div>
 
