@@ -635,13 +635,14 @@ function renderYieldCurveCard(){
           <span style="color:var(--text-faint);">10 años / 3 meses</span>
           <span style="font-weight:700;">${y.tnx.toFixed(2)}% / ${y.irx.toFixed(2)}%</span>
         </div>
+        ${renderFedFundsRows()}
       </div>
       ${renderIndicatorDeltaRow(y.weekAgo, y.monthAgo, y.score, false)}`;
   } else {
     body = '';
   }
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Spread entre el bono del Tesoro a 10 años y la letra a 3 meses, vía Yahoo Finance.">Curva de tipos (EEUU)</div>
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Spread entre el bono del Tesoro a 10 años y la letra a 3 meses (vía Yahoo Finance), más el tipo oficial de la Fed y el calendario del FOMC.">Tipos de interés (EEUU)</div>
     ${body}
   </div>`;
 }
@@ -842,50 +843,33 @@ async function loadFedFundsRate(){
   fedFundsLoading = false;
   render(null);
 }
-function renderFedFundsCard(){
+// Filas extra (tipo oficial + próximo FOMC) que se insertan dentro de la card
+// "Tipos de interés" — fusionadas ahí porque son la misma familia de dato que
+// la curva de tipos (10a-3m), en vez de una card independiente.
+function renderFedFundsRows(){
   if(!fedFundsRate && !fedFundsLoading && !fedFundsError){
     loadFedFundsRate();
   }
+  if(fedFundsLoading && !fedFundsRate) return `<div style="font-size:10.5px;color:var(--text-faint);">Consultando tipo de la Fed…</div>`;
+  if(fedFundsError && !fedFundsRate) return `<div style="font-size:10.5px;color:var(--text-faint);">${fedFundsError}</div>`;
+  if(!fedFundsRate) return '';
+  const f = fedFundsRate;
   const meeting = nextFomcMeeting();
   const daysUntil = meeting ? Math.max(0, Math.round((new Date(meeting.start+'T00:00:00') - new Date()) / 86400000)) : null;
-  let body;
-  if(fedFundsLoading && !fedFundsRate){
-    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">Consultando…</div>`;
-  } else if(fedFundsError && !fedFundsRate){
-    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">${fedFundsError}</div>`;
-  } else if(fedFundsRate){
-    const f = fedFundsRate;
-    body = `<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:14px;">
-        <div style="font-size:22px;font-weight:800;">${f.lower.toFixed(2)}–${f.upper.toFixed(2)}%</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Rango objetivo de tipos fijado por el FOMC — sube o baja solo en sus reuniones, no a diario. Fuente: FRED (Reserva Federal de San Luis).">Fed Funds Rate (rango objetivo)</span>
-          <span style="font-weight:700;">Dato del ${f.asOf}</span>
-        </div>
-        ${meeting ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);">Próxima reunión FOMC</span>
-          <span style="font-weight:700;">${fmtMeetingRange(meeting)} · ${daysUntil}d</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="El Summary of Economic Projections ('dot plot') muestra las propias proyecciones de tipos de cada miembro del FOMC, no solo la decisión del día — las reuniones con SEP suelen mover más el mercado.">¿Lleva proyecciones (SEP)?</span>
-          <span style="font-weight:700;color:${meeting.sep?'var(--accent-text)':'var(--text-dim)'};">${meeting.sep?'Sí':'No'}</span>
-        </div>` : ''}
-      </div>`;
-  } else {
-    body = '';
-  }
-  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Precio del dinero (tipo de interés) y calendario de reuniones del FOMC — el complemento de cantidad (liquidez) y precio (tipos).">Tipo de la Fed y próximo FOMC</div>
-    ${body}
-  </div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+      <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Rango objetivo de tipos fijado por el FOMC — sube o baja solo en sus reuniones, no a diario. Fuente: FRED (Reserva Federal de San Luis).">Fed Funds Rate</span>
+      <span style="font-weight:700;">${f.lower.toFixed(2)}–${f.upper.toFixed(2)}%</span>
+    </div>
+    ${meeting ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+      <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="El Summary of Economic Projections ('dot plot') muestra las propias proyecciones de tipos de cada miembro del FOMC, no solo la decisión del día — las reuniones con SEP suelen mover más el mercado.">Próxima reunión FOMC</span>
+      <span style="font-weight:700;">${fmtMeetingRange(meeting)} · ${daysUntil}d${meeting.sep?' · SEP':''}</span>
+    </div>` : ''}`;
 }
 
 function renderMarketIndicators(){
   return `<div class="indicator-cards-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px;">
     ${renderCrashIndexCard()}
     ${renderLiquidityCard()}
-    ${renderFedFundsCard()}
     ${renderYieldCurveCard()}
     ${renderBreadthCard()}
     ${renderConcentrationCard()}
