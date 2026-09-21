@@ -529,16 +529,15 @@ function renderLiquidityCard(){
   } else if(fedLiquidity){
     const l = fedLiquidity;
     const weekDelta = l.netLiquidityWeekAgoB!=null ? l.netLiquidityB - l.netLiquidityWeekAgoB : null;
+    const monthDelta = l.netLiquidityMonthAgoB!=null ? l.netLiquidityB - l.netLiquidityMonthAgoB : null;
+    const fmtDelta = d => d==null ? '—' : (d>=0?'+':'')+fmtUsdB(d);
+    const deltaColor = d => d==null ? 'var(--text-dim)' : d>=0 ? 'var(--green)' : 'var(--red)';
     body = `<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:10px;">
         <div style="font-size:18px;font-weight:800;">${fmtUsdB(l.netLiquidityB)}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Total Assets − TGA − RRP. Sube = QE / liquidez volviendo al sistema (positivo para activos de riesgo); baja = QT / se está absorbiendo. Fuente: FRED.">Liquidez neta</span>
-          <span style="font-weight:700;color:${weekDelta==null?'var(--text-dim)':weekDelta>=0?'var(--green)':'var(--red)'};">${weekDelta==null?'—':(weekDelta>=0?'+':'')+fmtUsdB(weekDelta)+' sem.'}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Balance total de la Fed. Sube = QE (inyecta liquidez); baja = QT (drena liquidez).">Total Assets</span>
+          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Total Assets − TGA − RRP. Sube = QE / liquidez volviendo al sistema (positivo para activos de riesgo); baja = QT / se está absorbiendo. Fuente: FRED, siempre con el último dato real publicado, nunca estimado.">Total Assets</span>
           <span style="font-weight:700;">${fmtUsdB(l.totalAssetsB)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
@@ -550,7 +549,8 @@ function renderLiquidityCard(){
           <span style="font-weight:700;">${fmtUsdB(l.rrpB)}</span>
         </div>
       </div>
-      <div style="font-size:9.5px;color:var(--text-faint);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-soft);">Dato del ${l.asOf}</div>`;
+      <div style="font-size:9.5px;color:var(--text-faint);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-soft);">vs hace 1 sem: <b style="color:${deltaColor(weekDelta)};">${fmtDelta(weekDelta)}</b> · vs hace 1 mes: <b style="color:${deltaColor(monthDelta)};">${fmtDelta(monthDelta)}</b></div>
+      <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">Dato del ${l.asOf}</div>`;
   } else {
     body = '';
   }
