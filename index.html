@@ -800,6 +800,8 @@ function renderMarketIndicators(){
 
 let stockViewerQuery = '', stockViewerSearchToken = 0;
 let stockViewerTicker = null, stockViewerName = null, stockViewerQuoteLoading = false, stockViewerQuoteError = null, stockViewerQuote = null;
+let stockViewerShortVolume = null, stockViewerShortVolumeLoading = false;
+let modalShortVolume = null, modalShortVolumeLoading = false, modalShortVolumeToken = 0;
 let stockViewerDividends = [], stockViewerEstimates = null;
 let stockViewerChartLoading = false, stockViewerChartError = null, stockViewerChartPoints = null;
 let stockViewerWeeklyPoints = null;
@@ -913,12 +915,25 @@ async function loadStockViewerChart(ticker){
   stockViewerChartLoading = false;
 }
 
+// Volumen en corto del día (FINRA, Reg SHO) — funciona para cualquier ticker de
+// EEUU, no solo los de la cartera; solo devuelve available:false para tickers
+// fuera de EEUU o cripto (ver finra-short-volume).
+async function loadShortVolume(ticker){
+  try{
+    return await callEdgeFunction('finra-short-volume', {ticker});
+  } catch(e){
+    return { ok:false, available:false };
+  }
+}
+
 async function selectStockViewerTicker(symbol, name){
   stockViewerTicker = symbol;
   stockViewerName = name || null;
   stockViewerQuery = symbol;
+  stockViewerShortVolume = null; stockViewerShortVolumeLoading = true;
   render(null);
-  await Promise.all([loadStockViewerQuote(symbol), loadStockViewerChart(symbol)]);
+  const [, , shortVol] = await Promise.all([loadStockViewerQuote(symbol), loadStockViewerChart(symbol), loadShortVolume(symbol)]);
+  stockViewerShortVolume = shortVol; stockViewerShortVolumeLoading = false;
   render(null);
 }
 
@@ -2459,6 +2474,10 @@ function renderModal(){
         ${modalCompanyState.loading ? `<div style="font-size:11.5px;color:var(--text-faint);">Consultando…</div>`
           : modalCompanyState.error ? `<div style="font-size:11px;color:var(--text-faint);">${modalCompanyState.error}</div>`
           : `<div style="font-size:12px;color:var(--text-dim);line-height:1.5;max-height:96px;overflow-y:auto;padding-right:6px;">${esc(modalCompanyState.summary||'')}</div>`}
+      </div>` : ''}
+
+      ${p.ticker ? `<div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
+        ${renderShortVolumeBlock(modalShortVolume, modalShortVolumeLoading)}
       </div>` : ''}
 
       <div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
@@ -4117,6 +4136,22 @@ function wireStockViewerChart(){
   }
 }
 
+// Compartido entre el visualizador de acciones y el modal de posición.
+function renderShortVolumeBlock(sv, loading){
+  if(loading) return `<div style="font-size:11px;color:var(--text-faint);">Consultando FINRA…</div>`;
+  if(!sv || !sv.ok) return '';
+  if(!sv.available) return `<div style="font-size:11px;color:var(--text-faint);">${esc(sv.reason||'Dato no disponible para este ticker.')}</div>`;
+  const pct = sv.shortVolumePct;
+  const color = pct>=50 ? 'var(--red)' : pct>=30 ? 'var(--text)' : 'var(--green)';
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+    <div>
+      <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="% del volumen negociado ese día que fue venta en corto — dato diario de FINRA (Reg SHO). No es el short interest total (esa cifra es quincenal): esto es la presión bajista del propio día, mucho más frecuente.">Volumen en corto (FINRA)</div>
+      <div style="font-size:9px;color:var(--text-faint);margin-top:1px;">Dato del ${sv.date}</div>
+    </div>
+    <div style="font-size:16px;font-weight:700;color:${color};">${pct.toFixed(1)}%</div>
+  </div>`;
+}
+
 function renderStockViewerScreen(){
   if(!session) return; // una operación asíncrona pendiente terminó después de cerrar sesión; no repintar la app
   const app = document.getElementById('app');
@@ -4213,6 +4248,10 @@ function renderStockViewerScreen(){
 
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px 22px;margin-bottom:20px;">
         ${quoteBody}
+      </div>
+
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:20px;">
+        ${renderShortVolumeBlock(stockViewerShortVolume, stockViewerShortVolumeLoading)}
       </div>
 
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
@@ -4539,9 +4578,18 @@ function render(scenario){
     ruleFormOpen = false; ruleFormError = null; positionRules = []; positionRulesLoading = true;
     recompraFormOpen = false; recompraFormError = null; recompraFormType = 'compra'; recompraFormPending = false; recompraEditingId = null;
     positionEventFormOpen = false; positionEventFormError = null; positionEventEditingId = null; positionEvents = []; positionEventsLoading = true;
+    modalShortVolume = null; modalShortVolumeLoading = !!(pos && pos.ticker);
     render(currentScenario);
     if(pos && pos.ticker) loadModalChart(pos.ticker, modalRange);
     if(pos && pos.ticker && !pos.business_summary && !isCryptoTicker(pos.ticker)) loadModalCompanyInfo(pos);
+    if(pos && pos.ticker){
+      const token = ++modalShortVolumeToken;
+      loadShortVolume(pos.ticker).then(res => {
+        if(token !== modalShortVolumeToken) return;
+        modalShortVolume = res; modalShortVolumeLoading = false;
+        render(currentScenario);
+      });
+    }
     loadPositionRules(selectedId).then(() => render(currentScenario));
     loadPositionEvents(selectedId).then(() => render(currentScenario));
   }));
