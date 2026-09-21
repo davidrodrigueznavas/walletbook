@@ -4103,25 +4103,54 @@ function renderShortInterestBlock(si, loading){
   }
   const fmtSharesM = n => n==null ? '—' : (n/1e6).toLocaleString('es-ES',{maximumFractionDigits:1})+'M';
   const fmtHistDate = iso => new Date(iso+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'}).replace('.','');
-  const historyHtml = (si.history && si.history.length) ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border-soft);">
-    <div style="font-size:8.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Acciones en corto sin devolver en cada corte quincenal (fuente: Nasdaq). En millones de acciones, no en % del float — para no mezclar con una aproximación calculada con el float de hoy.">Últimas ${si.history.length} quincenas</div>
-    ${si.history.map(h => `<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-faint);padding:1px 0;">
-      <span>${fmtHistDate(h.date)}</span>
-      <span style="font-weight:600;color:var(--text-dim);">${fmtSharesM(h.sharesShort)}</span>
-    </div>`).join('')}
-  </div>` : '';
+
+  // Mini-gráfico de evolución (más antiguo -> más reciente) de las últimas
+  // quincenas, con un punto por dato: al pasar el ratón encima de cada punto
+  // se ve la fecha y las acciones en corto de esa quincena (title de SVG).
+  let sparklineHtml = '';
+  if(si.history && si.history.length>=2){
+    const pts = si.history.slice().reverse();
+    const values = pts.map(h=>h.sharesShort);
+    const min = Math.min(...values), max = Math.max(...values);
+    const range = (max-min) || 1;
+    const w = 120, h = 34, pad = 5;
+    const stepX = (w-pad*2) / (pts.length-1);
+    const coords = pts.map((p,i)=>({
+      x: pad + i*stepX,
+      y: pad + (h-pad*2) * (1 - (p.sharesShort-min)/range),
+      p,
+    }));
+    const pathD = coords.map((c,i)=> (i===0?'M':'L')+c.x.toFixed(1)+','+c.y.toFixed(1)).join(' ');
+    const dots = coords.map((c,i)=>{
+      const isLast = i===coords.length-1;
+      return `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="7" fill="transparent" style="cursor:help;"><title>${fmtHistDate(c.p.date)}: ${fmtSharesM(c.p.sharesShort)} acciones en corto</title></circle>` +
+        `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${isLast?2.6:1.6}" fill="${isLast?color:'var(--text-faint)'}"/>`;
+    }).join('');
+    sparklineHtml = `<div style="flex-shrink:0;">
+      <svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="overflow:visible;display:block;">
+        <path d="${pathD}" fill="none" stroke="var(--text-faint)" stroke-width="1.4"/>
+        ${dots}
+      </svg>
+      <div style="font-size:8px;color:var(--text-faint);text-align:center;margin-top:2px;">últimas ${pts.length} quincenas</div>
+    </div>`;
+  }
+
   return `<div>
     <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="% del float (las acciones que de verdad se pueden negociar; no cuentan las bloqueadas de fundadores, directivos o inversores con acuerdos de bloqueo) que están prestadas y sin devolver ahora mismo — el acumulado real de apuestas en contra abiertas. Se publica 2 veces al mes, con ~8 días hábiles de retraso.">Short interest oficial</div>
-    <div style="font-size:18px;font-weight:700;color:${color};margin-top:4px;">${pct.toFixed(1)}%</div>
-    <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">${trendHtml}dato del CORTE del ${si.date}</div>
-    ${historyHtml}
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:4px;">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:${color};">${pct.toFixed(1)}% <span style="font-size:12px;font-weight:600;color:var(--text-dim);">· ${fmtSharesM(si.sharesShort)} acciones</span></div>
+        <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">${trendHtml}dato del CORTE del ${si.date}</div>
+      </div>
+      ${sparklineHtml}
+    </div>
   </div>`;
 }
 
 // Envuelve las dos fuentes juntas, con una línea que deja explícito que son
 // dos periodos de datos distintos (no dos formas de medir lo mismo).
 function renderShortInterestSection(officialSI, officialLoading, dailySV, dailyLoading){
-  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+  return `<div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
     <div style="background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;padding:12px 14px;box-sizing:border-box;">
       ${renderShortInterestBlock(officialSI, officialLoading)}
     </div>
