@@ -410,6 +410,27 @@ function renderIndicatorDeltaRow(weekAgo, monthAgo, current, invert){
   const badColor = d => (invert ? d<0 : d>=0) ? 'var(--red)' : 'var(--green)';
   return `<div style="font-size:9.5px;color:var(--text-faint);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-soft);">vs hace 1 sem: <b style="color:${badColor(d7)};">${fmt(d7)}</b> · vs hace 1 mes: <b style="color:${badColor(d30)};">${fmt(d30)}</b></div>`;
 }
+// Plantilla compartida por todas las filas de las cards de indicadores macro:
+// etiqueta a la izquierda, valor a la derecha, y opcionalmente una línea de
+// variación debajo (alineada a la derecha) — misma estructura en las 5 cards
+// para que no haya alturas ni saltos de línea distintos entre unas y otras.
+function metricLine(label, tip, valueHtml, deltaHtml){
+  return `<div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;gap:8px;">
+      <span style="color:var(--text-faint);white-space:nowrap;${tip?'cursor:help;border-bottom:1px dotted var(--text-faint);':''}"${tip?` title="${tip}"`:''}>${label}</span>
+      <span style="font-weight:700;white-space:nowrap;">${valueHtml}</span>
+    </div>
+    ${deltaHtml ? `<div style="font-size:9px;color:var(--text-faint);text-align:right;margin-top:1px;">${deltaHtml}</div>` : ''}
+  </div>`;
+}
+// Cabecera compartida: anillo de score (0-100) + etiqueta de banda, con altura
+// fija (44px de anillo) para que todas las cards con anillo midan igual.
+function metricRing(score, color, label){
+  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+    <div style="width:44px;height:44px;border-radius:50%;border:3px solid ${color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${color};flex-shrink:0;">${Math.round(score)}</div>
+    <div style="font-size:13.5px;font-weight:700;color:${color};">${label}</div>
+  </div>`;
+}
 
 async function loadMarketIndicators(){
   if(marketIndicatorsLoading) return;
@@ -471,19 +492,10 @@ function renderCrashIndexCard(){
   } else if(marketIndicators){
     const m = marketIndicators;
     const band = riskBand(m.combined);
-    body = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <div style="width:44px;height:44px;border-radius:50%;border:3px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${band.color};flex-shrink:0;">${Math.round(m.combined)}</div>
-        <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Distancia del S&amp;P 500 respecto a su media móvil de 40 semanas. Cuando el precio cruza por debajo, se suele leer como señal de cambio a tendencia bajista (análisis de Stan Weinstein).">S&P 500 vs media 40 sem</span>
-          <span style="font-weight:700;color:${m.pctVsSma40>=0?'var(--green)':'var(--red)'};">${m.pctVsSma40>=0?'+':''}${m.pctVsSma40.toFixed(1)}%${m.pctVsSma40<0?' · por debajo':''}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Índice de volatilidad del S&amp;P 500. Por debajo de 15, mercado tranquilo; 15-20 normal; 20-30 nerviosismo; por encima de 30, estrés o pánico.">VIX</span>
-          <span style="font-weight:700;">${m.vixLevel.toFixed(1)}</span>
-        </div>
+    body = `${metricRing(m.combined, band.color, band.label)}
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${metricLine('S&amp;P 500 vs media 40 sem', 'Distancia del S&amp;P 500 respecto a su media móvil de 40 semanas. Cuando el precio cruza por debajo, se suele leer como señal de cambio a tendencia bajista (análisis de Stan Weinstein).', `<span style="color:${m.pctVsSma40>=0?'var(--green)':'var(--red)'};">${m.pctVsSma40>=0?'+':''}${m.pctVsSma40.toFixed(1)}%</span>`)}
+        ${metricLine('VIX', 'Índice de volatilidad del S&amp;P 500. Por debajo de 15, mercado tranquilo; 15-20 normal; 20-30 nerviosismo; por encima de 30, estrés o pánico.', m.vixLevel.toFixed(1))}
       </div>
       ${renderIndicatorDeltaRow(m.weekAgo, m.monthAgo, m.combined, false)}`;
   } else {
@@ -532,28 +544,22 @@ function renderLiquidityCard(){
     const deltaColor = d => d==null ? 'var(--text-dim)' : d>=0 ? 'var(--green)' : 'var(--red)';
     const weekDelta = l.netLiquidityWeekAgoB!=null ? l.netLiquidityB - l.netLiquidityWeekAgoB : null;
     const monthDelta = l.netLiquidityMonthAgoB!=null ? l.netLiquidityB - l.netLiquidityMonthAgoB : null;
-    const fmtDeltaShort = d => d==null ? '—' : (d>=0?'+':'')+d.toLocaleString('es-ES',{maximumFractionDigits:1, minimumFractionDigits:1});
-    const metricRow = (label, tip, current, weekAgo, monthAgo) => {
+    const fmtDeltaNum = d => d==null ? '—' : (d>=0?'+':'')+d.toLocaleString('es-ES',{maximumFractionDigits:1, minimumFractionDigits:1});
+    const deltaLine = (weekAgo, monthAgo, current) => {
       const wd = weekAgo!=null ? current - weekAgo : null;
       const md = monthAgo!=null ? current - monthAgo : null;
-      return `<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11px;gap:6px;">
-        <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);flex-shrink:0;" title="${tip}">${label}</span>
-        <span style="text-align:right;white-space:nowrap;">
-          <span style="font-weight:700;">${fmtUsdB(current)}</span>
-          <span style="font-size:9px;color:var(--text-faint);"> (s: <b style="color:${deltaColor(wd)};">${fmtDeltaShort(wd)}</b> · m: <b style="color:${deltaColor(md)};">${fmtDeltaShort(md)}</b>)</span>
-        </span>
-      </div>`;
+      return `sem: <b style="color:${deltaColor(wd)};">${fmtDelta(wd)}</b> · mes: <b style="color:${deltaColor(md)};">${fmtDelta(md)}</b>`;
     };
-    body = `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
+    body = `<div style="margin-bottom:10px;">
         <div style="font-size:17px;font-weight:800;">${fmtUsdB(l.netLiquidityB)}</div>
-        <div style="font-size:10px;color:${deltaColor(weekDelta)};font-weight:700;">${fmtDelta(weekDelta)} sem.</div>
+        <div style="font-size:9px;color:var(--text-faint);margin-top:1px;">sem: <b style="color:${deltaColor(weekDelta)};">${fmtDeltaNum(weekDelta)}</b> · mes: <b style="color:${deltaColor(monthDelta)};">${fmtDeltaNum(monthDelta)}</b> mil M$</div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:5px;">
-        ${metricRow('Total Assets', 'Balance total de la Fed. Sube = QE (inyecta liquidez); baja = QT (drena liquidez). Entre paréntesis: variación (semana/mes) en mil M$.', l.totalAssetsB, l.totalAssetsWeekAgoB, l.totalAssetsMonthAgoB)}
-        ${metricRow('TGA', 'Treasury General Account: la cuenta corriente del Tesoro en la Fed. Sube = drena liquidez del mercado; baja = la devuelve. Entre paréntesis: variación (semana/mes) en mil M$.', l.tgaB, l.tgaWeekAgoB, l.tgaMonthAgoB)}
-        ${metricRow('RRP', 'Reverse Repo: dinero que bancos/fondos monetarios aparcan en la Fed en vez de que circule en el mercado. Sube = absorbe liquidez; baja = la devuelve al sistema. Entre paréntesis: variación (semana/mes) en mil M$.', l.rrpB, l.rrpWeekAgoB, l.rrpMonthAgoB)}
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${metricLine('Total Assets', 'Balance total de la Fed. Sube = QE (inyecta liquidez); baja = QT (drena liquidez).', fmtUsdB(l.totalAssetsB), deltaLine(l.totalAssetsWeekAgoB, l.totalAssetsMonthAgoB, l.totalAssetsB))}
+        ${metricLine('TGA', 'Treasury General Account: la cuenta corriente del Tesoro en la Fed. Sube = drena liquidez del mercado; baja = la devuelve.', fmtUsdB(l.tgaB), deltaLine(l.tgaWeekAgoB, l.tgaMonthAgoB, l.tgaB))}
+        ${metricLine('RRP', 'Reverse Repo: dinero que bancos/fondos monetarios aparcan en la Fed en vez de que circule en el mercado. Sube = absorbe liquidez; baja = la devuelve al sistema.', fmtUsdB(l.rrpB), deltaLine(l.rrpWeekAgoB, l.rrpMonthAgoB, l.rrpB))}
       </div>
-      <div style="font-size:9px;color:var(--text-faint);margin-top:6px;">mes: <b style="color:${deltaColor(monthDelta)};">${fmtDelta(monthDelta)}</b> · dato del ${l.asOf}</div>`;
+      <div style="font-size:9px;color:var(--text-faint);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-soft);">Dato del ${l.asOf}</div>`;
   } else {
     body = '';
   }
@@ -606,19 +612,10 @@ function renderYieldCurveCard(){
   } else if(yieldCurveIndicator){
     const y = yieldCurveIndicator;
     const band = y.spread<0 ? {label:'Curva invertida', color:'#DC2626'} : y.spread<0.5 ? {label:'Curva plana', color:'#FBBF24'} : {label:'Curva normal', color:'#4ADE80'};
-    body = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <div style="width:44px;height:44px;border-radius:50%;border:3px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${band.color};flex-shrink:0;">${Math.round(y.score)}</div>
-        <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Rendimiento del bono a 10 años menos la letra a 3 meses. Por debajo de 0 (invertida), ha precedido a casi todas las recesiones de EEUU desde los 60 — según la Fed de Nueva York, incluso más fiable que el clásico spread 2-10 años.">10 años − 3 meses</span>
-          <span style="font-weight:700;color:${y.spread>=0?'var(--green)':'var(--red)'};">${y.spread>=0?'+':''}${y.spread.toFixed(2)} pp</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);">10 años / 3 meses</span>
-          <span style="font-weight:700;">${y.tnx.toFixed(2)}% / ${y.irx.toFixed(2)}%</span>
-        </div>
+    body = `${metricRing(y.score, band.color, band.label)}
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${metricLine('10 años − 3 meses', 'Rendimiento del bono a 10 años menos la letra a 3 meses. Por debajo de 0 (invertida), ha precedido a casi todas las recesiones de EEUU desde los 60 — según la Fed de Nueva York, incluso más fiable que el clásico spread 2-10 años.', `<span style="color:${y.spread>=0?'var(--green)':'var(--red)'};">${y.spread>=0?'+':''}${y.spread.toFixed(2)} pp</span>`)}
+        ${metricLine('10 años / 3 meses', null, `${y.tnx.toFixed(2)}% / ${y.irx.toFixed(2)}%`)}
       </div>
       ${renderIndicatorDeltaRow(y.weekAgo, y.monthAgo, y.score, false)}`;
   } else {
@@ -676,14 +673,11 @@ function breadthRow(){
   if(!breadthIndicator && !breadthLoading && !breadthError){
     loadBreadthIndicator();
   }
-  if(breadthLoading && !breadthIndicator) return `<div style="font-size:10.5px;color:var(--text-faint);">Consultando amplitud…</div>`;
+  if(breadthLoading && !breadthIndicator) return metricLine('Small vs Large caps', null, `<span style="color:var(--text-faint);font-weight:400;font-size:10.5px;">…</span>`);
   if(breadthError && !breadthIndicator) return `<div style="font-size:10.5px;color:var(--text-faint);">${breadthError}</div>`;
   if(!breadthIndicator) return '';
   const b = breadthIndicator;
-  return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-    <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Ratio Russell 2000 (small caps) / S&amp;P 500 (large caps) frente a su media de 50 días. Cuando las small caps quedan muy por debajo de su media relativa, suele leerse como mercado defensivo, con menos apetito por el riesgo.">Small vs Large caps</span>
-    <span style="font-weight:700;color:${b.pctVsSma>=0?'var(--green)':'var(--red)'};">${b.pctVsSma>=0?'+':''}${b.pctVsSma.toFixed(1)}%</span>
-  </div>`;
+  return metricLine('Small vs Large caps', 'Ratio Russell 2000 (small caps) / S&amp;P 500 (large caps) frente a su media de 50 días. Cuando las small caps quedan muy por debajo de su media relativa, suele leerse como mercado defensivo, con menos apetito por el riesgo.', `<span style="color:${b.pctVsSma>=0?'var(--green)':'var(--red)'};">${b.pctVsSma>=0?'+':''}${b.pctVsSma.toFixed(1)}%</span>`);
 }
 
 let concentrationIndicator = null, concentrationLoading = false, concentrationError = null;
@@ -739,15 +733,9 @@ function renderConcentrationCard(){
   } else if(concentrationIndicator){
     const c = concentrationIndicator;
     const band = c.score>=65 ? {label:'Mercado muy concentrado', color:'#DC2626'} : c.score>=35 ? {label:'Concentración normal', color:'#FBBF24'} : {label:'Participación amplia', color:'#4ADE80'};
-    body = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <div style="width:44px;height:44px;border-radius:50%;border:3px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${band.color};flex-shrink:0;">${Math.round(c.score)}</div>
-        <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Ratio S&amp;P 500 ponderado por capitalización (SPY) / S&amp;P 500 equiponderado (RSP), frente a su media de 50 días. Cuando sube, unas pocas megacaps están tirando del índice mientras la mayoría de valores se quedan atrás — mercado más frágil y concentrado.">S&P 500 vs equiponderado</span>
-          <span style="font-weight:700;color:${c.pctVsSma>=0?'var(--red)':'var(--green)'};">${c.pctVsSma>=0?'+':''}${c.pctVsSma.toFixed(1)}%</span>
-        </div>
+    body = `${metricRing(c.score, band.color, band.label)}
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${metricLine('S&amp;P 500 vs igual peso', 'Ratio S&amp;P 500 ponderado por capitalización (SPY) / S&amp;P 500 equiponderado (RSP), frente a su media de 50 días. Cuando sube, unas pocas megacaps están tirando del índice mientras la mayoría de valores se quedan atrás — mercado más frágil y concentrado.', `<span style="color:${c.pctVsSma>=0?'var(--red)':'var(--green)'};">${c.pctVsSma>=0?'+':''}${c.pctVsSma.toFixed(1)}%</span>`)}
         ${breadthRow()}
       </div>
       ${renderIndicatorDeltaRow(c.weekAgo, c.monthAgo, c.score, false)}`;
@@ -863,14 +851,8 @@ function renderFedFundsCard(){
   } else if(marketLiquidityIndicator){
     const l = marketLiquidityIndicator;
     const liqBand = l.score>=65 ? {label:'Liquidez amplia', color:'#4ADE80'} : l.score>=35 ? {label:'Liquidez normal', color:'#FBBF24'} : {label:'Estrés de crédito', color:'#DC2626'};
-    liqBody = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <div style="width:44px;height:44px;border-radius:50%;border:3px solid ${liqBand.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${liqBand.color};flex-shrink:0;">${Math.round(l.score)}</div>
-        <div style="font-size:13px;font-weight:700;color:${liqBand.color};">${liqBand.label}</div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-        <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Ratio HYG (bonos high-yield) / IEF (Tesoro EEUU medio plazo) frente a su propia media de 50 días — proxy de mercado, no el balance real de la Fed. Por encima de su media, el mercado absorbe bien el riesgo; por debajo, estrés de crédito.">HYG/IEF vs media 50d</span>
-        <span style="font-weight:700;color:${l.pctVsSma>=0?'var(--green)':'var(--red)'};">${l.pctVsSma>=0?'+':''}${l.pctVsSma.toFixed(1)}%</span>
-      </div>`;
+    liqBody = `${metricRing(l.score, liqBand.color, liqBand.label)}
+      ${metricLine('HYG/IEF vs media 50d', 'Ratio HYG (bonos high-yield) / IEF (Tesoro EEUU medio plazo) frente a su propia media de 50 días — proxy de mercado, no el balance real de la Fed. Por encima de su media, el mercado absorbe bien el riesgo; por debajo, estrés de crédito.', `<span style="color:${l.pctVsSma>=0?'var(--green)':'var(--red)'};">${l.pctVsSma>=0?'+':''}${l.pctVsSma.toFixed(1)}%</span>`)}`;
   } else {
     liqBody = '';
   }
@@ -882,20 +864,16 @@ function renderFedFundsCard(){
     fedBody = `<div style="font-size:10.5px;color:var(--text-faint);">${fedFundsError}</div>`;
   } else if(fedFundsRate){
     const f = fedFundsRate;
-    fedBody = `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-        <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Rango objetivo de tipos fijado por el FOMC — sube o baja solo en sus reuniones, no a diario. Fuente: FRED.">Fed Funds Rate</span>
-        <span style="font-weight:700;">${f.lower.toFixed(2)}–${f.upper.toFixed(2)}%</span>
-      </div>
-      ${meeting ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-        <span style="color:var(--text-faint);">Próxima reunión FOMC</span>
-        <span style="font-weight:700;">${fmtMeetingRange(meeting)} · ${daysUntil}d${meeting.sep?' · SEP':''}</span>
-      </div>` : ''}`;
+    fedBody = `<div style="display:flex;flex-direction:column;gap:6px;">
+      ${metricLine('Fed Funds Rate', 'Rango objetivo de tipos fijado por el FOMC — sube o baja solo en sus reuniones, no a diario. Fuente: FRED.', `${f.lower.toFixed(2)}–${f.upper.toFixed(2)}%`)}
+      ${meeting ? metricLine('Próximo FOMC', meeting.sep ? 'Esta reunión incluye el Summary of Economic Projections (dot plot) — suele mover más el mercado.' : null, `${fmtMeetingRange(meeting)}${meeting.sep?' · SEP':''}<span style="color:var(--text-faint);font-weight:400;"> (${daysUntil}d)</span>`) : ''}
+    </div>`;
   } else {
     fedBody = '';
   }
 
   const body = `${liqBody}
-    <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-soft);">
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-soft);">
       ${fedBody}
     </div>`;
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
@@ -906,8 +884,8 @@ function renderFedFundsCard(){
 
 function renderMarketIndicators(){
   return `<div class="indicator-cards-row" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:20px;">
-    ${renderCrashIndexCard()}
     ${renderLiquidityCard()}
+    ${renderCrashIndexCard()}
     ${renderYieldCurveCard()}
     ${renderFedFundsCard()}
     ${renderConcentrationCard()}
