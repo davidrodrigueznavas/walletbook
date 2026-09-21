@@ -364,6 +364,7 @@ let session = null, portfolioId = null, loginError = null, loginBusy = false;
 let authMode = 'login', authInfo = null; // authMode: 'login' | 'signup' | 'reset' | 'recovery'
 let activePortfolioName = 'Mi cartera', portfolios = [], menuOpen = false, activeView = null;
 let frameworkModalOpen = false;
+let helpModalOpen = false;
 let profile = null;
 let exploreList = null, exploreLoading = false, exploreDetailId = null, exploreDetailPositions = null, exploreCategoryFilter = null;
 let positionRules = [], positionRulesLoading = false, ruleFormOpen = false, ruleFormError = null, ruleEditingId = null;
@@ -2405,6 +2406,69 @@ function renderFrameworkModal(){
   </div>`;
 }
 
+// De dónde sale cada dato de la app y con qué frecuencia se actualiza — para que
+// nunca se confunda "en vivo" con "publicado hace X" al leer un número.
+const DATA_SOURCES = [
+  {
+    provider: 'Yahoo Finance', auth: 'Sin API key',
+    items: [
+      { label: 'Precio y cotización de cada posición', freq: 'Cron cada hora, L-V en horario de mercado (13-21h UTC)' },
+      { label: 'Gráfico histórico de precio (visualizador y modal de posición)', freq: 'En vivo, al abrir el gráfico' },
+      { label: 'Buscador de tickers', freq: 'En vivo, al escribir' },
+      { label: 'Noticias de la cartera', freq: 'En vivo, al pulsar "Noticias de mi cartera"' },
+      { label: 'Calendario de eventos de la acción (resultados, dividendos...)', freq: 'En vivo, al consultar' },
+      { label: 'Descripción de la empresa (si no hay una propia guardada)', freq: 'En vivo, la primera vez que abres esa posición' },
+      { label: 'Métricas técnicas de los screeners (RSI, medias, volumen)', freq: 'Cron cada hora, L-V en horario de mercado' },
+      { label: 'Fundamentales de los screeners (PER, capitalización, crecimiento...)', freq: 'Cron cada hora, L-V en horario de mercado — requiere cookie+crumb de Yahoo, en lotes de 100 tickers' },
+      { label: 'Máximo de 90 días y % de caída (BTC, oro, plata)', freq: 'Cron cada hora, L-V en horario de mercado' },
+    ],
+  },
+  {
+    provider: 'Alpha Vantage', auth: 'Con API key propia',
+    items: [
+      { label: 'Fundamentales completos del visualizador de acciones (PER, PEG, márgenes, ROE, dividendos, estimaciones de analistas...)', freq: 'En vivo al consultar, pero el propio proveedor solo actualiza sus datos ~1 vez al día — no es intradía. Límite de peticiones diarias en el plan gratuito.' },
+    ],
+  },
+  {
+    provider: 'FINRA (Reg SHO)', auth: 'Sin autenticación — fichero público diario',
+    items: [
+      { label: 'Volumen en corto diario (visualizador y modal de posición)', freq: 'Se publica 1 vez al día, hacia las 18:00 hora de Nueva York, con el dato de esa misma sesión. Solo cubre acciones cotizadas en EEUU. No es el short interest oficial (ese lo publican las bolsas quincenalmente) — es el % del volumen negociado ese día que fue venta en corto, un proxy mucho más frecuente.' },
+    ],
+  },
+];
+
+function renderHelpModal(){
+  if(!helpModalOpen) return '';
+  return `<div class="modal-backdrop" id="help-backdrop">
+    <div class="modal-card" style="max-width:640px;padding:26px 30px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <h2 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:18px;margin:0;">Ayuda · de dónde salen los datos</h2>
+        <button id="help-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
+      </div>
+      <div style="font-size:11.5px;color:var(--text-dim);line-height:1.5;margin-bottom:20px;">Cada dato de Walletbook viene de una fuente externa distinta, y no todas actualizan con la misma frecuencia. Antes de leer un número como "en vivo", comprueba aquí cada cuánto se refresca de verdad.</div>
+      ${DATA_SOURCES.map(src=>`<div style="margin-bottom:18px;">
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
+          <div style="font-size:12.5px;font-weight:700;">${esc(src.provider)}</div>
+          <div style="font-size:10px;color:var(--text-faint);">${esc(src.auth)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${src.items.map(it=>`<div style="padding:8px 10px;border-radius:7px;background:var(--panel-2);border:1px solid var(--border-soft);">
+            <div style="font-size:11.5px;font-weight:600;margin-bottom:2px;">${esc(it.label)}</div>
+            <div style="font-size:10.5px;color:var(--text-faint);line-height:1.4;">${esc(it.freq)}</div>
+          </div>`).join('')}
+        </div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function wireHelpModal(app){
+  const closeBtn = document.getElementById('help-close');
+  if(closeBtn) closeBtn.addEventListener('click', () => { helpModalOpen = false; render(currentScenario); });
+  const backdrop = document.getElementById('help-backdrop');
+  if(backdrop) backdrop.addEventListener('click', (e) => { if(e.target===backdrop){ helpModalOpen = false; render(currentScenario); } });
+}
+
 function wireFrameworkModal(app){
   const openBtn = document.getElementById('framework-open-btn');
   if(openBtn) openBtn.addEventListener('click', (e) => { e.stopPropagation(); frameworkModalOpen = true; render(currentScenario); });
@@ -2771,6 +2835,7 @@ function menuBlock(){
       <button class="nav-item" data-view="calendario" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Calendario</button>
       <button class="nav-item" data-view="explorar" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Explorar en Walletbook</button>
       <button class="nav-item" data-view="cuenta" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Mi cuenta</button>
+      <button class="nav-item" data-view="ayuda" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);padding:13px 18px;font-size:13.5px;">Ayuda · de dónde salen los datos</button>
       <button id="menu-logout-btn" style="display:block;width:100%;text-align:left;cursor:pointer;background:none;border:none;color:var(--red);padding:13px 18px;font-size:13.5px;">Cerrar sesión</button>
     </div>` : ''}
   </div>`;
@@ -3031,6 +3096,9 @@ function wireMenu(app){
       render(null);
       await loadCalendarEvents();
       render(null);
+    } else if(view === 'ayuda'){
+      helpModalOpen = true;
+      render(currentScenario);
     } else {
       activeView = view;
       render(currentScenario);
@@ -3189,6 +3257,7 @@ function renderMyPortfoliosScreen(){
     </div>
     ${renderViewOverlay()}
     ${renderFrameworkModal()}
+    ${renderHelpModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -3198,6 +3267,7 @@ function renderMyPortfoliosScreen(){
   wireStockFinderModal(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireHelpModal(app);
   wireMarketPanel(app);
   wirePortfolioCards(app);
 }
@@ -3227,6 +3297,7 @@ function renderHomeScreen(){
     ${renderScreenerBuilderModal()}
     ${renderViewOverlay()}
     ${renderFrameworkModal()}
+    ${renderHelpModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -3288,6 +3359,7 @@ function renderHomeScreen(){
   wirePortfolioCards(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireHelpModal(app);
   wireMarketPanel(app);
 }
 
@@ -3358,6 +3430,7 @@ function renderExploreScreen(){
     </div>
     ${renderViewOverlay()}
     ${renderFrameworkModal()}
+    ${renderHelpModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -3367,6 +3440,7 @@ function renderExploreScreen(){
   wireStockFinderModal(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireHelpModal(app);
   wireMarketPanel(app);
 
   app.querySelectorAll('.explore-filter-pill').forEach(btn=>btn.addEventListener('click', () => {
@@ -3464,6 +3538,7 @@ function renderAccountScreen(){
     </div>
     ${renderViewOverlay()}
     ${renderFrameworkModal()}
+    ${renderHelpModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -3473,6 +3548,7 @@ function renderAccountScreen(){
   wireStockFinderModal(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireHelpModal(app);
   wireMarketPanel(app);
 
   const accountThemeBtn = document.getElementById('account-theme-toggle');
@@ -3625,6 +3701,7 @@ function renderCalendarScreen(){
     </div>
     ${renderViewOverlay()}
     ${renderFrameworkModal()}
+    ${renderHelpModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -3634,6 +3711,7 @@ function renderCalendarScreen(){
   wireStockFinderModal(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireHelpModal(app);
   wireMarketPanel(app);
 
   app.querySelectorAll('.cal-day-cell').forEach(btn=>btn.addEventListener('click', () => {
@@ -3856,6 +3934,7 @@ function renderScreenersScreen(){
     ${renderScreenerBuilderModal()}
     ${renderViewOverlay()}
     ${renderFrameworkModal()}
+    ${renderHelpModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -3865,6 +3944,7 @@ function renderScreenersScreen(){
   wireStockFinderModal(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireHelpModal(app);
   wireMarketPanel(app);
   wireScreenerBuilder(app);
 
@@ -4325,6 +4405,7 @@ function renderStockViewerScreen(){
     </div>
     ${renderViewOverlay()}
     ${renderFrameworkModal()}
+    ${renderHelpModal()}
     ${renderDialog()}
     ${renderStatusToast()}
   </div>`;
@@ -4334,6 +4415,7 @@ function renderStockViewerScreen(){
   wireStockFinderModal(app);
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireHelpModal(app);
   wireMarketPanel(app);
 
   const input = document.getElementById('stockviewer-input');
@@ -4556,6 +4638,7 @@ function render(scenario){
   ${renderPortfolioNewsModal()}
   ${renderViewOverlay()}
     ${renderFrameworkModal()}
+    ${renderHelpModal()}
   ${renderDialog()}
   ${renderStatusToast()}`;
 
@@ -4863,6 +4946,7 @@ function render(scenario){
 
   wireViewOverlay(app);
   wireFrameworkModal(app);
+  wireHelpModal(app);
   wireMarketPanel(app);
 }
 
