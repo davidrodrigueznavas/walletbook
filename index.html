@@ -4348,12 +4348,10 @@ function renderShortVolumeBlock(sv, loading){
   const pct = sv.shortVolumePct;
   const restPct = 100 - pct;
   const color = pct>=50 ? 'var(--red)' : pct>=30 ? 'var(--text)' : 'var(--green)';
-  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-    <div>
-      <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="De las acciones que se negociaron HOY, cuántas fueron una venta con acciones prestadas (no compradas). Se cuenta de cero cada día. Ojo: parte de esas ventas no son apuestas reales en contra — muchas las hacen intermediarios del mercado por pura rutina de su trabajo, no porque crean que va a caer.">Volumen en corto (FINRA)</div>
-      <div style="font-size:9px;color:var(--text-faint);margin-top:1px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Resto del volumen (100% − volumen en corto): ventas donde el vendedor no tomó prestadas las acciones (venta normal, no en corto). No es lo mismo que 'volumen comprador' — esto solo describe el lado vendedor de cada operación, no si el comprador abría posición larga o cerraba un corto.">No en corto: ${restPct.toFixed(1)}% · dato de HOY (${sv.date})</div>
-    </div>
-    <div style="font-size:16px;font-weight:700;color:${color};">${pct.toFixed(1)}%</div>
+  return `<div>
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="De las acciones que se negociaron HOY, cuántas fueron una venta con acciones prestadas (no compradas). Se cuenta de cero cada día. Ojo: parte de esas ventas no son apuestas reales en contra — muchas las hacen intermediarios del mercado por pura rutina de su trabajo, no porque crean que va a caer.">Volumen en corto (FINRA)</div>
+    <div style="font-size:18px;font-weight:700;color:${color};margin-top:4px;">${pct.toFixed(1)}%</div>
+    <div style="font-size:9px;color:var(--text-faint);margin-top:3px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Resto del volumen (100% − volumen en corto): ventas donde el vendedor no tomó prestadas las acciones (venta normal, no en corto). No es lo mismo que 'volumen comprador' — esto solo describe el lado vendedor de cada operación, no si el comprador abría posición larga o cerraba un corto.">No en corto: ${restPct.toFixed(1)}% · dato de HOY (${sv.date})</div>
   </div>`;
 }
 
@@ -4373,21 +4371,19 @@ function renderShortInterestBlock(si, loading){
     const arrow = trendPct>0.5 ? '↑' : trendPct<-0.5 ? '↓' : '=';
     trendHtml = `${arrow} ${Math.abs(trendPct).toFixed(0)}% vs quincena anterior (${si.priorMonthDate}) · `;
   }
-  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-    <div>
-      <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="% del float (las acciones que de verdad se pueden negociar; no cuentan las bloqueadas de fundadores, directivos o inversores con acuerdos de bloqueo) que están prestadas y sin devolver ahora mismo — el acumulado real de apuestas en contra abiertas. Se publica 2 veces al mes, con ~8 días hábiles de retraso.">Short interest oficial</div>
-      <div style="font-size:9px;color:var(--text-faint);margin-top:1px;">${trendHtml}dato del CORTE del ${si.date}</div>
-    </div>
-    <div style="font-size:16px;font-weight:700;color:${color};">${pct.toFixed(1)}%</div>
+  return `<div>
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="% del float (las acciones que de verdad se pueden negociar; no cuentan las bloqueadas de fundadores, directivos o inversores con acuerdos de bloqueo) que están prestadas y sin devolver ahora mismo — el acumulado real de apuestas en contra abiertas. Se publica 2 veces al mes, con ~8 días hábiles de retraso.">Short interest oficial</div>
+    <div style="font-size:18px;font-weight:700;color:${color};margin-top:4px;">${pct.toFixed(1)}%</div>
+    <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">${trendHtml}dato del CORTE del ${si.date}</div>
   </div>`;
 }
 
 // Envuelve las dos fuentes juntas, con una línea que deja explícito que son
 // dos periodos de datos distintos (no dos formas de medir lo mismo).
 function renderShortInterestSection(officialSI, officialLoading, dailySV, dailyLoading){
-  return `<div style="display:flex;flex-direction:column;gap:10px;">
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
     ${renderShortInterestBlock(officialSI, officialLoading)}
-    <div style="border-top:1px solid var(--border-soft);padding-top:10px;">
+    <div style="border-left:1px solid var(--border-soft);padding-left:16px;">
       ${renderShortVolumeBlock(dailySV, dailyLoading)}
     </div>
   </div>`;
