@@ -895,7 +895,9 @@ function renderMarketIndicators(){
 let stockViewerQuery = '', stockViewerSearchToken = 0;
 let stockViewerTicker = null, stockViewerName = null, stockViewerQuoteLoading = false, stockViewerQuoteError = null, stockViewerQuote = null;
 let stockViewerShortVolume = null, stockViewerShortVolumeLoading = false;
+let stockViewerOfficialShortInterest = null, stockViewerOfficialShortInterestLoading = false;
 let modalShortVolume = null, modalShortVolumeLoading = false, modalShortVolumeToken = 0;
+let modalOfficialShortInterest = null, modalOfficialShortInterestLoading = false, modalOfficialShortInterestToken = 0;
 let stockViewerDividends = [], stockViewerEstimates = null;
 let stockViewerChartLoading = false, stockViewerChartError = null, stockViewerChartPoints = null;
 let stockViewerWeeklyPoints = null;
@@ -1020,14 +1022,27 @@ async function loadShortVolume(ticker){
   }
 }
 
+// Short interest OFICIAL (quincenal, vía Yahoo) — dato distinto y complementario
+// al de FINRA arriba: aquí es la posición acumulada real, no el volumen de un
+// día. Ver short-interest (Edge Function) y renderShortInterestBlock.
+async function loadOfficialShortInterest(ticker){
+  try{
+    return await callEdgeFunction('short-interest', {ticker});
+  } catch(e){
+    return { ok:false, available:false };
+  }
+}
+
 async function selectStockViewerTicker(symbol, name){
   stockViewerTicker = symbol;
   stockViewerName = name || null;
   stockViewerQuery = symbol;
   stockViewerShortVolume = null; stockViewerShortVolumeLoading = true;
+  stockViewerOfficialShortInterest = null; stockViewerOfficialShortInterestLoading = true;
   render(null);
-  const [, , shortVol] = await Promise.all([loadStockViewerQuote(symbol), loadStockViewerChart(symbol), loadShortVolume(symbol)]);
+  const [, , shortVol, officialSI] = await Promise.all([loadStockViewerQuote(symbol), loadStockViewerChart(symbol), loadShortVolume(symbol), loadOfficialShortInterest(symbol)]);
   stockViewerShortVolume = shortVol; stockViewerShortVolumeLoading = false;
+  stockViewerOfficialShortInterest = officialSI; stockViewerOfficialShortInterestLoading = false;
   render(null);
 }
 
@@ -2522,6 +2537,7 @@ const DATA_SOURCES = [
       { label: 'Métricas técnicas de los screeners (RSI, medias, volumen)', freq: 'Cron cada hora, L-V en horario de mercado' },
       { label: 'Fundamentales de los screeners (PER, capitalización, crecimiento...)', freq: 'Cron cada hora, L-V en horario de mercado — requiere cookie+crumb de Yahoo, en lotes de 100 tickers' },
       { label: 'Máximo de 90 días y % de caída (BTC, oro, plata)', freq: 'Cron cada hora, L-V en horario de mercado' },
+      { label: 'Short interest oficial (visualizador y modal de posición)', freq: 'Se publica solo 2 veces al mes (cortes a mitad y a fin de mes), con ~8 días hábiles de retraso hasta hacerse público. Es la posición real acumulada de acciones prestadas en corto, como % del float — no confundir con el volumen en corto diario de FINRA (más abajo): son dos periodos de datos distintos, no dos formas de medir lo mismo. Solo disponible para acciones, requiere cookie+crumb de Yahoo.' },
     ],
   },
   {
@@ -2649,7 +2665,7 @@ function renderModal(){
       </div>` : ''}
 
       ${p.ticker ? `<div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
-        ${renderShortVolumeBlock(modalShortVolume, modalShortVolumeLoading)}
+        ${renderShortInterestSection(modalOfficialShortInterest, modalOfficialShortInterestLoading, modalShortVolume, modalShortVolumeLoading)}
       </div>` : ''}
 
       <div style="margin-bottom:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:10px 12px;box-sizing:border-box;">
@@ -4335,9 +4351,46 @@ function renderShortVolumeBlock(sv, loading){
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
     <div>
       <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="% del volumen negociado ese día que fue venta en corto — dato diario de FINRA (Reg SHO). No es el short interest total (esa cifra es quincenal): esto es la presión bajista del propio día, mucho más frecuente.">Volumen en corto (FINRA)</div>
-      <div style="font-size:9px;color:var(--text-faint);margin-top:1px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Resto del volumen (100% − volumen en corto): ventas donde el vendedor no tomó prestadas las acciones (venta normal, no en corto). No es lo mismo que 'volumen comprador' — esto solo describe el lado vendedor de cada operación, no si el comprador abría posición larga o cerraba un corto.">No en corto: ${restPct.toFixed(1)}% · dato del ${sv.date}</div>
+      <div style="font-size:9px;color:var(--text-faint);margin-top:1px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Resto del volumen (100% − volumen en corto): ventas donde el vendedor no tomó prestadas las acciones (venta normal, no en corto). No es lo mismo que 'volumen comprador' — esto solo describe el lado vendedor de cada operación, no si el comprador abría posición larga o cerraba un corto.">No en corto: ${restPct.toFixed(1)}% · dato de HOY (${sv.date})</div>
     </div>
     <div style="font-size:16px;font-weight:700;color:${color};">${pct.toFixed(1)}%</div>
+  </div>`;
+}
+
+// Short interest OFICIAL (quincenal) — la posición real acumulada de acciones
+// prestadas y sin devolver, como % del float. Nada que ver con el volumen de
+// un día concreto (eso es renderShortVolumeBlock, arriba): aquí es una foto
+// fija que se publica solo 2 veces al mes, con ~8 días hábiles de retraso.
+function renderShortInterestBlock(si, loading){
+  if(loading) return `<div style="font-size:11px;color:var(--text-faint);">Consultando short interest oficial…</div>`;
+  if(!si || !si.ok) return '';
+  if(!si.available) return `<div style="font-size:11px;color:var(--text-faint);">${esc(si.reason||'Dato no disponible para este ticker.')}</div>`;
+  const pct = si.shortPercentOfFloat;
+  const color = pct>=20 ? 'var(--red)' : pct>=10 ? 'var(--text)' : 'var(--green)';
+  let trendHtml = '';
+  if(si.sharesShortPriorMonth!=null && si.sharesShortPriorMonth>0){
+    const trendPct = (si.sharesShort - si.sharesShortPriorMonth) / si.sharesShortPriorMonth * 100;
+    const arrow = trendPct>0.5 ? '↑' : trendPct<-0.5 ? '↓' : '=';
+    trendHtml = `${arrow} ${Math.abs(trendPct).toFixed(0)}% vs quincena anterior (${si.priorMonthDate}) · `;
+  }
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+    <div>
+      <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="% del float (acciones realmente disponibles para negociar) que está prestado y vendido en corto AHORA MISMO — la posición real acumulada, no la actividad de un día. Se publica solo 2 veces al mes (cortes a mitad y a fin de mes), y tarda ~8 días hábiles en hacerse público — por eso el dato de abajo siempre tiene semanas de retraso. Fuente: Yahoo Finance.">Short interest oficial</div>
+      <div style="font-size:9px;color:var(--text-faint);margin-top:1px;">${trendHtml}dato del CORTE del ${si.date}</div>
+    </div>
+    <div style="font-size:16px;font-weight:700;color:${color};">${pct.toFixed(1)}%</div>
+  </div>`;
+}
+
+// Envuelve las dos fuentes juntas, con una línea que deja explícito que son
+// dos periodos de datos distintos (no dos formas de medir lo mismo).
+function renderShortInterestSection(officialSI, officialLoading, dailySV, dailyLoading){
+  return `<div style="display:flex;flex-direction:column;gap:10px;">
+    ${renderShortInterestBlock(officialSI, officialLoading)}
+    <div style="border-top:1px solid var(--border-soft);padding-top:10px;">
+      ${renderShortVolumeBlock(dailySV, dailyLoading)}
+    </div>
+    <div style="font-size:9px;color:var(--text-faint);line-height:1.4;">El de arriba es una foto quincenal de la posición real en corto; el de abajo es la actividad de venta en corto de HOY. Son dos periodos distintos, no dos formas de medir lo mismo.</div>
   </div>`;
 }
 
@@ -4440,7 +4493,7 @@ function renderStockViewerScreen(){
       </div>
 
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:20px;">
-        ${renderShortVolumeBlock(stockViewerShortVolume, stockViewerShortVolumeLoading)}
+        ${renderShortInterestSection(stockViewerOfficialShortInterest, stockViewerOfficialShortInterestLoading, stockViewerShortVolume, stockViewerShortVolumeLoading)}
       </div>
 
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
@@ -4771,6 +4824,7 @@ function render(scenario){
     recompraFormOpen = false; recompraFormError = null; recompraFormType = 'compra'; recompraFormPending = false; recompraEditingId = null;
     positionEventFormOpen = false; positionEventFormError = null; positionEventEditingId = null; positionEvents = []; positionEventsLoading = true;
     modalShortVolume = null; modalShortVolumeLoading = !!(pos && pos.ticker);
+    modalOfficialShortInterest = null; modalOfficialShortInterestLoading = !!(pos && pos.ticker);
     render(currentScenario);
     if(pos && pos.ticker) loadModalChart(pos.ticker, modalRange);
     if(pos && pos.ticker && !pos.business_summary && !isCryptoTicker(pos.ticker)) loadModalCompanyInfo(pos);
@@ -4779,6 +4833,12 @@ function render(scenario){
       loadShortVolume(pos.ticker).then(res => {
         if(token !== modalShortVolumeToken) return;
         modalShortVolume = res; modalShortVolumeLoading = false;
+        render(currentScenario);
+      });
+      const siToken = ++modalOfficialShortInterestToken;
+      loadOfficialShortInterest(pos.ticker).then(res => {
+        if(siToken !== modalOfficialShortInterestToken) return;
+        modalOfficialShortInterest = res; modalOfficialShortInterestLoading = false;
         render(currentScenario);
       });
     }
