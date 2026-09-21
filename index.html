@@ -591,12 +591,11 @@ function renderLiquidityCard(){
         <div style="font-size:17px;font-weight:800;">${fmtUsdB(l.netLiquidityB)}</div>
         <div style="font-size:9px;color:var(--text-faint);margin-top:1px;">sem: <b style="color:${deltaColor(weekDelta)};">${fmtDeltaNum(weekDelta)}</b> · mes: <b style="color:${deltaColor(monthDelta)};">${fmtDeltaNum(monthDelta)}</b> mil M$</div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px;">
+      <div style="display:flex;flex-direction:column;gap:14px;">
         ${metricLine('Total Assets', 'Balance total de la Fed. La variación de abajo lo confirma: si es positiva (+, en verde) el balance está subiendo = QE, inyecta liquidez. Si es negativa (−, en rojo) el balance está bajando = QT, drena liquidez. Qué significa esto para el mercado: inyectar liquidez (QE) tiende a empujar al alza los activos de riesgo (acciones, cripto) aunque no haya un motivo fundamental. Drenarla (QT) tiende a presionarlos a la baja, incluso con buenos resultados empresariales. Es contexto de fondo, no una señal de compra/venta por sí sola.', fmtUsdB(l.totalAssetsB), deltaLine(l.totalAssetsWeekAgoB, l.totalAssetsMonthAgoB, l.totalAssetsB))}
         ${metricLine('TGA', 'Treasury General Account: la cuenta corriente del Tesoro en la Fed. Sube = drena liquidez del mercado; baja = la devuelve.', fmtUsdB(l.tgaB), deltaLine(l.tgaWeekAgoB, l.tgaMonthAgoB, l.tgaB))}
         ${metricLine('RRP', 'Reverse Repo: dinero que bancos/fondos monetarios aparcan en la Fed en vez de que circule en el mercado. Sube = absorbe liquidez; baja = la devuelve al sistema.', fmtUsdB(l.rrpB), deltaLine(l.rrpWeekAgoB, l.rrpMonthAgoB, l.rrpB))}
-      </div>
-      <div style="font-size:9px;color:var(--text-faint);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-soft);">Dato del ${l.asOf}</div>`;
+      </div>`;
   } else {
     body = '';
   }
