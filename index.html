@@ -668,35 +668,21 @@ async function loadBreadthIndicator(){
   breadthLoading = false;
   render(null);
 }
-function renderBreadthCard(){
+// Fusionada con la card de concentración (renderConcentrationCard): ambas
+// miden lo mismo en el fondo (¿la subida es amplia o solo unos pocos valores
+// tiran del carro?), solo que a distinta escala — entre segmentos de mercado
+// aquí, dentro del propio S&P 500 en la otra.
+function breadthRow(){
   if(!breadthIndicator && !breadthLoading && !breadthError){
     loadBreadthIndicator();
   }
-  let body;
-  if(breadthLoading && !breadthIndicator){
-    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">Consultando…</div>`;
-  } else if(breadthError && !breadthIndicator){
-    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">${breadthError}</div>`;
-  } else if(breadthIndicator){
-    const b = breadthIndicator;
-    const band = riskBand(b.score);
-    body = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <div style="width:44px;height:44px;border-radius:50%;border:3px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${band.color};flex-shrink:0;">${Math.round(b.score)}</div>
-        <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Ratio Russell 2000 (small caps) / S&amp;P 500 (large caps) frente a su media de 50 días. Cuando las small caps quedan muy por debajo de su media relativa, suele leerse como mercado defensivo, con menos apetito por el riesgo.">Small vs Large caps</span>
-          <span style="font-weight:700;color:${b.pctVsSma>=0?'var(--green)':'var(--red)'};">${b.pctVsSma>=0?'+':''}${b.pctVsSma.toFixed(1)}%</span>
-        </div>
-      </div>
-      ${renderIndicatorDeltaRow(b.weekAgo, b.monthAgo, b.score, false)}`;
-  } else {
-    body = '';
-  }
-  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Ratio Russell 2000 / S&amp;P 500 vía Yahoo Finance, como proxy sencillo de amplitud de mercado.">Amplitud (small vs large caps)</div>
-    ${body}
+  if(breadthLoading && !breadthIndicator) return `<div style="font-size:10.5px;color:var(--text-faint);">Consultando amplitud…</div>`;
+  if(breadthError && !breadthIndicator) return `<div style="font-size:10.5px;color:var(--text-faint);">${breadthError}</div>`;
+  if(!breadthIndicator) return '';
+  const b = breadthIndicator;
+  return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+    <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Ratio Russell 2000 (small caps) / S&amp;P 500 (large caps) frente a su media de 50 días. Cuando las small caps quedan muy por debajo de su media relativa, suele leerse como mercado defensivo, con menos apetito por el riesgo.">Small vs Large caps</span>
+    <span style="font-weight:700;color:${b.pctVsSma>=0?'var(--green)':'var(--red)'};">${b.pctVsSma>=0?'+':''}${b.pctVsSma.toFixed(1)}%</span>
   </div>`;
 }
 
@@ -762,17 +748,14 @@ function renderConcentrationCard(){
           <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Ratio S&amp;P 500 ponderado por capitalización (SPY) / S&amp;P 500 equiponderado (RSP), frente a su media de 50 días. Cuando sube, unas pocas megacaps están tirando del índice mientras la mayoría de valores se quedan atrás — mercado más frágil y concentrado.">S&P 500 vs equiponderado</span>
           <span style="font-weight:700;color:${c.pctVsSma>=0?'var(--red)':'var(--green)'};">${c.pctVsSma>=0?'+':''}${c.pctVsSma.toFixed(1)}%</span>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
-          <span style="color:var(--text-faint);">Ratio SPY/RSP</span>
-          <span style="font-weight:700;">${c.ratio.toFixed(3)}</span>
-        </div>
+        ${breadthRow()}
       </div>
       ${renderIndicatorDeltaRow(c.weekAgo, c.monthAgo, c.score, false)}`;
   } else {
     body = '';
   }
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="S&amp;P 500 ponderado por capitalización (SPY) frente al mismo índice equiponderado (RSP), vía Yahoo Finance.">Concentración del S&amp;P 500</div>
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="S&amp;P 500 ponderado por capitalización (SPY) frente al mismo índice equiponderado (RSP), más el ratio Russell 2000 / S&amp;P 500 — dos formas de medir si la subida es amplia o solo unos pocos valores tiran del carro.">Amplitud y concentración</div>
     ${body}
   </div>`;
 }
@@ -922,12 +905,11 @@ function renderFedFundsCard(){
 }
 
 function renderMarketIndicators(){
-  return `<div class="indicator-cards-row" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:20px;">
+  return `<div class="indicator-cards-row" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:20px;">
     ${renderCrashIndexCard()}
     ${renderLiquidityCard()}
     ${renderYieldCurveCard()}
     ${renderFedFundsCard()}
-    ${renderBreadthCard()}
     ${renderConcentrationCard()}
   </div>`;
 }
