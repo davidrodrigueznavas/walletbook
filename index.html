@@ -2611,7 +2611,7 @@ const DATA_SOURCES = [
       { label: 'Métricas técnicas de los screeners (RSI, medias, volumen)', freq: 'Cron cada hora, L-V en horario de mercado' },
       { label: 'Fundamentales de los screeners (PER, capitalización, crecimiento...)', freq: 'Cron cada hora, L-V en horario de mercado — requiere cookie+crumb de Yahoo, en lotes de 100 tickers' },
       { label: 'Máximo de 90 días y % de caída (BTC, oro, plata)', freq: 'Cron cada hora, L-V en horario de mercado' },
-      { label: 'Short interest oficial (visualizador y modal de posición)', freq: 'Se publica solo 2 veces al mes (cortes a mitad y a fin de mes), con ~8 días hábiles de retraso hasta hacerse público. Es el % del float (las acciones que de verdad se pueden negociar; no cuentan las bloqueadas de fundadores, directivos o inversores con acuerdos de bloqueo) que están prestadas y sin devolver ahora mismo — el acumulado real de apuestas en contra abiertas. Distinto del volumen en corto diario de FINRA (más abajo), que es cuánto del volumen negociado HOY fue una venta en corto — y que incluye tanto apuestas reales en contra como ventas en corto rutinarias de los creadores de mercado (liquidez, cobertura de opciones), por lo que un % alto ahí no siempre significa sentimiento bajista generalizado. Solo disponible para acciones, requiere cookie+crumb de Yahoo.' },
+      { label: 'Short interest oficial (visualizador y modal de posición)', freq: 'Se publica solo 2 veces al mes (cortes a mitad y a fin de mes), con ~8 días hábiles de retraso hasta hacerse público. Es el % del float (las acciones que de verdad se pueden negociar; no cuentan las bloqueadas de fundadores, directivos o inversores con acuerdos de bloqueo) que están prestadas y sin devolver ahora mismo — el acumulado real de apuestas en contra abiertas. Distinto del volumen en corto diario de FINRA (más abajo), que es cuánto del volumen negociado HOY fue una venta en corto — y que incluye tanto apuestas reales en contra como ventas en corto rutinarias de los creadores de mercado (liquidez, cobertura de opciones), por lo que un % alto ahí no siempre significa sentimiento bajista generalizado. Solo disponible para acciones, requiere cookie+crumb de Yahoo. Debajo se muestran las últimas 6 quincenas en millones de acciones (no %, para no mezclar con una aproximación calculada con el float de hoy) — esas 6 filas vienen de la API pública de Nasdaq, sin autenticación.' },
     ],
   },
   {
@@ -4458,10 +4458,20 @@ function renderShortInterestBlock(si, loading){
     const arrow = trendPct>0.5 ? '↑' : trendPct<-0.5 ? '↓' : '=';
     trendHtml = `${arrow} ${Math.abs(trendPct).toFixed(0)}% vs quincena anterior (${si.priorMonthDate}) · `;
   }
+  const fmtSharesM = n => n==null ? '—' : (n/1e6).toLocaleString('es-ES',{maximumFractionDigits:1})+'M';
+  const fmtHistDate = iso => new Date(iso+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'}).replace('.','');
+  const historyHtml = (si.history && si.history.length) ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border-soft);">
+    <div style="font-size:8.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Acciones en corto sin devolver en cada corte quincenal (fuente: Nasdaq). En millones de acciones, no en % del float — para no mezclar con una aproximación calculada con el float de hoy.">Últimas ${si.history.length} quincenas</div>
+    ${si.history.map(h => `<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-faint);padding:1px 0;">
+      <span>${fmtHistDate(h.date)}</span>
+      <span style="font-weight:600;color:var(--text-dim);">${fmtSharesM(h.sharesShort)}</span>
+    </div>`).join('')}
+  </div>` : '';
   return `<div>
     <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="% del float (las acciones que de verdad se pueden negociar; no cuentan las bloqueadas de fundadores, directivos o inversores con acuerdos de bloqueo) que están prestadas y sin devolver ahora mismo — el acumulado real de apuestas en contra abiertas. Se publica 2 veces al mes, con ~8 días hábiles de retraso.">Short interest oficial</div>
     <div style="font-size:18px;font-weight:700;color:${color};margin-top:4px;">${pct.toFixed(1)}%</div>
     <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">${trendHtml}dato del CORTE del ${si.date}</div>
+    ${historyHtml}
   </div>`;
 }
 
