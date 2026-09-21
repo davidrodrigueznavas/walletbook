@@ -156,7 +156,7 @@ async function callEdgeFunction(name, params){
 
 const MARKET = {
   eeuu:{label:'EEUU',color:'#5B8DEF'}, europa:{label:'Europa',color:'#2FBF9F'},
-  japon:{label:'Japón',color:'#E8776C'}, canada:{label:'Canadá',color:'#B79CED'},
+  canada:{label:'Canadá',color:'#B79CED'},
   taiwan:{label:'Taiwán (ADR)',color:'#8A94A0'}, cripto:{label:'Cripto',color:'#F7931A'}
 };
 const TIER = {
@@ -943,41 +943,23 @@ async function loadAaiiSentiment(){
   aaiiSentimentLoading = false;
   render(null);
 }
-function renderAaiiCard(label, value, avg, color, tip){
-  return `<div style="background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;padding:12px 14px;box-sizing:border-box;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="${tip}">${label}</div>
-    <div style="font-size:18px;font-weight:700;color:${color};margin-top:4px;">${value.toFixed(1)}%</div>
-    <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">Media histórica: ${avg.toFixed(1)}%</div>
-  </div>`;
-}
 // Encuesta semanal de la AAII a inversores particulares (bullish/neutral/
 // bearish sobre los próximos 6 meses). Se lee del HTML público de la propia
 // página (no hay CSV/API sin membresía) — ver Edge Function aaii-sentiment.
-function renderAaiiSentimentSection(){
+// Píldora compacta en la cabecera, junto al indicador de mercados abiertos:
+// ▲ verde alcistas · — gris neutrales · ▼ rojo bajistas, con el detalle en el
+// tooltip (mismo patrón que el resto de indicadores de la app).
+function aaiiSentimentWidget(){
   if(!aaiiSentiment && !aaiiSentimentLoading && !aaiiSentimentError){
     loadAaiiSentiment();
   }
-  let body;
-  if(aaiiSentimentLoading && !aaiiSentiment){
-    body = `<div style="font-size:12px;color:var(--text-faint);padding:8px 0;">Consultando AAII…</div>`;
-  } else if(aaiiSentimentError && !aaiiSentiment){
-    body = `<div style="font-size:12px;color:var(--text-faint);padding:8px 0;">${aaiiSentimentError}</div>`;
-  } else if(aaiiSentiment){
-    const a = aaiiSentiment;
-    const spread = a.bullish - a.bearish;
-    const spreadColor = spread>=0 ? 'var(--green)' : 'var(--red)';
-    body = `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
-        ${renderAaiiCard('Alcistas (Bullish)', a.bullish, a.bullishAvg, 'var(--green)', 'Porcentaje de inversores particulares encuestados que esperan que el mercado suba en los próximos 6 meses.')}
-        ${renderAaiiCard('Neutrales', a.neutral, a.neutralAvg, 'var(--text-dim)', 'Porcentaje que espera que el mercado se mantenga más o menos igual en los próximos 6 meses.')}
-        ${renderAaiiCard('Bajistas (Bearish)', a.bearish, a.bearishAvg, 'var(--red)', 'Porcentaje que espera que el mercado baje en los próximos 6 meses.')}
-      </div>
-      <div style="font-size:9px;color:var(--text-faint);margin-top:8px;">Spread alcistas−bajistas: <b style="color:${spreadColor};">${spread>=0?'+':''}${spread.toFixed(1)} pp</b> · semana del ${a.weekEnding}</div>`;
-  } else {
-    body = '';
-  }
-  return `<div style="margin-bottom:20px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Encuesta semanal a inversores particulares de la AAII (American Association of Individual Investors) sobre hacia dónde creen que irá el mercado en 6 meses. Se usa como indicador contrarian: extremos de pesimismo (mucho bearish) han precedido subidas del mercado, y extremos de optimismo (mucho bullish) han precedido caídas. Publicada cada jueves desde 1987.">Sentimiento inversor particular (AAII)</div>
-    ${body}
+  if(!aaiiSentiment) return '';
+  const a = aaiiSentiment;
+  const tip = `Sentimiento inversor particular (AAII), semana del ${a.weekEnding}: ${a.bullish.toFixed(1)}% alcistas (media ${a.bullishAvg.toFixed(1)}%), ${a.neutral.toFixed(1)}% neutrales (media ${a.neutralAvg.toFixed(1)}%), ${a.bearish.toFixed(1)}% bajistas (media ${a.bearishAvg.toFixed(1)}%). Encuesta semanal desde 1987, usada como indicador contrarian: extremos de pesimismo han precedido subidas, extremos de optimismo han precedido caídas.`;
+  return `<div class="pill-btn" title="${tip}" style="cursor:help;border:1px solid var(--border);background:var(--panel-2);display:flex;align-items:center;gap:9px;flex-shrink:0;">
+    <span style="display:flex;align-items:center;gap:3px;color:var(--green);font-size:11.5px;font-weight:700;white-space:nowrap;">▲ ${a.bullish.toFixed(0)}%</span>
+    <span style="display:flex;align-items:center;gap:3px;color:var(--text-dim);font-size:11.5px;font-weight:700;white-space:nowrap;">— ${a.neutral.toFixed(0)}%</span>
+    <span style="display:flex;align-items:center;gap:3px;color:var(--red);font-size:11.5px;font-weight:700;white-space:nowrap;">▼ ${a.bearish.toFixed(0)}%</span>
   </div>`;
 }
 
@@ -1546,7 +1528,7 @@ function currencyForTicker(ticker){
   for(const suf in SUFFIX_CURRENCY){ if(ticker.endsWith(suf)) return SUFFIX_CURRENCY[suf]; }
   return 'USD';
 }
-const SUFFIX_MARKET = { '.T':'japon', '.DE':'europa', '.PA':'europa', '.MI':'europa', '.AS':'europa', '.L':'europa', '.MC':'europa', '.ST':'europa', '.TO':'canada', '.V':'canada', '.TW':'taiwan', '.TWO':'taiwan' };
+const SUFFIX_MARKET = { '.DE':'europa', '.PA':'europa', '.MI':'europa', '.AS':'europa', '.L':'europa', '.MC':'europa', '.ST':'europa', '.TO':'canada', '.V':'canada', '.TW':'taiwan', '.TWO':'taiwan' };
 const SUFFIX_EXCHANGE = {
   '.T':'Bolsa de Tokio', '.DE':'Xetra (Alemania)', '.PA':'Euronext París', '.MI':'Borsa Italiana (Milán)',
   '.AS':'Euronext Ámsterdam', '.SW':'SIX Swiss Exchange', '.CO':'Nasdaq Copenhague', '.MC':'BME (Madrid)',
@@ -1573,7 +1555,6 @@ function marketForTicker(ticker, exchange){
   for(const suf in SUFFIX_MARKET){ if(ticker.endsWith(suf)) return SUFFIX_MARKET[suf]; }
   const ex = (exchange || '').toLowerCase();
   if(ex.includes('toronto') || ex.includes('tsx')) return 'canada';
-  if(ex.includes('tokyo')) return 'japon';
   if(ex.includes('taiwan')) return 'taiwan';
   if(ex.includes('xetra') || ex.includes('frankfurt') || ex.includes('paris') || ex.includes('milan') || ex.includes('amsterdam') || ex.includes('london') || ex.includes('madrid') || ex.includes('stockholm')) return 'europa';
   return 'eeuu';
@@ -3180,6 +3161,7 @@ function topNavBar(){
     </button>
     <div id="topnav-right" style="display:flex;align-items:center;gap:10px;min-width:0;">
       ${marketStatusWidget()}
+      ${aaiiSentimentWidget()}
       <button id="framework-open-btn" class="pill-btn" style="border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--accent-text);font-weight:600;white-space:nowrap;">Framework</button>
       ${stockFinderBlock()}
       ${menuBlock()}
@@ -3508,7 +3490,6 @@ function renderHomeScreen(){
     <div style="max-width:1200px;margin:0 auto;padding:0 32px;box-sizing:border-box;">
       ${topNavBar()}
       ${renderMarketIndicators()}
-      ${renderAaiiSentimentSection()}
       ${renderCalendarStrip()}
       <div style="margin-bottom:26px;">
         <h1 style="font-family:'Calibri','Carlito',sans-serif;font-weight:600;font-size:19px;margin:0;">Mis carteras</h1>
