@@ -480,10 +480,46 @@ async function loadMarketIndicators(){
   render(null);
 }
 
+let fearGreedIndex = null, fearGreedLoading = false, fearGreedError = null;
+async function loadFearGreedIndex(){
+  if(fearGreedLoading) return;
+  fearGreedLoading = true; fearGreedError = null;
+  try{
+    const res = await callEdgeFunction('fear-greed-index', {});
+    if(!res.ok) throw new Error(res.error || 'Error al consultar CNN.');
+    fearGreedIndex = res;
+  } catch(e){
+    fearGreedError = (e && e.message) || 'Error al consultar CNN.';
+  }
+  fearGreedLoading = false;
+  render(null);
+}
+const FEAR_GREED_BAND = {
+  'extreme fear': {label:'Miedo extremo', color:'var(--red)'},
+  'fear': {label:'Miedo', color:'#FBBF24'},
+  'neutral': {label:'Neutral', color:'var(--text-dim)'},
+  'greed': {label:'Codicia', color:'var(--green)'},
+  'extreme greed': {label:'Codicia extrema', color:'#16A34A'},
+};
+
 function renderCrashIndexCard(){
   if(!marketIndicators && !marketIndicatorsLoading && !marketIndicatorsError){
     loadMarketIndicators();
   }
+  if(!fearGreedIndex && !fearGreedLoading && !fearGreedError){
+    loadFearGreedIndex();
+  }
+  let fgLine = '';
+  if(fearGreedLoading && !fearGreedIndex){
+    fgLine = metricLine('Fear &amp; Greed (CNN)', null, '<span style="color:var(--text-faint);">…</span>');
+  } else if(fearGreedError && !fearGreedIndex){
+    fgLine = '';
+  } else if(fearGreedIndex){
+    const fg = fearGreedIndex;
+    const fgBand = FEAR_GREED_BAND[fg.rating] || {label:fg.rating, color:'var(--text-dim)'};
+    fgLine = metricLine('Fear &amp; Greed (CNN)', 'Índice de sentimiento de CNN Business: media de 7 señales de mercado (momentum, amplitud del mercado, put/call ratio, demanda de bonos basura, demanda de refugio seguro, volatilidad y fuerza del precio). Bandas: 0-25 miedo extremo, 25-45 miedo, 45-55 neutral, 55-75 codicia, 75-100 codicia extrema.', `<span style="color:${fgBand.color};">${fg.score.toFixed(0)} · ${fgBand.label}</span>`);
+  }
+
   let body;
   if(marketIndicatorsLoading && !marketIndicators){
     body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">Consultando…</div>`;
@@ -496,6 +532,7 @@ function renderCrashIndexCard(){
       <div style="display:flex;flex-direction:column;gap:6px;">
         ${metricLine('S&amp;P 500 vs media 40 sem', 'Distancia del S&amp;P 500 respecto a su media móvil de 40 semanas. Cuando el precio cruza por debajo, se suele leer como señal de cambio a tendencia bajista (análisis de Stan Weinstein).', `<span style="color:${m.pctVsSma40>=0?'var(--green)':'var(--red)'};">${m.pctVsSma40>=0?'+':''}${m.pctVsSma40.toFixed(1)}%</span>`)}
         ${metricLine('VIX', 'Índice de volatilidad del S&amp;P 500. Por debajo de 15, mercado tranquilo; 15-20 normal; 20-30 nerviosismo; por encima de 30, estrés o pánico.', m.vixLevel.toFixed(1))}
+        ${fgLine}
       </div>
       ${renderIndicatorDeltaRow(m.weekAgo, m.monthAgo, m.combined, false)}`;
   } else {
@@ -2557,6 +2594,12 @@ const DATA_SOURCES = [
     items: [
       { label: 'Fed Funds Rate (rango objetivo) y calendario FOMC', freq: 'El tipo solo cambia en las reuniones del FOMC (máx. 8 veces al año) — el calendario de fechas está fijo a mano en la app, no viene de FRED.' },
       { label: 'Liquidez neta de la Fed (Total Assets, TGA, RRP)', freq: 'Total Assets y TGA se publican 1 vez a la semana (H.4.1, los jueves); RRP es diario. La card usa siempre la semana más reciente de Total Assets como fecha de referencia. Lectura del signo en Total Assets: variación positiva (+, verde) = el balance sube = QE, inyecta liquidez; variación negativa (−, rojo) = el balance baja = QT, drena liquidez. Qué significa esto para el mercado: inyectar liquidez (QE) tiende a empujar al alza los activos de riesgo (acciones, cripto) aunque no haya un motivo fundamental — es dinero nuevo buscando dónde colocarse. Drenar liquidez (QT) tiende a presionarlos a la baja, incluso con buenos resultados empresariales — hay menos dinero disponible circulando. Es contexto de fondo, no una señal de compra/venta por sí sola.' },
+    ],
+  },
+  {
+    provider: 'CNN Business', auth: 'Sin autenticación — endpoint no oficial de su propia web',
+    items: [
+      { label: 'Fear & Greed Index (dentro de "Índice de riesgo de mercado")', freq: 'Se actualiza en vivo durante la sesión de mercado en EEUU. Es la media de 7 señales (momentum, amplitud del mercado, put/call ratio, demanda de bonos basura, demanda de refugio seguro, volatilidad y fuerza del precio), no la misma metodología que el aro de la card (que solo mira S&P 500 vs media 40 sem + VIX) — se muestran juntos porque miden lo mismo en espíritu (sentimiento/riesgo del mercado), no porque sean el mismo cálculo.' },
     ],
   },
 ];
