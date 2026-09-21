@@ -4330,11 +4330,12 @@ function renderShortVolumeBlock(sv, loading){
   if(!sv || !sv.ok) return '';
   if(!sv.available) return `<div style="font-size:11px;color:var(--text-faint);">${esc(sv.reason||'Dato no disponible para este ticker.')}</div>`;
   const pct = sv.shortVolumePct;
+  const restPct = 100 - pct;
   const color = pct>=50 ? 'var(--red)' : pct>=30 ? 'var(--text)' : 'var(--green)';
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
     <div>
       <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="% del volumen negociado ese día que fue venta en corto — dato diario de FINRA (Reg SHO). No es el short interest total (esa cifra es quincenal): esto es la presión bajista del propio día, mucho más frecuente.">Volumen en corto (FINRA)</div>
-      <div style="font-size:9px;color:var(--text-faint);margin-top:1px;">Dato del ${sv.date}</div>
+      <div style="font-size:9px;color:var(--text-faint);margin-top:1px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Resto del volumen (100% − volumen en corto): ventas donde el vendedor no tomó prestadas las acciones (venta normal, no en corto). No es lo mismo que 'volumen comprador' — esto solo describe el lado vendedor de cada operación, no si el comprador abría posición larga o cerraba un corto.">No en corto: ${restPct.toFixed(1)}% · dato del ${sv.date}</div>
     </div>
     <div style="font-size:16px;font-weight:700;color:${color};">${pct.toFixed(1)}%</div>
   </div>`;
