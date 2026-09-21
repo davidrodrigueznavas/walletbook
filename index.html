@@ -471,8 +471,8 @@ function renderCrashIndexCard(){
   } else if(marketIndicators){
     const m = marketIndicators;
     const band = riskBand(m.combined);
-    body = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-        <div style="width:56px;height:56px;border-radius:50%;border:4px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:${band.color};flex-shrink:0;">${Math.round(m.combined)}</div>
+    body = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="width:44px;height:44px;border-radius:50%;border:3px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${band.color};flex-shrink:0;">${Math.round(m.combined)}</div>
         <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;">
@@ -489,8 +489,8 @@ function renderCrashIndexCard(){
   } else {
     body = '';
   }
-  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Media simple de dos señales: distancia del S&amp;P 500 a su media de 40 semanas, y nivel del VIX. Es una heurística orientativa, no un modelo predictivo validado.">Índice de riesgo de mercado</div>
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Media simple de dos señales: distancia del S&amp;P 500 a su media de 40 semanas, y nivel del VIX. Es una heurística orientativa, no un modelo predictivo validado.">Índice de riesgo de mercado</div>
     ${body}
   </div>`;
 }
@@ -555,8 +555,8 @@ function renderLiquidityCard(){
     // de crash, donde alto = más riesgo) — se colorea con la misma paleta
     // pero invirtiendo qué extremo es "bueno".
     const liqBand = l.score>=65 ? {label:'Liquidez amplia', color:'#4ADE80'} : l.score>=35 ? {label:'Liquidez normal', color:'#FBBF24'} : {label:'Estrés de crédito/liquidez', color:'#DC2626'};
-    body = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-        <div style="width:56px;height:56px;border-radius:50%;border:4px solid ${liqBand.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:${liqBand.color};flex-shrink:0;">${Math.round(l.score)}</div>
+    body = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="width:44px;height:44px;border-radius:50%;border:3px solid ${liqBand.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${liqBand.color};flex-shrink:0;">${Math.round(l.score)}</div>
         <div style="font-size:14px;font-weight:700;color:${liqBand.color};">${liqBand.label}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;">
@@ -573,8 +573,8 @@ function renderLiquidityCard(){
   } else {
     body = '';
   }
-  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Proxy de liquidez de mercado usando el ratio entre bonos high-yield (HYG) y Tesoro EEUU (IEF), vía Yahoo Finance. No es la liquidez real de la Fed, es una aproximación de mercado.">Liquidez de mercado</div>
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Proxy de liquidez de mercado usando el ratio entre bonos high-yield (HYG) y Tesoro EEUU (IEF), vía Yahoo Finance. No es la liquidez real de la Fed, es una aproximación de mercado.">Liquidez de mercado</div>
     ${body}
   </div>`;
 }
@@ -622,8 +622,8 @@ function renderYieldCurveCard(){
   } else if(yieldCurveIndicator){
     const y = yieldCurveIndicator;
     const band = y.spread<0 ? {label:'Curva invertida', color:'#DC2626'} : y.spread<0.5 ? {label:'Curva plana', color:'#FBBF24'} : {label:'Curva normal', color:'#4ADE80'};
-    body = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-        <div style="width:56px;height:56px;border-radius:50%;border:4px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:${band.color};flex-shrink:0;">${Math.round(y.score)}</div>
+    body = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="width:44px;height:44px;border-radius:50%;border:3px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${band.color};flex-shrink:0;">${Math.round(y.score)}</div>
         <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;">
@@ -641,8 +641,8 @@ function renderYieldCurveCard(){
   } else {
     body = '';
   }
-  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Spread entre el bono del Tesoro a 10 años y la letra a 3 meses (vía Yahoo Finance), más el tipo oficial de la Fed y el calendario del FOMC.">Tipos de interés (EEUU)</div>
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Spread entre el bono del Tesoro a 10 años y la letra a 3 meses (vía Yahoo Finance), más el tipo oficial de la Fed y el calendario del FOMC.">Tipos de interés (EEUU)</div>
     ${body}
   </div>`;
 }
@@ -697,8 +697,8 @@ function renderBreadthCard(){
   } else if(breadthIndicator){
     const b = breadthIndicator;
     const band = riskBand(b.score);
-    body = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-        <div style="width:56px;height:56px;border-radius:50%;border:4px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:${band.color};flex-shrink:0;">${Math.round(b.score)}</div>
+    body = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="width:44px;height:44px;border-radius:50%;border:3px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${band.color};flex-shrink:0;">${Math.round(b.score)}</div>
         <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;">
@@ -711,8 +711,8 @@ function renderBreadthCard(){
   } else {
     body = '';
   }
-  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Ratio Russell 2000 / S&amp;P 500 vía Yahoo Finance, como proxy sencillo de amplitud de mercado.">Amplitud (small vs large caps)</div>
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Ratio Russell 2000 / S&amp;P 500 vía Yahoo Finance, como proxy sencillo de amplitud de mercado.">Amplitud (small vs large caps)</div>
     ${body}
   </div>`;
 }
@@ -770,8 +770,8 @@ function renderConcentrationCard(){
   } else if(concentrationIndicator){
     const c = concentrationIndicator;
     const band = c.score>=65 ? {label:'Mercado muy concentrado', color:'#DC2626'} : c.score>=35 ? {label:'Concentración normal', color:'#FBBF24'} : {label:'Participación amplia', color:'#4ADE80'};
-    body = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-        <div style="width:56px;height:56px;border-radius:50%;border:4px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:${band.color};flex-shrink:0;">${Math.round(c.score)}</div>
+    body = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="width:44px;height:44px;border-radius:50%;border:3px solid ${band.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${band.color};flex-shrink:0;">${Math.round(c.score)}</div>
         <div style="font-size:14px;font-weight:700;color:${band.color};">${band.label}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;">
@@ -788,8 +788,8 @@ function renderConcentrationCard(){
   } else {
     body = '';
   }
-  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="S&amp;P 500 ponderado por capitalización (SPY) frente al mismo índice equiponderado (RSP), vía Yahoo Finance.">Concentración del S&amp;P 500</div>
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="S&amp;P 500 ponderado por capitalización (SPY) frente al mismo índice equiponderado (RSP), vía Yahoo Finance.">Concentración del S&amp;P 500</div>
     ${body}
   </div>`;
 }
@@ -867,7 +867,7 @@ function renderFedFundsRows(){
 }
 
 function renderMarketIndicators(){
-  return `<div class="indicator-cards-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px;">
+  return `<div class="indicator-cards-row" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:20px;">
     ${renderCrashIndexCard()}
     ${renderLiquidityCard()}
     ${renderYieldCurveCard()}
