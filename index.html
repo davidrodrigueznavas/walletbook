@@ -2642,7 +2642,7 @@ const DATA_SOURCES = [
   {
     provider: 'AAII (American Association of Individual Investors)', auth: 'Sin autenticación — leído del HTML público de su página de resultados',
     items: [
-      { label: 'Sentimiento inversor particular (Alcistas/Neutrales/Bajistas)', freq: 'Encuesta semanal, publicada cada jueves con el dato de la semana que acaba de cerrar (jueves a miércoles). No hay API/CSV público sin membresía de pago — se lee directamente de la página pública de resultados, así que un cambio de diseño en su web podría romper la lectura temporalmente.' },
+      { label: 'Sentimiento inversor particular (Alcistas/Neutrales/Bajistas)', freq: 'Encuesta semanal, publicada cada jueves con el dato de la semana que acaba de cerrar (jueves a miércoles). No hay API/CSV público sin membresía de pago — se lee directamente de la página pública de resultados, así que un cambio de diseño en su web podría romper la lectura temporalmente. Se usa como indicador "contrarian" (contrario): cuando casi todo el mundo piensa igual, el mercado ha tendido históricamente a hacer lo contrario. Si casi todos son bajistas (mucho miedo), ya casi no queda gente por vender — y eso ha precedido rebotes. Si casi todos son alcistas (optimismo generalizado), ya casi no queda gente por comprar — y eso ha precedido caídas. No es una señal infalible ni de corto plazo, es contexto de fondo: cuando todos van en la misma dirección, conviene estar más alerta.' },
     ],
   },
 ];
