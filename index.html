@@ -4106,12 +4106,16 @@ function renderShortInterestBlock(si, loading){
 
   return `<div>
     <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="% del float (las acciones que de verdad se pueden negociar; no cuentan las bloqueadas de fundadores, directivos o inversores con acuerdos de bloqueo) que están prestadas y sin devolver ahora mismo — el acumulado real de apuestas en contra abiertas. Se publica 2 veces al mes, con ~8 días hábiles de retraso.">Short interest oficial</div>
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:4px;">
-      <div style="font-size:18px;font-weight:700;color:${color};">${pct.toFixed(1)}% <span style="font-size:12px;font-weight:600;color:var(--text-dim);">· ${fmtSharesM(si.sharesShort)} acciones</span></div>
-      <div id="si-hist-legend" style="font-size:9.5px;color:var(--text-dim);font-weight:600;white-space:nowrap;"></div>
+    <div style="display:flex;align-items:center;gap:14px;margin-top:4px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:18px;font-weight:700;color:${color};">${pct.toFixed(1)}% <span style="font-size:12px;font-weight:600;color:var(--text-dim);">· ${fmtSharesM(si.sharesShort)} acciones</span></div>
+        <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">${trendHtml}dato del CORTE del ${si.date}</div>
+      </div>
+      ${hasChart ? `<div style="flex:2;min-width:0;">
+        <div id="si-hist-legend" style="font-size:9px;color:var(--text-dim);font-weight:600;white-space:nowrap;text-align:right;height:11px;"></div>
+        <div id="si-hist-chart" style="height:76px;border-radius:6px;overflow:hidden;"></div>
+      </div>` : ''}
     </div>
-    <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">${trendHtml}dato del CORTE del ${si.date}</div>
-    ${hasChart ? `<div id="si-hist-chart" style="height:120px;margin-top:8px;border-radius:6px;overflow:hidden;"></div>` : ''}
   </div>`;
 }
 
