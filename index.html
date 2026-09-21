@@ -2610,7 +2610,7 @@ const DATA_SOURCES = [
       { label: 'Métricas técnicas de los screeners (RSI, medias, volumen)', freq: 'Cron cada hora, L-V en horario de mercado' },
       { label: 'Fundamentales de los screeners (PER, capitalización, crecimiento...)', freq: 'Cron cada hora, L-V en horario de mercado — requiere cookie+crumb de Yahoo, en lotes de 100 tickers' },
       { label: 'Máximo de 90 días y % de caída (BTC, oro, plata)', freq: 'Cron cada hora, L-V en horario de mercado' },
-      { label: 'Short interest oficial (visualizador y modal de posición)', freq: 'Se publica solo 2 veces al mes (cortes a mitad y a fin de mes), con ~8 días hábiles de retraso hasta hacerse público. Es el % del float (las acciones que de verdad se pueden negociar; no cuentan las bloqueadas de fundadores, directivos o inversores con acuerdos de bloqueo) que están prestadas y sin devolver ahora mismo — el acumulado real de apuestas en contra abiertas. Distinto del volumen en corto diario de FINRA (más abajo), que es cuánto del volumen negociado HOY fue una venta en corto — y que incluye tanto apuestas reales en contra como ventas en corto rutinarias de los creadores de mercado (liquidez, cobertura de opciones), por lo que un % alto ahí no siempre significa sentimiento bajista generalizado. Solo disponible para acciones, requiere cookie+crumb de Yahoo. Debajo se muestran las últimas 6 quincenas en millones de acciones (no %, para no mezclar con una aproximación calculada con el float de hoy) — esas 6 filas vienen de la API pública de Nasdaq, sin autenticación.' },
+      { label: 'Short interest oficial (visualizador y modal de posición)', freq: 'Se publica solo 2 veces al mes (cortes a mitad y a fin de mes), con ~8 días hábiles de retraso hasta hacerse público. Es el % del float (las acciones que de verdad se pueden negociar; no cuentan las bloqueadas de fundadores, directivos o inversores con acuerdos de bloqueo) que están prestadas y sin devolver ahora mismo — el acumulado real de apuestas en contra abiertas. Distinto del volumen en corto diario de FINRA (más abajo), que es cuánto del volumen negociado HOY fue una venta en corto — y que incluye tanto apuestas reales en contra como ventas en corto rutinarias de los creadores de mercado (liquidez, cobertura de opciones), por lo que un % alto ahí no siempre significa sentimiento bajista generalizado. Solo disponible para acciones, requiere cookie+crumb de Yahoo.' },
     ],
   },
   {
@@ -2626,9 +2626,15 @@ const DATA_SOURCES = [
     ],
   },
   {
+    provider: 'Nasdaq', auth: 'Sin autenticación — API pública de nasdaq.com',
+    items: [
+      { label: 'Histórico de short interest, últimas 6 quincenas (visualizador y modal de posición)', freq: 'Mismo calendario de publicación que el short interest oficial de arriba (2 veces al mes, ~8 días hábiles de retraso). Se muestra en millones de acciones, no en % del float — para no mezclar con una aproximación calculada con el float de hoy, que puede haber cambiado entre una quincena y otra.' },
+    ],
+  },
+  {
     provider: 'FRED (Reserva Federal de San Luis)', auth: 'Sin autenticación — CSV público',
     items: [
-      { label: 'Fed Funds Rate (rango objetivo) y calendario FOMC', freq: 'El tipo solo cambia en las reuniones del FOMC (máx. 8 veces al año) — el calendario de fechas está fijo a mano en la app, no viene de FRED.' },
+      { label: 'Fed Funds Rate (rango objetivo) y calendario FOMC', freq: 'El tipo solo cambia en las reuniones del FOMC (máx. 8 veces al año) — el calendario de fechas está fijo a mano en la app, no viene de FRED. Las reuniones marcadas "SEP" incluyen el Summary of Economic Projections (el "dot plot" con las proyecciones de tipos de cada miembro del FOMC) y suelen mover más el mercado que una reunión normal.' },
       { label: 'Liquidez neta de la Fed (Total Assets, TGA, RRP)', freq: 'Total Assets y TGA se publican 1 vez a la semana (H.4.1, los jueves); RRP es diario. La card usa siempre la semana más reciente de Total Assets como fecha de referencia. Lectura del signo en Total Assets: variación positiva (+, verde) = el balance sube = QE, inyecta liquidez; variación negativa (−, rojo) = el balance baja = QT, drena liquidez. Qué significa esto para el mercado: inyectar liquidez (QE) tiende a empujar al alza los activos de riesgo (acciones, cripto) aunque no haya un motivo fundamental — es dinero nuevo buscando dónde colocarse. Drenar liquidez (QT) tiende a presionarlos a la baja, incluso con buenos resultados empresariales — hay menos dinero disponible circulando. Es contexto de fondo, no una señal de compra/venta por sí sola.' },
     ],
   },
@@ -2641,7 +2647,7 @@ const DATA_SOURCES = [
   {
     provider: 'AAII (American Association of Individual Investors)', auth: 'Sin autenticación — leído del HTML público de su página de resultados',
     items: [
-      { label: 'Sentimiento inversor particular (Alcistas/Neutrales/Bajistas)', freq: 'Encuesta semanal, publicada cada jueves con el dato de la semana que acaba de cerrar (jueves a miércoles). No hay API/CSV público sin membresía de pago — se lee directamente de la página pública de resultados, así que un cambio de diseño en su web podría romper la lectura temporalmente. Se usa como indicador "contrarian" (contrario): cuando casi todo el mundo piensa igual, el mercado ha tendido históricamente a hacer lo contrario. Si casi todos son bajistas (mucho miedo), ya casi no queda gente por vender — y eso ha precedido rebotes. Si casi todos son alcistas (optimismo generalizado), ya casi no queda gente por comprar — y eso ha precedido caídas. No es una señal infalible ni de corto plazo, es contexto de fondo: cuando todos van en la misma dirección, conviene estar más alerta.' },
+      { label: 'Sentimiento inversor particular — Alcistas/Neutrales/Bajistas (píldora en la cabecera, junto al indicador de mercados abiertos)', freq: 'Encuesta semanal, publicada cada jueves con el dato de la semana que acaba de cerrar (jueves a miércoles). No hay API/CSV público sin membresía de pago — se lee directamente de la página pública de resultados, así que un cambio de diseño en su web podría romper la lectura temporalmente. Se usa como indicador "contrarian" (contrario): cuando casi todo el mundo piensa igual, el mercado ha tendido históricamente a hacer lo contrario. Si casi todos son bajistas (mucho miedo), ya casi no queda gente por vender — y eso ha precedido rebotes. Si casi todos son alcistas (optimismo generalizado), ya casi no queda gente por comprar — y eso ha precedido caídas. No es una señal infalible ni de corto plazo, es contexto de fondo: cuando todos van en la misma dirección, conviene estar más alerta.' },
     ],
   },
 ];
