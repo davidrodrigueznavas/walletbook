@@ -226,7 +226,11 @@ const EVENT_TYPE = {
   split: 'Split / contrasplit',
   nota_posicion: 'Nota Posición',
   otro: 'Otro',
+  macro: 'FOMC',
 };
+// 'macro' es solo para eventos globales (ej. FOMC) sembrados en
+// calendar_events_global — no debe poder elegirse al crear un evento propio.
+const USER_EVENT_TYPES = Object.fromEntries(Object.entries(EVENT_TYPE).filter(([k])=>k!=='macro'));
 const SCREENER_METRIC = {
   rsi14: {label:'RSI (14)', fmt:v=>v.toFixed(1), get:r=>r.rsi14},
   price_vs_sma50: {label:'Precio vs SMA50 (%)', fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%', get:r=> r.sma50 ? ((r.last_price-r.sma50)/r.sma50)*100 : null},
@@ -789,10 +793,99 @@ function renderConcentrationCard(){
   </div>`;
 }
 
+// Calendario oficial de reuniones del FOMC — fechas publicadas por la Fed con
+// antelación (federalreserve.gov/monetarypolicy/fomccalendars.htm). Fijo a mano
+// porque casi nunca cambia; revisar esa página si hace falta ampliar años.
+// "sep" = la reunión incluye el Summary of Economic Projections (dot plot),
+// las que más mueven mercado — siempre marzo/junio/septiembre/diciembre.
+const FOMC_MEETINGS = [
+  { start:'2026-01-27', end:'2026-01-28', sep:false },
+  { start:'2026-03-17', end:'2026-03-18', sep:true },
+  { start:'2026-04-28', end:'2026-04-29', sep:false },
+  { start:'2026-06-16', end:'2026-06-17', sep:true },
+  { start:'2026-07-28', end:'2026-07-29', sep:false },
+  { start:'2026-09-15', end:'2026-09-16', sep:true },
+  { start:'2026-10-27', end:'2026-10-28', sep:false },
+  { start:'2026-12-08', end:'2026-12-09', sep:true },
+  { start:'2027-01-26', end:'2027-01-27', sep:false },
+  { start:'2027-03-16', end:'2027-03-17', sep:true },
+  { start:'2027-04-27', end:'2027-04-28', sep:false },
+  { start:'2027-06-08', end:'2027-06-09', sep:true },
+  { start:'2027-07-27', end:'2027-07-28', sep:false },
+  { start:'2027-09-14', end:'2027-09-15', sep:true },
+  { start:'2027-10-26', end:'2027-10-27', sep:false },
+  { start:'2027-12-07', end:'2027-12-08', sep:true },
+];
+function nextFomcMeeting(){
+  const todayStr = new Date().toISOString().slice(0,10);
+  return FOMC_MEETINGS.find(m => m.end >= todayStr) || null;
+}
+function fmtMeetingRange(m){
+  const s = new Date(m.start+'T00:00:00'), e = new Date(m.end+'T00:00:00');
+  const sameMonth = s.getMonth()===e.getMonth();
+  const dayFmt = d => d.toLocaleDateString('es-ES', {day:'numeric'});
+  const monthFmt = d => d.toLocaleDateString('es-ES', {month:'short'}).replace('.','');
+  return sameMonth ? `${dayFmt(s)}-${dayFmt(e)} ${monthFmt(e)}` : `${dayFmt(s)} ${monthFmt(s)} - ${dayFmt(e)} ${monthFmt(e)}`;
+}
+
+let fedFundsRate = null, fedFundsLoading = false, fedFundsError = null;
+async function loadFedFundsRate(){
+  if(fedFundsLoading) return;
+  fedFundsLoading = true; fedFundsError = null;
+  try{
+    const res = await callEdgeFunction('fed-funds-rate', {});
+    if(!res.ok) throw new Error(res.error || 'Error al consultar la Fed.');
+    fedFundsRate = res;
+  } catch(e){
+    fedFundsError = (e && e.message) || 'Error al consultar la Fed.';
+  }
+  fedFundsLoading = false;
+  render(null);
+}
+function renderFedFundsCard(){
+  if(!fedFundsRate && !fedFundsLoading && !fedFundsError){
+    loadFedFundsRate();
+  }
+  const meeting = nextFomcMeeting();
+  const daysUntil = meeting ? Math.max(0, Math.round((new Date(meeting.start+'T00:00:00') - new Date()) / 86400000)) : null;
+  let body;
+  if(fedFundsLoading && !fedFundsRate){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">Consultando…</div>`;
+  } else if(fedFundsError && !fedFundsRate){
+    body = `<div style="font-size:12px;color:var(--text-faint);padding:16px 0;">${fedFundsError}</div>`;
+  } else if(fedFundsRate){
+    const f = fedFundsRate;
+    body = `<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:14px;">
+        <div style="font-size:22px;font-weight:800;">${f.lower.toFixed(2)}–${f.upper.toFixed(2)}%</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="Rango objetivo de tipos fijado por el FOMC — sube o baja solo en sus reuniones, no a diario. Fuente: FRED (Reserva Federal de San Luis).">Fed Funds Rate (rango objetivo)</span>
+          <span style="font-weight:700;">Dato del ${f.asOf}</span>
+        </div>
+        ${meeting ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);">Próxima reunión FOMC</span>
+          <span style="font-weight:700;">${fmtMeetingRange(meeting)} · ${daysUntil}d</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+          <span style="color:var(--text-faint);cursor:help;border-bottom:1px dotted var(--text-faint);" title="El Summary of Economic Projections ('dot plot') muestra las propias proyecciones de tipos de cada miembro del FOMC, no solo la decisión del día — las reuniones con SEP suelen mover más el mercado.">¿Lleva proyecciones (SEP)?</span>
+          <span style="font-weight:700;color:${meeting.sep?'var(--accent-text)':'var(--text-dim)'};">${meeting.sep?'Sí':'No'}</span>
+        </div>` : ''}
+      </div>`;
+  } else {
+    body = '';
+  }
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Precio del dinero (tipo de interés) y calendario de reuniones del FOMC — el complemento de cantidad (liquidez) y precio (tipos).">Tipo de la Fed y próximo FOMC</div>
+    ${body}
+  </div>`;
+}
+
 function renderMarketIndicators(){
   return `<div class="indicator-cards-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px;">
     ${renderCrashIndexCard()}
     ${renderLiquidityCard()}
+    ${renderFedFundsCard()}
     ${renderYieldCurveCard()}
     ${renderBreadthCard()}
     ${renderConcentrationCard()}
@@ -1064,23 +1157,30 @@ async function loadAllRulesData(){
 
 async function loadCalendarEvents(){
   calendarEventsLoading = true;
-  const [evRes, posRes] = await Promise.all([
+  const [evRes, globalRes, posRes] = await Promise.all([
     supabase.from('calendar_events').select('*').eq('owner_id', session.user.id).order('event_date', { ascending:true }),
+    supabase.from('calendar_events_global').select('*').order('event_date', { ascending:true }),
     supabase.from('positions').select('id, name, ticker, portfolio_id, invested, price').eq('owner_id', session.user.id).is('deleted_at', null).order('name'),
   ]);
   if(evRes.error) console.error(evRes.error);
+  if(globalRes.error) console.error(globalRes.error);
   if(posRes.error) console.error(posRes.error);
-  calendarEvents = evRes.data || [];
+  // Eventos globales (ej. reuniones FOMC): iguales para todos los usuarios, de
+  // solo lectura — no tienen owner_id ni se pueden editar/borrar desde la app.
+  const own = (evRes.data || []).map(e => ({ ...e, isGlobal:false }));
+  const global = (globalRes.data || []).map(e => ({ ...e, isGlobal:true }));
+  calendarEvents = [...own, ...global].sort((a,b) => a.event_date.localeCompare(b.event_date));
   calendarPositionOptions = await attachRecompras(posRes.data || []);
   calendarEventsLoading = false;
 }
 
-// Solo se muestran los eventos propios y los de acciones que ya están invertidas
-// (no las que solo tienen importe pendiente o están en watchlist) — salvo las
-// "Nota Posición", que se ven siempre, también en posiciones pendientes de invertir.
+// Solo se muestran los eventos propios, los globales (ej. FOMC) y los de acciones
+// que ya están invertidas (no las que solo tienen importe pendiente o están en
+// watchlist) — salvo las "Nota Posición", que se ven siempre, también en
+// posiciones pendientes de invertir.
 function visibleCalendarEvents(){
   const investedIds = new Set((calendarPositionOptions||[]).filter(p => investedOf(p) > 0).map(p => p.id));
-  return (calendarEvents||[]).filter(e => e.source === 'propio' || e.event_type === 'nota_posicion' || investedIds.has(e.position_id));
+  return (calendarEvents||[]).filter(e => e.isGlobal || e.source === 'propio' || e.event_type === 'nota_posicion' || investedIds.has(e.position_id));
 }
 
 async function loadScreeners(){
@@ -1217,6 +1317,7 @@ function calendarEventRow(e){
       <div style="min-width:0;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap;">
           ${calendarEventTypeBadge(e.event_type)}
+          ${e.isGlobal ? `<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:1px 6px;border-radius:6px;background:var(--accent-soft);color:var(--accent-text);border:1px solid var(--accent-border);">Común</span>` : ''}
           ${e.source==='accion'?`<span style="font-size:10.5px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.position_name||'')}${e.ticker?' · '+esc(e.ticker):''}</span>`:''}
         </div>
         <div style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.title)}</div>
@@ -1225,8 +1326,8 @@ function calendarEventRow(e){
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-      <button class="calendar-event-edit-btn" data-id="${e.id}" title="Editar" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:11px;font-weight:600;padding:2px 6px;">Editar</button>
-      <button class="calendar-event-delete-btn" data-id="${e.id}" title="Eliminar" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;">×</button>
+      ${e.isGlobal ? '' : `<button class="calendar-event-edit-btn" data-id="${e.id}" title="Editar" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:11px;font-weight:600;padding:2px 6px;">Editar</button>
+      <button class="calendar-event-delete-btn" data-id="${e.id}" title="Eliminar" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:16px;padding:2px 6px;">×</button>`}
     </div>
   </div>`;
 }
@@ -2568,7 +2669,7 @@ function renderModal(){
           <div class="field"><label>Título</label><input id="posevent-title" placeholder="ej. Resultados Q4" value="${esc(editingPosEvent?.title||'')}" autocomplete="off"/></div>
           <div class="field"><label>Tipo</label><select id="posevent-type">
             ${investedOf(p)>0
-              ? Object.entries(EVENT_TYPE).map(([k,v])=>`<option value="${k}" ${editingPosEvent?.event_type===k?'selected':''}>${v}</option>`).join('')
+              ? Object.entries(USER_EVENT_TYPES).map(([k,v])=>`<option value="${k}" ${editingPosEvent?.event_type===k?'selected':''}>${v}</option>`).join('')
               : `<option value="nota_posicion">${EVENT_TYPE.nota_posicion}</option>`}
           </select></div>
           <div class="field"><label>Fecha</label><input type="date" id="posevent-date" value="${editingPosEvent?.event_date||''}" autocomplete="off"/></div>
@@ -2773,7 +2874,7 @@ function renderAddPositionModal(){
         <div class="modal-fields-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div class="field"><label>Tipo</label><select id="addpos-event-type">
             <option value="">— Ninguno —</option>
-            ${Object.entries(EVENT_TYPE).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
+            ${Object.entries(USER_EVENT_TYPES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
           </select></div>
           <div class="field"><label>Fecha</label><input id="addpos-event-date" type="date" autocomplete="off"/></div>
         </div>
@@ -3648,7 +3749,7 @@ function renderCalendarScreen(){
         <div class="field"><label>Título</label><input id="cal-title" placeholder="ej. Resultados Q3" value="${esc(editingEvent?.title||'')}" autocomplete="off"/></div>
         <div class="field"><label>Fecha</label><input id="cal-date" type="date" value="${editingEvent?.event_date||calendarSelectedDay||''}" autocomplete="off"/></div>
         <div class="field"><label>Tipo de evento</label><select id="cal-type">
-          ${Object.entries(EVENT_TYPE).map(([k,v])=>`<option value="${k}" ${editingEvent?.event_type===k?'selected':''}>${v}</option>`).join('')}
+          ${Object.entries(USER_EVENT_TYPES).map(([k,v])=>`<option value="${k}" ${editingEvent?.event_type===k?'selected':''}>${v}</option>`).join('')}
         </select></div>
         <div class="field">
           <label>Origen</label>
