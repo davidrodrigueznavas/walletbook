@@ -33,6 +33,9 @@
     --red: #F87171;
     --red-soft: rgba(248,113,113,0.14);
     --red-border: rgba(248,113,113,0.4);
+    --yellow: #FBBF24;
+    --yellow-soft: rgba(251,191,36,0.14);
+    --yellow-border: rgba(251,191,36,0.4);
   }
   :root[data-theme="light"] {
     --bg: #F5F5F4;
@@ -57,6 +60,9 @@
     --red: #D3453B;
     --red-soft: rgba(211,69,59,0.10);
     --red-border: rgba(211,69,59,0.35);
+    --yellow: #B8860B;
+    --yellow-soft: rgba(184,134,11,0.10);
+    --yellow-border: rgba(184,134,11,0.35);
   }
   html, body { height:100%; margin:0; }
   body { background:var(--bg); color:var(--text); font-family:'Calibri','Carlito',sans-serif; overflow:hidden; }
@@ -1891,8 +1897,8 @@ function renderPositionCard(p, sc){
   const isPending = inv<=0 && pendingInvestmentFor(p)>0;
   const todayStr = new Date().toISOString().slice(0,10);
   const hasOverdueEvent = inv>0 && (p.events||[]).some(e => e.event_date < todayStr && !e.reviewed_at);
-  const cardBg = hasOverdueEvent ? 'var(--red-soft)' : resp==='pos' ? 'var(--green-soft)' : resp==='neg' ? 'var(--red-soft)' : 'var(--panel-2)';
-  const cardBorder = hasOverdueEvent ? 'var(--red-border)' : resp==='pos' ? 'var(--green-border)' : resp==='neg' ? 'var(--red-border)' : 'var(--border)';
+  const cardBg = hasOverdueEvent ? 'var(--yellow-soft)' : resp==='pos' ? 'var(--green-soft)' : resp==='neg' ? 'var(--red-soft)' : 'var(--panel-2)';
+  const cardBorder = hasOverdueEvent ? 'var(--yellow-border)' : resp==='pos' ? 'var(--green-border)' : resp==='neg' ? 'var(--red-border)' : 'var(--border)';
   const showValidation = isPending || inv>0;
   const openBuyOrders = openOrdersOf(p, 'compra');
   const openSellOrders = openOrdersOf(p, 'venta');
@@ -1901,7 +1907,7 @@ function renderPositionCard(p, sc){
   const validationRow = (showValidation || openBuyOrders.length || openSellOrders.length) ? `<div style="display:flex;gap:3px;margin-top:2px;flex-wrap:wrap;">
     ${showValidation ? `<span title="Validación fundamental${p.fundamental_validated?' hecha':' pendiente'}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:${p.fundamental_validated?'var(--green-soft)':'var(--panel)'};color:${p.fundamental_validated?'var(--green)':'var(--text-faint)'};border:1px solid ${p.fundamental_validated?'var(--green-border)':'var(--border-soft)'};">F</span>
     <span title="Validación técnica${p.technical_validated?' hecha':' pendiente'}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:${p.technical_validated?'var(--green-soft)':'var(--panel)'};color:${p.technical_validated?'var(--green)':'var(--text-faint)'};border:1px solid ${p.technical_validated?'var(--green-border)':'var(--border-soft)'};">T</span>` : ''}
-    ${hasOverdueEvent ? `<span title="Hay un evento pasado sin revisar" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:var(--red-soft);color:var(--red);border:1px solid var(--red-border);">⚠</span>` : ''}
+    ${hasOverdueEvent ? `<span title="Hay un evento pasado sin revisar" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:var(--yellow-soft);color:var(--yellow);border:1px solid var(--yellow-border);">⚠</span>` : ''}
     ${openBuyOrders.length ? `<span title="Orden de compra abierta${buyOrderPrice?` a ${buyOrderPrice}€`:''}${openBuyOrders.length>1?` (${openBuyOrders.length} órdenes)`:''}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:var(--accent-soft);color:var(--accent-text);border:1px solid var(--accent-border);">↗${buyOrderPrice?buyOrderPrice+'€':'compra'}</span>` : ''}
     ${openSellOrders.length ? `<span title="Orden de venta abierta${sellOrderPrice?` a ${sellOrderPrice}€`:''}${openSellOrders.length>1?` (${openSellOrders.length} órdenes)`:''}" style="font-size:7.5px;font-weight:700;padding:1px 4px;border-radius:4px;background:var(--red-soft);color:var(--red);border:1px solid var(--red-border);">↘${sellOrderPrice?sellOrderPrice+'€':'venta'}</span>` : ''}
   </div>` : '';
@@ -2414,13 +2420,13 @@ function renderModal(){
         ${positionEventsLoading ? `<div style="font-size:11px;color:var(--text-faint);">Cargando…</div>` : (positionEvents.length ? `<div id="posevent-list" style="position:relative;display:flex;flex-direction:column;gap:6px;margin-bottom:${positionEventFormOpen?'12px':'0'};max-height:118px;overflow-y:auto;">
           ${positionEvents.map(e=>{
             const isPastUnreviewed = e.event_date < todayStr && !e.reviewed_at;
-            return `<div data-event-date="${e.event_date}" data-reviewed="${e.reviewed_at?'1':'0'}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 9px;border-radius:7px;background:var(--panel);border:1px solid ${isPastUnreviewed?'var(--red-border)':'var(--border-soft)'};flex-shrink:0;">
+            return `<div data-event-date="${e.event_date}" data-reviewed="${e.reviewed_at?'1':'0'}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 9px;border-radius:7px;background:var(--panel);border:1px solid ${isPastUnreviewed?'var(--yellow-border)':'var(--border-soft)'};flex-shrink:0;">
               <div style="font-size:11.5px;min-width:0;">
                 ${calendarEventTypeBadge(e.event_type)} <span style="margin-left:6px;">${esc(e.title)}</span><span style="color:var(--text-faint);"> · ${e.event_date}</span>
                 ${e.notes ? `<div style="font-size:10.5px;color:var(--text-dim);margin-top:3px;">${esc(e.notes)}</div>` : ''}
               </div>
               <div style="display:flex;align-items:center;gap:2px;flex-shrink:0;">
-                ${isPastUnreviewed ? `<button class="posevent-review-btn" data-id="${e.id}" title="Marcar como revisado" style="cursor:pointer;background:var(--red-soft);border:1px solid var(--red-border);color:var(--red);border-radius:5px;font-size:10px;font-weight:700;padding:2px 6px;margin-right:2px;">✓ Revisar</button>`
+                ${isPastUnreviewed ? `<button class="posevent-review-btn" data-id="${e.id}" title="Marcar como revisado" style="cursor:pointer;background:var(--yellow-soft);border:1px solid var(--yellow-border);color:var(--yellow);border-radius:5px;font-size:10px;font-weight:700;padding:2px 6px;margin-right:2px;">✓ Revisar</button>`
                   : e.reviewed_at ? `<span title="Revisado" style="font-size:10px;color:var(--green);margin-right:2px;">✓</span>` : ''}
                 <button class="posevent-edit-btn" data-id="${e.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:10.5px;font-weight:600;padding:0 4px;">Editar</button>
                 <button class="posevent-delete-btn" data-id="${e.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;">×</button>
@@ -4194,7 +4200,16 @@ function wirePositionEventsScroll(){
   const rows = Array.from(list.children);
   if(!rows.length) return;
   const todayStr = new Date().toISOString().slice(0,10);
-  const anchor = rows.find(r => r.getAttribute('data-event-date') >= todayStr) || rows[rows.length-1];
+  const anchorIdx = rows.findIndex(r => r.getAttribute('data-event-date') >= todayStr);
+  const idx = anchorIdx === -1 ? rows.length-1 : anchorIdx;
+  const anchor = rows[idx];
+  // Alto justo para 2 filas desde el ancla (con su gap incluido) -- calculado
+  // en vez de fijo a un número de píxeles, porque una fila con notas es más
+  // alta que una sin ellas y un max-height fijo dejaba ver más o menos de 2
+  // según el contenido.
+  const second = rows[idx+1];
+  const visibleHeight = second ? (second.offsetTop + second.offsetHeight) - anchor.offsetTop : anchor.offsetHeight;
+  list.style.maxHeight = visibleHeight + 'px';
   list.scrollTop = anchor.offsetTop;
 }
 
