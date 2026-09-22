@@ -4111,9 +4111,9 @@ function renderShortInterestBlock(si, loading){
         <div style="font-size:18px;font-weight:700;color:${color};">${pct.toFixed(1)}% <span style="font-size:12px;font-weight:600;color:var(--text-dim);">· ${fmtSharesM(si.sharesShort)} acciones</span></div>
         <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">${trendHtml}dato del CORTE del ${si.date}</div>
       </div>
-      ${hasChart ? `<div style="flex:2;min-width:0;">
+      ${hasChart ? `<div style="flex:1.4;min-width:0;">
         <div id="si-hist-legend" style="font-size:9px;color:var(--text-dim);font-weight:600;white-space:nowrap;text-align:right;height:11px;"></div>
-        <div id="si-hist-chart" style="height:76px;border-radius:6px;overflow:hidden;"></div>
+        <div id="si-hist-chart" style="height:60px;"></div>
       </div>` : ''}
     </div>
   </div>`;
@@ -4136,24 +4136,32 @@ function wireShortInterestChart(){
   const pct = si.shortPercentOfFloat;
   const dark = theme === 'dark';
   const lineColor = pct>=20 ? (dark?'#F87171':'#D3453B') : pct>=10 ? (dark?'#E9E9EB':'#202124') : (dark?'#4ADE80':'#1E9E5A');
-  const textColor = dark ? '#9CA0A8' : '#5B5F66';
+  const textColor = dark ? '#6E7177' : '#94969B';
   const gridColor = dark ? '#26282D' : '#E8E9EC';
   const bgColor = dark ? '#1E2024' : '#FFFFFF'; // var(--panel) -- distinto del panel-2 de fondo de la card
 
+  // Minimalista a propósito: sin eje de valores (el número ya se ve grande a
+  // la izquierda y el detalle por punto sale en la leyenda al pasar el
+  // ratón), sin interacción de zoom/scroll (es una foto fija, no un gráfico
+  // para explorar) y con margen interno para que ninguna etiqueta se salga.
   const chart = LightweightCharts.createChart(container, {
-    layout: { background:{color:bgColor}, textColor, fontSize:10, fontFamily:'Calibri, Carlito, sans-serif' },
-    grid: { vertLines:{color:gridColor}, horzLines:{color:gridColor} },
-    rightPriceScale: { borderColor:gridColor },
-    timeScale: { borderColor:gridColor, visible:true },
-    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    layout: { background:{color:bgColor}, textColor, fontSize:9, fontFamily:'Calibri, Carlito, sans-serif' },
+    grid: { vertLines:{visible:false}, horzLines:{color:gridColor} },
+    rightPriceScale: { visible:false },
+    leftPriceScale: { visible:false },
+    timeScale: { borderVisible:false, visible:true, rightOffset:2, fixLeftEdge:true, fixRightEdge:true },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal, vertLine:{labelVisible:false}, horzLine:{visible:false,labelVisible:false} },
+    handleScroll: false, handleScale: false,
     autoSize: true,
   });
   const series = chart.addAreaSeries({
-    lineColor, topColor:lineColor+'38', bottomColor:lineColor+'00', lineWidth:2,
+    lineColor, topColor:lineColor+'38', bottomColor:lineColor+'00', lineWidth:1.6,
+    priceLineVisible:false, lastValueVisible:false,
     priceFormat: { type:'custom', formatter: v => v.toLocaleString('es-ES',{maximumFractionDigits:1})+'M' },
   });
   const data = si.history.slice().reverse().map(h => ({ time:h.date, value: h.sharesShort/1e6 }));
   series.setData(data);
+  chart.priceScale('right').applyOptions({ scaleMargins: { top: 0.15, bottom: 0.15 } });
   chart.timeScale().fitContent();
 
   const legendEl = document.getElementById('si-hist-legend');
@@ -4172,7 +4180,7 @@ function wireShortInterestChart(){
 // Envuelve las dos fuentes juntas, con una línea que deja explícito que son
 // dos periodos de datos distintos (no dos formas de medir lo mismo).
 function renderShortInterestSection(officialSI, officialLoading, dailySV, dailyLoading){
-  return `<div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
+  return `<div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;">
     <div style="background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;padding:12px 14px;box-sizing:border-box;">
       ${renderShortInterestBlock(officialSI, officialLoading)}
     </div>
