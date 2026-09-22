@@ -1018,7 +1018,7 @@ async function attachRecompras(positions){
 
 async function attachCalendarEvents(positions){
   if(!positions.length) return positions;
-  const { data, error } = await supabase.from('calendar_events').select('id, position_id, event_date, event_type').in('position_id', positions.map(p=>p.id));
+  const { data, error } = await supabase.from('calendar_events').select('id, position_id, event_date, event_type, reviewed_at').in('position_id', positions.map(p=>p.id));
   if(error){ console.error(error); return positions; }
   const byPosition = {};
   (data||[]).forEach(e => { (byPosition[e.position_id] = byPosition[e.position_id]||[]).push(e); });
@@ -1890,7 +1890,7 @@ function renderPositionCard(p, sc){
   const weekLabel = wk===null ? `<span style="color:var(--text-faint);">7d —</span>` : `<span style="color:${wk>=0?'var(--green)':'var(--red)'};">7d ${wk>=0?'+':''}${wk}%</span>`;
   const isPending = inv<=0 && pendingInvestmentFor(p)>0;
   const todayStr = new Date().toISOString().slice(0,10);
-  const hasOverdueEvent = inv>0 && (p.events||[]).some(e => e.event_date < todayStr);
+  const hasOverdueEvent = inv>0 && (p.events||[]).some(e => e.event_date < todayStr && !e.reviewed_at);
   const cardBg = hasOverdueEvent ? 'var(--red-soft)' : resp==='pos' ? 'var(--green-soft)' : resp==='neg' ? 'var(--red-soft)' : 'var(--panel-2)';
   const cardBorder = hasOverdueEvent ? 'var(--red-border)' : resp==='pos' ? 'var(--green-border)' : resp==='neg' ? 'var(--red-border)' : 'var(--border)';
   const showValidation = isPending || inv>0;
@@ -2347,6 +2347,7 @@ function renderModal(){
   const sens = SENS[p.sector] || {};
   const sc = SCENARIOS.find(s=>s.key===currentScenario);
   const resp = sc ? sectorResponse(sens, sc.f) : null;
+  const todayStr = new Date().toISOString().slice(0,10);
   return `<div class="modal-backdrop" id="modal-backdrop">
     <div class="modal-card">
       <div class="modal-header-row" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;gap:10px;">
@@ -2410,17 +2411,22 @@ function renderModal(){
           <button id="posevent-add-toggle" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:11.5px;font-weight:600;padding:0;">${positionEventFormOpen?'Cancelar':'+ Añadir evento'}</button>
         </div>
         ${investedOf(p)<=0 ? `<div style="font-size:10.5px;color:var(--text-faint);margin-bottom:6px;">Posición pendiente de invertir: solo se pueden añadir notas.</div>` : ''}
-        ${positionEventsLoading ? `<div style="font-size:11px;color:var(--text-faint);">Cargando…</div>` : (positionEvents.length ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:${positionEventFormOpen?'12px':'0'};">
-          ${positionEvents.map(e=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 9px;border-radius:7px;background:var(--panel);border:1px solid var(--border-soft);">
-            <div style="font-size:11.5px;min-width:0;">
-              ${calendarEventTypeBadge(e.event_type)} <span style="margin-left:6px;">${esc(e.title)}</span><span style="color:var(--text-faint);"> · ${e.event_date}</span>
-              ${e.notes ? `<div style="font-size:10.5px;color:var(--text-dim);margin-top:3px;">${esc(e.notes)}</div>` : ''}
-            </div>
-            <div style="display:flex;align-items:center;gap:2px;flex-shrink:0;">
-              <button class="posevent-edit-btn" data-id="${e.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:10.5px;font-weight:600;padding:0 4px;">Editar</button>
-              <button class="posevent-delete-btn" data-id="${e.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;">×</button>
-            </div>
-          </div>`).join('')}
+        ${positionEventsLoading ? `<div style="font-size:11px;color:var(--text-faint);">Cargando…</div>` : (positionEvents.length ? `<div id="posevent-list" style="position:relative;display:flex;flex-direction:column;gap:6px;margin-bottom:${positionEventFormOpen?'12px':'0'};max-height:118px;overflow-y:auto;">
+          ${positionEvents.map(e=>{
+            const isPastUnreviewed = e.event_date < todayStr && !e.reviewed_at;
+            return `<div data-event-date="${e.event_date}" data-reviewed="${e.reviewed_at?'1':'0'}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 9px;border-radius:7px;background:var(--panel);border:1px solid ${isPastUnreviewed?'var(--red-border)':'var(--border-soft)'};flex-shrink:0;">
+              <div style="font-size:11.5px;min-width:0;">
+                ${calendarEventTypeBadge(e.event_type)} <span style="margin-left:6px;">${esc(e.title)}</span><span style="color:var(--text-faint);"> · ${e.event_date}</span>
+                ${e.notes ? `<div style="font-size:10.5px;color:var(--text-dim);margin-top:3px;">${esc(e.notes)}</div>` : ''}
+              </div>
+              <div style="display:flex;align-items:center;gap:2px;flex-shrink:0;">
+                ${isPastUnreviewed ? `<button class="posevent-review-btn" data-id="${e.id}" title="Marcar como revisado" style="cursor:pointer;background:var(--red-soft);border:1px solid var(--red-border);color:var(--red);border-radius:5px;font-size:10px;font-weight:700;padding:2px 6px;margin-right:2px;">✓ Revisar</button>`
+                  : e.reviewed_at ? `<span title="Revisado" style="font-size:10px;color:var(--green);margin-right:2px;">✓</span>` : ''}
+                <button class="posevent-edit-btn" data-id="${e.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:10.5px;font-weight:600;padding:0 4px;">Editar</button>
+                <button class="posevent-delete-btn" data-id="${e.id}" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:14px;padding:0 4px;">×</button>
+              </div>
+            </div>`;
+          }).join('')}
         </div>` : (!positionEventFormOpen ? `<div style="font-size:11px;color:var(--text-faint);">Sin eventos todavía.</div>` : ''))}
         ${positionEventFormOpen ? (() => {
           const editingPosEvent = positionEventEditingId ? positionEvents.find(e=>e.id===positionEventEditingId) : null;
@@ -4177,6 +4183,21 @@ function wireShortInterestChart(){
   shortInterestChartInstance = chart;
 }
 
+// La lista de "Eventos de esta posición" puede acumular muchos con los
+// meses; en vez de mostrarlos todos de golpe, el contenedor tiene una altura
+// fija (~2 filas) con scroll, y al abrir la posición se posiciona ya en el
+// primer evento futuro (o, si no queda ninguno, en el último pasado) — así
+// arriba quedan los antiguos y abajo los que faltan por llegar.
+function wirePositionEventsScroll(){
+  const list = document.getElementById('posevent-list');
+  if(!list) return;
+  const rows = Array.from(list.children);
+  if(!rows.length) return;
+  const todayStr = new Date().toISOString().slice(0,10);
+  const anchor = rows.find(r => r.getAttribute('data-event-date') >= todayStr) || rows[rows.length-1];
+  list.scrollTop = anchor.offsetTop;
+}
+
 // Envuelve las dos fuentes juntas, con una línea que deja explícito que son
 // dos periodos de datos distintos (no dos formas de medir lo mismo).
 function renderShortInterestSection(officialSI, officialLoading, dailySV, dailyLoading){
@@ -4793,6 +4814,23 @@ function render(scenario){
     positionEventFormError = null;
     render(currentScenario);
   }));
+  app.querySelectorAll('.posevent-review-btn').forEach(btn=>btn.addEventListener('click', async () => {
+    const id = btn.getAttribute('data-id');
+    const pos = portfolio.positions.find(p=>p.id===selectedId);
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase.from('calendar_events').update({ reviewed_at: nowIso }).eq('id', id);
+    if(error){ showStatus('No se pudo marcar como revisado — revisa la conexión.'); return; }
+    // Actualiza el estado local (lista del modal + el array que usa la tarjeta
+    // en el grid) para que el aviso en rojo desaparezca al momento, sin
+    // esperar a la próxima recarga completa de la cartera.
+    const ev = positionEvents.find(e=>e.id===id);
+    if(ev) ev.reviewed_at = nowIso;
+    if(pos){
+      const cardEv = (pos.events||[]).find(e=>e.id===id);
+      if(cardEv) cardEv.reviewed_at = nowIso;
+    }
+    render(currentScenario);
+  }));
   const posEventSaveBtn = document.getElementById('posevent-save-btn');
   if(posEventSaveBtn) posEventSaveBtn.addEventListener('click', async () => {
     const pos = portfolio.positions.find(p=>p.id===selectedId);
@@ -4906,6 +4944,7 @@ function render(scenario){
   });
   wireAddPositionModal(app);
   wireShortInterestChart();
+  wirePositionEventsScroll();
 
   const portfolioNewsBtn = document.getElementById('portfolio-news-btn');
   if(portfolioNewsBtn) portfolioNewsBtn.addEventListener('click', async () => {
