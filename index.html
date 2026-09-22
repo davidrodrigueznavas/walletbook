@@ -4091,9 +4091,9 @@ function renderShortVolumeBlock(sv, loading){
   const restPct = 100 - pct;
   const color = pct>=50 ? 'var(--red)' : pct>=30 ? 'var(--text)' : 'var(--green)';
   return `<div>
-    <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="De las acciones que se negociaron HOY, cuántas fueron una venta con acciones prestadas (no compradas). Se cuenta de cero cada día. Ojo: parte de esas ventas no son apuestas reales en contra — muchas las hacen intermediarios del mercado por pura rutina de su trabajo, no porque crean que va a caer.">Volumen en corto (FINRA)</div>
-    <div style="font-size:15px;font-weight:700;color:${color};margin-top:2px;">${pct.toFixed(1)}%</div>
-    <div style="font-size:8.5px;color:var(--text-faint);margin-top:2px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Resto del volumen (100% − volumen en corto): ventas donde el vendedor no tomó prestadas las acciones (venta normal, no en corto). No es lo mismo que 'volumen comprador' — esto solo describe el lado vendedor de cada operación, no si el comprador abría posición larga o cerraba un corto.">No en corto: ${restPct.toFixed(1)}% · dato de HOY (${sv.date})</div>
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="De las acciones que se negociaron HOY, cuántas fueron una venta con acciones prestadas (no compradas). Se cuenta de cero cada día. Ojo: parte de esas ventas no son apuestas reales en contra — muchas las hacen intermediarios del mercado por pura rutina de su trabajo, no porque crean que va a caer.">Volumen en corto (FINRA)</div>
+    <div style="font-size:18px;font-weight:700;color:${color};margin-top:4px;">${pct.toFixed(1)}%</div>
+    <div style="font-size:9px;color:var(--text-faint);margin-top:3px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Resto del volumen (100% − volumen en corto): ventas donde el vendedor no tomó prestadas las acciones (venta normal, no en corto). No es lo mismo que 'volumen comprador' — esto solo describe el lado vendedor de cada operación, no si el comprador abría posición larga o cerraba un corto.">No en corto: ${restPct.toFixed(1)}% · dato de HOY (${sv.date})</div>
   </div>`;
 }
 
@@ -4117,15 +4117,15 @@ function renderShortInterestBlock(si, loading){
   const hasChart = si.history && si.history.length>=2;
 
   return `<div>
-    <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="% del float (las acciones que de verdad se pueden negociar; no cuentan las bloqueadas de fundadores, directivos o inversores con acuerdos de bloqueo) que están prestadas y sin devolver ahora mismo — el acumulado real de apuestas en contra abiertas. Se publica 2 veces al mes, con ~8 días hábiles de retraso.">Short interest oficial</div>
-    <div style="display:flex;align-items:center;gap:12px;margin-top:2px;">
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="% del float (las acciones que de verdad se pueden negociar; no cuentan las bloqueadas de fundadores, directivos o inversores con acuerdos de bloqueo) que están prestadas y sin devolver ahora mismo — el acumulado real de apuestas en contra abiertas. Se publica 2 veces al mes, con ~8 días hábiles de retraso.">Short interest oficial</div>
+    <div style="display:flex;align-items:center;gap:14px;margin-top:4px;">
       <div style="flex:1;min-width:0;">
-        <div style="font-size:15px;font-weight:700;color:${color};">${pct.toFixed(1)}% <span style="font-size:10.5px;font-weight:600;color:var(--text-dim);">· ${fmtSharesM(si.sharesShort)} acciones</span></div>
-        <div style="font-size:8.5px;color:var(--text-faint);margin-top:2px;">${trendHtml}dato del CORTE del ${si.date}</div>
+        <div style="font-size:18px;font-weight:700;color:${color};">${pct.toFixed(1)}% <span style="font-size:12px;font-weight:600;color:var(--text-dim);">· ${fmtSharesM(si.sharesShort)} acciones</span></div>
+        <div style="font-size:9px;color:var(--text-faint);margin-top:3px;">${trendHtml}dato del CORTE del ${si.date}</div>
       </div>
       ${hasChart ? `<div style="flex:1.4;min-width:0;">
-        <div id="si-hist-legend" style="font-size:8.5px;color:var(--text-dim);font-weight:600;white-space:nowrap;text-align:right;height:10px;"></div>
-        <div id="si-hist-chart" style="height:44px;"></div>
+        <div id="si-hist-legend" style="font-size:9px;color:var(--text-dim);font-weight:600;white-space:nowrap;text-align:right;height:11px;"></div>
+        <div id="si-hist-chart" style="height:60px;"></div>
       </div>` : ''}
     </div>
   </div>`;
@@ -4216,11 +4216,11 @@ function wirePositionEventsScroll(){
 // Envuelve las dos fuentes juntas, con una línea que deja explícito que son
 // dos periodos de datos distintos (no dos formas de medir lo mismo).
 function renderShortInterestSection(officialSI, officialLoading, dailySV, dailyLoading){
-  return `<div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;">
-    <div style="background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;box-sizing:border-box;">
+  return `<div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;max-width:660px;">
+    <div style="background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;padding:12px 14px;box-sizing:border-box;">
       ${renderShortInterestBlock(officialSI, officialLoading)}
     </div>
-    <div style="background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;box-sizing:border-box;">
+    <div style="background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;padding:12px 14px;box-sizing:border-box;">
       ${renderShortVolumeBlock(dailySV, dailyLoading)}
     </div>
   </div>`;
