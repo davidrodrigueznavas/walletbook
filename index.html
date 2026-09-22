@@ -1296,7 +1296,7 @@ function renderDiscoverPreview(){
           <div style="width:32px;height:32px;border-radius:10px;background:var(--accent-soft);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:900;font-size:14px;color:var(--accent-text);flex-shrink:0;">${(p.name||'?').trim().charAt(0).toUpperCase()}</div>
           ${gainChip(p.overall_gain_pct, 12)}
         </div>
-        <div style="font-size:13px;font-weight:700;">${p.name}</div>
+        <div style="font-size:13px;font-weight:700;">${esc(p.name)}</div>
         <div style="font-size:10px;color:var(--text-faint);padding-top:8px;border-top:1px solid var(--border-soft);">${p.category && PORTFOLIO_CATEGORY[p.category] ? PORTFOLIO_CATEGORY[p.category].label+' · ' : ''}${p.position_count===1?'1 posición':p.position_count+' posiciones'}</div>
       </button>`).join('')}
     </div>`;
@@ -1325,7 +1325,7 @@ function showStatus(msg, ms=4000){
 }
 function renderStatusToast(){
   if(!statusMessage) return '';
-  return `<div style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:12px;color:var(--text-dim);box-shadow:0 12px 32px rgba(0,0,0,0.25);z-index:90;white-space:nowrap;">${statusMessage}</div>`;
+  return `<div style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:12px;color:var(--text-dim);box-shadow:0 12px 32px rgba(0,0,0,0.25);z-index:90;white-space:nowrap;">${esc(statusMessage)}</div>`;
 }
 document.documentElement.setAttribute('data-theme', theme);
 let modalRange = 'mes', modalChartState = {loading:false, error:null, points:null}, modalChartToken = 0;
@@ -1981,8 +1981,8 @@ function renderDialog(){
   return `<div class="modal-backdrop" id="dialog-backdrop" style="z-index:80;">
     <div class="modal-card" style="max-width:380px;padding:22px;">
       <h3 style="font-family:'Calibri','Carlito',sans-serif;font-size:15px;font-weight:600;margin:0 0 10px;">${dialogState.title}</h3>
-      ${dialogState.message ? `<div style="font-size:12.5px;color:var(--text-dim);margin-bottom:14px;line-height:1.5;">${dialogState.message}</div>` : ''}
-      ${isPrompt ? `<input id="dialog-input" type="text" placeholder="${dialogState.placeholder||''}" value="${(dialogState.defaultValue||'').replace(/"/g,'&quot;')}" ${dialogState.maxLength?`maxlength="${dialogState.maxLength}"`:''} style="width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:9px 11px;box-sizing:border-box;" autofocus/>
+      ${dialogState.message ? `<div style="font-size:12.5px;color:var(--text-dim);margin-bottom:14px;line-height:1.5;">${esc(dialogState.message)}</div>` : ''}
+      ${isPrompt ? `<input id="dialog-input" type="text" placeholder="${esc(dialogState.placeholder||'')}" value="${esc(dialogState.defaultValue||'')}" ${dialogState.maxLength?`maxlength="${dialogState.maxLength}"`:''} style="width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:9px 11px;box-sizing:border-box;" autofocus/>
       ${dialogState.maxLength ? `<div id="dialog-counter" style="font-size:10px;color:var(--text-faint);text-align:right;margin-top:4px;">${(dialogState.defaultValue||'').length}/${dialogState.maxLength}</div>` : ''}
       <div style="margin-bottom:${dialogState.maxLength?'6px':'14px'};"></div>` : '<div style="margin-bottom:6px;"></div>'}
       ${dialogState.error ? `<div style="color:var(--red);font-size:11.5px;margin-bottom:12px;">${dialogState.error}</div>` : ''}
@@ -2051,7 +2051,7 @@ function wireAddPositionModal(app){
       if(results === null){ suggestionsBox.innerHTML = `<div style="padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Error al buscar.</div>`; return; }
       if(!results.length){ suggestionsBox.innerHTML = `<div style="padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Sin resultados.</div>`; return; }
       suggestionsBox.innerHTML = results.map((r,i) => `<button type="button" class="ticker-suggestion" data-idx="${i}">
-        <b>${r.symbol}</b> — ${r.name}${r.exchange?` <span style="color:var(--text-faint);">(${r.exchange})</span>`:''}
+        <b>${esc(r.symbol)}</b> — ${esc(r.name)}${r.exchange?` <span style="color:var(--text-faint);">(${esc(r.exchange)})</span>`:''}
       </button>`).join('');
       suggestionsBox.querySelectorAll('.ticker-suggestion').forEach(btn => btn.addEventListener('mousedown', (e) => {
         e.preventDefault();
@@ -2899,7 +2899,7 @@ function wireStockFinderModal(app){
         if(results === null){ suggestionsBox.innerHTML = `<div style="${suggestionsBoxStyle}padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Error al buscar.</div>`; return; }
         if(!results.length){ suggestionsBox.innerHTML = `<div style="${suggestionsBoxStyle}padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Sin resultados.</div>`; return; }
         suggestionsBox.innerHTML = `<div style="${suggestionsBoxStyle}">${results.map((r,i) => `<button type="button" class="ticker-suggestion" data-idx="${i}">
-          <b>${r.symbol}</b> — ${r.name}${r.exchange?` <span style="color:var(--text-faint);">(${r.exchange})</span>`:''}
+          <b>${esc(r.symbol)}</b> — ${esc(r.name)}${r.exchange?` <span style="color:var(--text-faint);">(${esc(r.exchange)})</span>`:''}
         </button>`).join('')}</div>`;
         suggestionsBox.querySelectorAll('.ticker-suggestion').forEach(sbtn => sbtn.addEventListener('mousedown', (e) => {
           e.preventDefault();
@@ -4430,7 +4430,7 @@ function renderStockViewerScreen(){
       if(results === null){ suggestionsBox.innerHTML = `<div style="padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Error al buscar.</div>`; return; }
       if(!results.length){ suggestionsBox.innerHTML = `<div style="padding:8px 10px;font-size:11.5px;color:var(--text-faint);">Sin resultados.</div>`; return; }
       suggestionsBox.innerHTML = results.map((r,i) => `<button type="button" class="ticker-suggestion" data-idx="${i}">
-        <b>${r.symbol}</b> — ${r.name}${r.exchange?` <span style="color:var(--text-faint);">(${r.exchange})</span>`:''}
+        <b>${esc(r.symbol)}</b> — ${esc(r.name)}${r.exchange?` <span style="color:var(--text-faint);">(${esc(r.exchange)})</span>`:''}
       </button>`).join('');
       suggestionsBox.querySelectorAll('.ticker-suggestion').forEach(btn => btn.addEventListener('mousedown', (e) => {
         e.preventDefault();
@@ -4609,7 +4609,7 @@ function render(scenario){
       ${kpiBlock('Posiciones', totals.withData+' / '+totals.total)}
       ${kpiBlock('Comisiones broker', fmtEUR(totals.commission))}
       ${kpiBlock('Rentab. anual.', cagr.value===null?'—':(cagr.value>=0?'+':'')+fmtPct(cagr.value), cagr.value===null?'var(--text-dim)':(cagr.value>=0?'var(--green)':'var(--red)'), cagr.value===null ? `Necesita al menos 30 días de historial desde la primera compra (llevas ${cagr.days}).` : `CAGR desde la primera compra, hace ${cagr.days} días.`)}
-      ${kpiBlock('Concentración', conc.name?Math.round(conc.pct)+'%':'—', null, conc.name ? `Tu posición mayor es ${conc.name}, con el ${Math.round(conc.pct)}% del valor actual de la cartera.` : '')}
+      ${kpiBlock('Concentración', conc.name?Math.round(conc.pct)+'%':'—', null, conc.name ? `Tu posición mayor es ${esc(conc.name)}, con el ${Math.round(conc.pct)}% del valor actual de la cartera.` : '')}
       ${kpiBlock('Pdt. invertir', fmtEUR(pendingInvestTotal), null, 'Suma del campo "Pendiente invertir" de cada posición — cantidad planeada para seguir invirtiendo, no dinero ya invertido.')}
       ${kpiBlock('Total cartera estimado', fmtEUR(estimatedTotal), null, 'Valor actual + lo pendiente de invertir en todas las posiciones — una proyección, no el valor real de hoy.')}
     </div>
