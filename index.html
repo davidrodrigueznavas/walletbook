@@ -419,7 +419,7 @@ function renderCrashIndexCard(){
     body = '';
   }
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Media simple de dos señales normalizadas a 0-100: distancia del S&amp;P 500 a su media de 40 semanas, y nivel del VIX. Score = 50 − (%S&amp;P vs media)×5, promediado con VIX reescalado linealmente de 10-40 a 0-100. Es una heurística orientativa, no un modelo predictivo validado — puntúa alto en fase de caída, no la anticipa.">Índice de riesgo de mercado</div>
+    <div style="font-size:9.5px;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;display:inline-block;" title="Media simple de dos señales normalizadas a 0-100: distancia del S&amp;P 500 a su media de 40 semanas, y nivel del VIX. Score = 50 − (%S&amp;P vs media)×5, promediado con VIX reescalado linealmente de 10-40 a 0-100. Es una heurística orientativa, no un modelo predictivo validado — puntúa alto en fase de caída, no la anticipa.">Índice de riesgo de mercado</div>
     ${body}
   </div>`;
 }
@@ -481,7 +481,7 @@ function renderLiquidityCard(){
     body = '';
   }
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Liquidez neta = Total Assets − TGA − RRP, vía FRED (Reserva Federal de San Luis). No es un proxy de mercado, es el balance real de la Fed. Total Assets y TGA se publican semanalmente (jueves); RRP es diario.">Liquidez neta de la Fed</div>
+    <div style="font-size:9.5px;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;display:inline-block;" title="Liquidez neta = Total Assets − TGA − RRP, vía FRED (Reserva Federal de San Luis). No es un proxy de mercado, es el balance real de la Fed. Total Assets y TGA se publican semanalmente (jueves); RRP es diario.">Liquidez neta de la Fed</div>
     ${body}
   </div>`;
 }
@@ -541,7 +541,7 @@ function renderYieldCurveCard(){
     body = '';
   }
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Spread entre el bono del Tesoro a 10 años (^TNX) y la letra a 3 meses (^IRX), vía Yahoo Finance. Score = 50 − spread×25 (spread en puntos porcentuales), 0-100.">Curva de tipos (EEUU)</div>
+    <div style="font-size:9.5px;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;display:inline-block;" title="Spread entre el bono del Tesoro a 10 años (^TNX) y la letra a 3 meses (^IRX), vía Yahoo Finance. Score = 50 − spread×25 (spread en puntos porcentuales), 0-100.">Curva de tipos (EEUU)</div>
     ${body}
   </div>`;
 }
@@ -669,7 +669,7 @@ function renderConcentrationCard(){
     body = '';
   }
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="S&amp;P 500 ponderado por capitalización (SPY) frente al mismo índice equiponderado (RSP), más el ratio Russell 2000 / S&amp;P 500 — dos formas de medir si la subida es amplia o solo unos pocos valores tiran del carro. Score = 50 + (%SPY/RSP vs media)×5 (aquí el signo va al revés que en los demás indicadores: que el ratio SUBA es la señal de riesgo, no de seguridad), 0-100.">Amplitud y concentración</div>
+    <div style="font-size:9.5px;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;display:inline-block;" title="S&amp;P 500 ponderado por capitalización (SPY) frente al mismo índice equiponderado (RSP), más el ratio Russell 2000 / S&amp;P 500 — dos formas de medir si la subida es amplia o solo unos pocos valores tiran del carro. Score = 50 + (%SPY/RSP vs media)×5 (aquí el signo va al revés que en los demás indicadores: que el ratio SUBA es la señal de riesgo, no de seguridad), 0-100.">Amplitud y concentración</div>
     ${body}
   </div>`;
 }
@@ -787,7 +787,7 @@ function renderFedFundsCard(){
       ${fedBody}
     </div>`;
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Ratio HYG/IEF (liquidez de mercado, vía Yahoo Finance; score = 50 + %vs media×12, 0-100) + tipo oficial de la Fed y calendario del FOMC (vía FRED). Dos ritmos distintos en una card: HYG/IEF se mueve a diario, el Fed Funds Rate solo cambia en reuniones del FOMC — por eso cada bloque lleva su propia fecha de dato al pie.">Liquidez de mercado y Fed</div>
+    <div style="font-size:9.5px;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;display:inline-block;" title="Ratio HYG/IEF (liquidez de mercado, vía Yahoo Finance; score = 50 + %vs media×12, 0-100) + tipo oficial de la Fed y calendario del FOMC (vía FRED). Dos ritmos distintos en una card: HYG/IEF se mueve a diario, el Fed Funds Rate solo cambia en reuniones del FOMC — por eso cada bloque lleva su propia fecha de dato al pie.">Liquidez de mercado y Fed</div>
     ${body}
   </div>`;
 }
