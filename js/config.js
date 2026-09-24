@@ -82,7 +82,7 @@ export const EVENT_TYPE = {
   split: 'Split / contrasplit',
   nota_posicion: 'Nota Posición',
   otro: 'Otro',
-  macro: 'FOMC',
+  macro: 'Macro',
 };
 
 // 'macro' es solo para eventos globales (ej. FOMC) sembrados en
