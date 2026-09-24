@@ -290,6 +290,19 @@ function metricRing(score, color, label){
     <div style="font-size:13.5px;font-weight:700;color:${color};">${label}</div>
   </div>`;
 }
+// Fecha del dato más reciente usado en la card, en letra muy pequeña al pie --
+// para que no se confunda "lo he consultado ahora mismo" con "el dato en sí
+// es de hoy" (varios de estos indicadores se publican semanal o más despacio).
+// Acepta una fecha o varias (cuando la card mezcla fuentes) y usa la más
+// antigua de todas, para no aparentar más frescura de la que realmente hay.
+function dataAsOfFooter(...dateStrs){
+  const dates = dateStrs.filter(Boolean).sort();
+  if(!dates.length) return '';
+  const d = new Date(dates[0].length<=10 ? dates[0]+'T00:00:00' : dates[0]);
+  if(isNaN(d.getTime())) return '';
+  const label = d.toLocaleDateString('es-ES', {day:'numeric', month:'short', year:'numeric'}).replace('.','');
+  return `<div style="font-size:8px;color:var(--text-faint);margin-top:8px;text-align:right;">datos del ${label}</div>`;
+}
 
 async function loadMarketIndicators(){
   if(marketIndicatorsLoading) return;
@@ -331,7 +344,8 @@ async function loadMarketIndicators(){
     const weekAgo = combinedAt(idxNearDaysAgo(sp500Res.points,7), idxNearDaysAgo(vixRes.points,7));
     const monthAgo = combinedAt(idxNearDaysAgo(sp500Res.points,30), idxNearDaysAgo(vixRes.points,30));
 
-    marketIndicators = { sp500Price:lastPrice, sp500Sma40:lastSma40, pctVsSma40, score40, vixLevel, scoreVix, combined, weekAgo, monthAgo };
+    marketIndicators = { sp500Price:lastPrice, sp500Sma40:lastSma40, pctVsSma40, score40, vixLevel, scoreVix, combined, weekAgo, monthAgo,
+      sp500AsOf: sp500Res.points[sp500Res.points.length-1].t, vixAsOf: vixRes.points[vixRes.points.length-1].t };
   } catch(e){
     marketIndicatorsError = (e && e.message) || 'Error al consultar indicadores de mercado.';
   }
@@ -376,7 +390,7 @@ function renderCrashIndexCard(){
   } else if(fearGreedIndex){
     const fg = fearGreedIndex;
     const fgBand = FEAR_GREED_BAND[fg.rating] || {label:fg.rating, color:'var(--text-dim)'};
-    fgLine = metricLine('Fear &amp; Greed (CNN)', 'Índice de sentimiento de CNN Business: media de 7 señales de mercado (momentum, amplitud del mercado, put/call ratio, demanda de bonos basura, demanda de refugio seguro, volatilidad y fuerza del precio). Bandas: 0-25 miedo extremo, 25-45 miedo, 45-55 neutral, 55-75 codicia, 75-100 codicia extrema.', `<span style="color:${fgBand.color};">${fg.score.toFixed(0)} · ${fgBand.label}</span>`);
+    fgLine = metricLine('Fear &amp; Greed (CNN)', 'Índice de sentimiento de CNN Business: media de 7 señales de mercado (momentum, amplitud del mercado, put/call ratio, demanda de bonos basura, demanda de refugio seguro, volatilidad y fuerza del precio). Bandas: 0-25 miedo extremo, 25-45 miedo, 45-55 neutral, 55-75 codicia, 75-100 codicia extrema. Es contrarian: miedo extremo ha coincidido históricamente con suelos de mercado (poca gente queda por vender); codicia extrema, con techos (poca gente queda por comprar). No es una señal de entrada/salida por sí sola, es contexto de sentimiento.', `<span style="color:${fgBand.color};">${fg.score.toFixed(0)} · ${fgBand.label}</span>`);
   }
 
   let body;
@@ -389,16 +403,17 @@ function renderCrashIndexCard(){
     const band = riskBand(m.combined);
     body = `${metricRing(m.combined, band.color, band.label)}
       <div style="display:flex;flex-direction:column;gap:6px;">
-        ${metricLine('S&amp;P 500 vs media 40 sem', 'Distancia del S&amp;P 500 respecto a su media móvil de 40 semanas. Cuando el precio cruza por debajo, se suele leer como señal de cambio a tendencia bajista (análisis de Stan Weinstein).', `<span style="color:${m.pctVsSma40>=0?'var(--green)':'var(--red)'};">${m.pctVsSma40>=0?'+':''}${m.pctVsSma40.toFixed(1)}%</span>`)}
-        ${metricLine('VIX', 'Índice de volatilidad del S&amp;P 500. Por debajo de 15, mercado tranquilo; 15-20 normal; 20-30 nerviosismo; por encima de 30, estrés o pánico.', m.vixLevel.toFixed(1))}
+        ${metricLine('S&amp;P 500 vs media 40 sem', 'Distancia del S&amp;P 500 respecto a su media móvil de 40 semanas. Cuando el precio cruza por debajo, se suele leer como señal de cambio a tendencia bajista (análisis de Stan Weinstein) — la fase de distribución da paso a la de caída, donde el propio Weinstein recomienda reducir o salir en vez de "comprar la caída".', `<span style="color:${m.pctVsSma40>=0?'var(--green)':'var(--red)'};">${m.pctVsSma40>=0?'+':''}${m.pctVsSma40.toFixed(1)}%</span>`)}
+        ${metricLine('VIX', 'Índice de volatilidad implícita (opciones) del S&amp;P 500 a 30 días — cuánto movimiento espera el mercado, no cuánto se ha movido ya. Por debajo de 15, mercado tranquilo; 15-20 normal; 20-30 nerviosismo, cubrirse con opciones se encarece; por encima de 30, estrés o pánico, donde históricamente ha habido tanto las mayores caídas como los rebotes más fuertes (alta volatilidad en ambas direcciones, no solo bajista).', m.vixLevel.toFixed(1))}
         ${fgLine}
       </div>
-      ${renderIndicatorDeltaRow(m.weekAgo, m.monthAgo, m.combined, false)}`;
+      ${renderIndicatorDeltaRow(m.weekAgo, m.monthAgo, m.combined, false)}
+      ${dataAsOfFooter(m.sp500AsOf, m.vixAsOf, fearGreedIndex && fearGreedIndex.asOf)}`;
   } else {
     body = '';
   }
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Media simple de dos señales: distancia del S&amp;P 500 a su media de 40 semanas, y nivel del VIX. Es una heurística orientativa, no un modelo predictivo validado.">Índice de riesgo de mercado</div>
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Media simple de dos señales normalizadas a 0-100: distancia del S&amp;P 500 a su media de 40 semanas, y nivel del VIX. Score = 50 − (%S&amp;P vs media)×5, promediado con VIX reescalado linealmente de 10-40 a 0-100. Es una heurística orientativa, no un modelo predictivo validado — puntúa alto en fase de caída, no la anticipa.">Índice de riesgo de mercado</div>
     ${body}
   </div>`;
 }
@@ -454,12 +469,13 @@ function renderLiquidityCard(){
         ${metricLine('Total Assets', 'Balance total de la Fed. La variación de abajo lo confirma: si es positiva (+, en verde) el balance está subiendo = QE, inyecta liquidez. Si es negativa (−, en rojo) el balance está bajando = QT, drena liquidez. Qué significa esto para el mercado: inyectar liquidez (QE) tiende a empujar al alza los activos de riesgo (acciones, cripto) aunque no haya un motivo fundamental. Drenarla (QT) tiende a presionarlos a la baja, incluso con buenos resultados empresariales. Es contexto de fondo, no una señal de compra/venta por sí sola.', fmtUsdB(l.totalAssetsB), deltaLine(l.totalAssetsWeekAgoB, l.totalAssetsMonthAgoB, l.totalAssetsB))}
         ${metricLine('TGA', 'Treasury General Account: la cuenta corriente del Tesoro en la Fed. Sube = drena liquidez del mercado; baja = la devuelve.', fmtUsdB(l.tgaB), deltaLine(l.tgaWeekAgoB, l.tgaMonthAgoB, l.tgaB))}
         ${metricLine('RRP', 'Reverse Repo: dinero que bancos/fondos monetarios aparcan en la Fed en vez de que circule en el mercado. Sube = absorbe liquidez; baja = la devuelve al sistema.', fmtUsdB(l.rrpB), deltaLine(l.rrpWeekAgoB, l.rrpMonthAgoB, l.rrpB))}
-      </div>`;
+      </div>
+      ${dataAsOfFooter(l.asOf)}`;
   } else {
     body = '';
   }
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Liquidez neta = Total Assets − TGA − RRP, vía FRED (Reserva Federal de San Luis). No es un proxy de mercado, es el balance real de la Fed.">Liquidez neta de la Fed</div>
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Liquidez neta = Total Assets − TGA − RRP, vía FRED (Reserva Federal de San Luis). No es un proxy de mercado, es el balance real de la Fed. Total Assets y TGA se publican semanalmente (jueves); RRP es diario.">Liquidez neta de la Fed</div>
     ${body}
   </div>`;
 }
@@ -488,7 +504,8 @@ async function loadYieldCurveIndicator(){
     const weekAgo = scoreAt(idxNearDaysAgo(tnxRes.points,7), idxNearDaysAgo(irxRes.points,7));
     const monthAgo = scoreAt(idxNearDaysAgo(tnxRes.points,30), idxNearDaysAgo(irxRes.points,30));
 
-    yieldCurveIndicator = { tnx, irx, spread, score, weekAgo, monthAgo };
+    yieldCurveIndicator = { tnx, irx, spread, score, weekAgo, monthAgo,
+      tnxAsOf: tnxRes.points[tnxRes.points.length-1].t, irxAsOf: irxRes.points[irxRes.points.length-1].t };
   } catch(e){
     yieldCurveError = (e && e.message) || 'Error al consultar la curva de tipos.';
   }
@@ -509,15 +526,16 @@ function renderYieldCurveCard(){
     const band = y.spread<0 ? {label:'Curva invertida', color:'#DC2626'} : y.spread<0.5 ? {label:'Curva plana', color:'#FBBF24'} : {label:'Curva normal', color:'#4ADE80'};
     body = `${metricRing(y.score, band.color, band.label)}
       <div style="display:flex;flex-direction:column;gap:6px;">
-        ${metricLine('10 años − 3 meses', 'Rendimiento del bono a 10 años menos la letra a 3 meses. Por debajo de 0 (invertida), ha precedido a casi todas las recesiones de EEUU desde los 60 — según la Fed de Nueva York, incluso más fiable que el clásico spread 2-10 años.', `<span style="color:${y.spread>=0?'var(--green)':'var(--red)'};">${y.spread>=0?'+':''}${y.spread.toFixed(2)} pp</span>`)}
+        ${metricLine('10 años − 3 meses', 'Rendimiento del bono a 10 años menos la letra a 3 meses. Por debajo de 0 (invertida) significa que prestar a corto plazo paga más que a largo — señal de que el mercado espera que la Fed tenga que bajar tipos pronto, normalmente porque anticipa debilidad económica. Ha precedido a casi todas las recesiones de EEUU desde los 60 (según la Fed de Nueva York, incluso más fiable que el clásico spread 2-10 años). Ojo con el timing: históricamente la recesión no llega mientras está invertida, sino meses después de que la curva vuelve a positivo (se "des-invierte") — la inversión en sí es el aviso, no la señal de entrada.', `<span style="color:${y.spread>=0?'var(--green)':'var(--red)'};">${y.spread>=0?'+':''}${y.spread.toFixed(2)} pp</span>`)}
         ${metricLine('10 años / 3 meses', null, `${y.tnx.toFixed(2)}% / ${y.irx.toFixed(2)}%`)}
       </div>
-      ${renderIndicatorDeltaRow(y.weekAgo, y.monthAgo, y.score, false)}`;
+      ${renderIndicatorDeltaRow(y.weekAgo, y.monthAgo, y.score, false)}
+      ${dataAsOfFooter(y.tnxAsOf, y.irxAsOf)}`;
   } else {
     body = '';
   }
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Spread entre el bono del Tesoro a 10 años y la letra a 3 meses, vía Yahoo Finance.">Curva de tipos (EEUU)</div>
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Spread entre el bono del Tesoro a 10 años (^TNX) y la letra a 3 meses (^IRX), vía Yahoo Finance. Score = 50 − spread×25 (spread en puntos porcentuales), 0-100.">Curva de tipos (EEUU)</div>
     ${body}
   </div>`;
 }
@@ -553,7 +571,8 @@ async function loadBreadthIndicator(){
     const weekAgo = scoreAt(idxNearDaysAgo(alignedPoints,7));
     const monthAgo = scoreAt(idxNearDaysAgo(alignedPoints,30));
 
-    breadthIndicator = { ratio:lastRatio, pctVsSma, score, weekAgo, monthAgo };
+    breadthIndicator = { ratio:lastRatio, pctVsSma, score, weekAgo, monthAgo,
+      rutAsOf: alignedPoints[alignedPoints.length-1].t, gspcAsOf: gspcRes.points[gspcRes.points.length-1].t };
   } catch(e){
     breadthError = (e && e.message) || 'Error al consultar small vs large caps.';
   }
@@ -572,7 +591,11 @@ function breadthRow(){
   if(breadthError && !breadthIndicator) return `<div style="font-size:10.5px;color:var(--text-faint);">${breadthError}</div>`;
   if(!breadthIndicator) return '';
   const b = breadthIndicator;
-  return metricLine('Small vs Large caps', 'Ratio Russell 2000 (small caps) / S&amp;P 500 (large caps) frente a su media de 50 días. Cuando las small caps quedan muy por debajo de su media relativa, suele leerse como mercado defensivo, con menos apetito por el riesgo.', `<span style="color:${b.pctVsSma>=0?'var(--green)':'var(--red)'};">${b.pctVsSma>=0?'+':''}${b.pctVsSma.toFixed(1)}%</span>`);
+  const fmtD = d => d==null ? '—' : (d>=0?'+':'')+Math.round(d);
+  const badColor = d => d>=0 ? 'var(--red)' : 'var(--green)';
+  const d7 = b.weekAgo!=null ? b.score-b.weekAgo : null, d30 = b.monthAgo!=null ? b.score-b.monthAgo : null;
+  const delta = (d7!=null && d30!=null) ? `vs 1 sem: <b style="color:${badColor(d7)};">${fmtD(d7)}</b> · vs 1 mes: <b style="color:${badColor(d30)};">${fmtD(d30)}</b>` : null;
+  return metricLine('Small vs Large caps', 'Ratio Russell 2000 (small caps) / S&amp;P 500 (large caps) frente a su media de 50 días. Las small caps son más sensibles al ciclo económico y a la financiación (más deuda a tipo variable, menos acceso a mercados de capital) — cuando quedan muy por debajo de su media relativa, suele leerse como mercado defensivo, con menos apetito por el riesgo y el dinero refugiándose en las grandes compañías más sólidas.', `<span style="color:${b.pctVsSma>=0?'var(--green)':'var(--red)'};">${b.pctVsSma>=0?'+':''}${b.pctVsSma.toFixed(1)}%</span>`, delta);
 }
 
 let concentrationIndicator = null, concentrationLoading = false, concentrationError = null;
@@ -609,7 +632,8 @@ async function loadConcentrationIndicator(){
     const weekAgo = scoreAt(idxNearDaysAgo(alignedPoints,7));
     const monthAgo = scoreAt(idxNearDaysAgo(alignedPoints,30));
 
-    concentrationIndicator = { ratio:lastRatio, pctVsSma, score, weekAgo, monthAgo };
+    concentrationIndicator = { ratio:lastRatio, pctVsSma, score, weekAgo, monthAgo,
+      spyAsOf: alignedPoints[alignedPoints.length-1].t, rspAsOf: rspRes.points[rspRes.points.length-1].t };
   } catch(e){
     concentrationError = (e && e.message) || 'Error al consultar la concentración del mercado.';
   }
@@ -630,15 +654,16 @@ function renderConcentrationCard(){
     const band = c.score>=65 ? {label:'Mercado muy concentrado', color:'#DC2626'} : c.score>=35 ? {label:'Concentración normal', color:'#FBBF24'} : {label:'Participación amplia', color:'#4ADE80'};
     body = `${metricRing(c.score, band.color, band.label)}
       <div style="display:flex;flex-direction:column;gap:6px;">
-        ${metricLine('S&amp;P 500 vs igual peso', 'Ratio S&amp;P 500 ponderado por capitalización (SPY) / S&amp;P 500 equiponderado (RSP), frente a su media de 50 días. Cuando sube, unas pocas megacaps están tirando del índice mientras la mayoría de valores se quedan atrás — mercado más frágil y concentrado.', `<span style="color:${c.pctVsSma>=0?'var(--red)':'var(--green)'};">${c.pctVsSma>=0?'+':''}${c.pctVsSma.toFixed(1)}%</span>`)}
+        ${metricLine('S&amp;P 500 vs igual peso', 'Ratio S&amp;P 500 ponderado por capitalización (SPY) / S&amp;P 500 equiponderado (RSP), frente a su media de 50 días. Cuando sube, unas pocas megacaps están tirando del índice mientras la mayoría de valores se quedan atrás — mercado más frágil y concentrado: si esas pocas empresas decepcionan (resultados, guidance, una noticia puntual), arrastran al índice entero mucho más de lo que su peso "debería" justificar en un mercado sano, porque no hay el resto de valores compensando. Un desenlace típico de concentración extrema es una rotación brusca hacia el resto del mercado (las megacaps caen, el resto sube) más que un crash generalizado.', `<span style="color:${c.pctVsSma>=0?'var(--red)':'var(--green)'};">${c.pctVsSma>=0?'+':''}${c.pctVsSma.toFixed(1)}%</span>`)}
         ${breadthRow()}
       </div>
-      ${renderIndicatorDeltaRow(c.weekAgo, c.monthAgo, c.score, false)}`;
+      ${renderIndicatorDeltaRow(c.weekAgo, c.monthAgo, c.score, false)}
+      ${dataAsOfFooter(c.spyAsOf, c.rspAsOf, breadthIndicator && breadthIndicator.rutAsOf, breadthIndicator && breadthIndicator.gspcAsOf)}`;
   } else {
     body = '';
   }
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="S&amp;P 500 ponderado por capitalización (SPY) frente al mismo índice equiponderado (RSP), más el ratio Russell 2000 / S&amp;P 500 — dos formas de medir si la subida es amplia o solo unos pocos valores tiran del carro.">Amplitud y concentración</div>
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="S&amp;P 500 ponderado por capitalización (SPY) frente al mismo índice equiponderado (RSP), más el ratio Russell 2000 / S&amp;P 500 — dos formas de medir si la subida es amplia o solo unos pocos valores tiran del carro. Score = 50 + (%SPY/RSP vs media)×5 (aquí el signo va al revés que en los demás indicadores: que el ratio SUBA es la señal de riesgo, no de seguridad), 0-100.">Amplitud y concentración</div>
     ${body}
   </div>`;
 }
@@ -701,7 +726,8 @@ async function loadMarketLiquidityIndicator(){
     // crédito" en rojo, contradiciendo el propio texto de la card.
     const score = pctVsSma==null ? null : Math.max(0, Math.min(100, 50 + pctVsSma*12));
 
-    marketLiquidityIndicator = { ratio:lastRatio, sma50:lastSma, pctVsSma, score };
+    marketLiquidityIndicator = { ratio:lastRatio, sma50:lastSma, pctVsSma, score,
+      hygAsOf: alignedPoints[alignedPoints.length-1].t, iefAsOf: iefRes.points[iefRes.points.length-1].t };
   } catch(e){
     marketLiquidityError = (e && e.message) || 'Error al consultar el indicador de liquidez.';
   }
@@ -728,7 +754,8 @@ function renderFedFundsCard(){
     const l = marketLiquidityIndicator;
     const liqBand = l.score>=65 ? {label:'Liquidez amplia', color:'#4ADE80'} : l.score>=35 ? {label:'Liquidez normal', color:'#FBBF24'} : {label:'Estrés de crédito', color:'#DC2626'};
     liqBody = `${metricRing(l.score, liqBand.color, liqBand.label)}
-      ${metricLine('HYG/IEF vs media 50d', 'Ratio HYG (bonos high-yield) / IEF (Tesoro EEUU medio plazo) frente a su propia media de 50 días — proxy de mercado, no el balance real de la Fed. Por encima de su media, el mercado absorbe bien el riesgo; por debajo, estrés de crédito: los inversores exigen más prima para prestar a empresas de baja calidad frente a deuda pública, señal de que ven más riesgo de impago o de que hay menos dinero disponible dispuesto a asumir ese riesgo. El crédito suele moverse antes que la bolsa — a un bonista le preocupa que le devuelvan el dinero antes de que a un accionista le preocupe el crecimiento — por lo que episodios de estrés de crédito han anticipado caídas bursátiles en varias ocasiones (2018, 2020, 2022). Es contexto para ir con más cuidado, sobre todo en posiciones de más riesgo o beta alta, no una señal de venta por sí sola.', `<span style="color:${l.pctVsSma>=0?'var(--green)':'var(--red)'};">${l.pctVsSma>=0?'+':''}${l.pctVsSma.toFixed(1)}%</span>`)}`;
+      ${metricLine('HYG/IEF vs media 50d', 'Ratio HYG (bonos high-yield) / IEF (Tesoro EEUU medio plazo) frente a su propia media de 50 días — proxy de mercado, no el balance real de la Fed. Por encima de su media, el mercado absorbe bien el riesgo; por debajo, estrés de crédito: los inversores exigen más prima para prestar a empresas de baja calidad frente a deuda pública, señal de que ven más riesgo de impago o de que hay menos dinero disponible dispuesto a asumir ese riesgo. El crédito suele moverse antes que la bolsa — a un bonista le preocupa que le devuelvan el dinero antes de que a un accionista le preocupe el crecimiento — por lo que episodios de estrés de crédito han anticipado caídas bursátiles en varias ocasiones (2018, 2020, 2022). Es contexto para ir con más cuidado, sobre todo en posiciones de más riesgo o beta alta, no una señal de venta por sí sola.', `<span style="color:${l.pctVsSma>=0?'var(--green)':'var(--red)'};">${l.pctVsSma>=0?'+':''}${l.pctVsSma.toFixed(1)}%</span>`)}
+      ${dataAsOfFooter(l.hygAsOf, l.iefAsOf)}`;
   } else {
     liqBody = '';
   }
@@ -741,9 +768,10 @@ function renderFedFundsCard(){
   } else if(fedFundsRate){
     const f = fedFundsRate;
     fedBody = `<div style="display:flex;flex-direction:column;gap:6px;">
-      ${metricLine('Fed Funds Rate', 'Rango objetivo de tipos fijado por el FOMC — sube o baja solo en sus reuniones, no a diario. Fuente: FRED.', `${f.lower.toFixed(2)}–${f.upper.toFixed(2)}%`)}
-      ${meeting ? metricLine('Próximo FOMC', meeting.sep ? 'Esta reunión incluye el Summary of Economic Projections (dot plot) — suele mover más el mercado.' : null, `${fmtMeetingRange(meeting)}${meeting.sep?' · SEP':''}<span style="color:var(--text-faint);font-weight:400;"> (${daysUntil}d)</span>`) : ''}
-    </div>`;
+      ${metricLine('Fed Funds Rate', 'Rango objetivo de tipos fijado por el FOMC — sube o baja solo en sus reuniones (máx. 8 veces al año), no a diario. Tipos más altos encarecen el crédito para empresas y particulares, compiten con la bolsa por el dinero (la deuda "sin riesgo" paga más) y presionan especialmente a las empresas más endeudadas o que dependen de financiación barata para crecer (growth, small caps). Tipos más bajos hacen lo contrario: crédito barato, más incentivo a asumir riesgo. Fuente: FRED.', `${f.lower.toFixed(2)}–${f.upper.toFixed(2)}%`)}
+      ${meeting ? metricLine('Próximo FOMC', meeting.sep ? 'Esta reunión incluye el Summary of Economic Projections (dot plot) — las proyecciones de tipos de cada miembro del comité — y suele mover más el mercado que una reunión normal, tanto por la decisión en sí como por el tono de la rueda de prensa posterior.' : 'Reunión de decisión de tipos sin Summary of Economic Projections — normalmente mueve menos el mercado que las de marzo/junio/septiembre/diciembre, salvo sorpresa.', `${fmtMeetingRange(meeting)}${meeting.sep?' · SEP':''}<span style="color:var(--text-faint);font-weight:400;"> (${daysUntil}d)</span>`) : ''}
+    </div>
+    ${dataAsOfFooter(f.asOf)}`;
   } else {
     fedBody = '';
   }
@@ -753,7 +781,7 @@ function renderFedFundsCard(){
       ${fedBody}
     </div>`;
   return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
-    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Ratio HYG/IEF (liquidez de mercado, vía Yahoo Finance) + tipo oficial de la Fed y calendario del FOMC (vía FRED).">Liquidez de mercado y Fed</div>
+    <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Ratio HYG/IEF (liquidez de mercado, vía Yahoo Finance; score = 50 + %vs media×12, 0-100) + tipo oficial de la Fed y calendario del FOMC (vía FRED). Dos ritmos distintos en una card: HYG/IEF se mueve a diario, el Fed Funds Rate solo cambia en reuniones del FOMC — por eso cada bloque lleva su propia fecha de dato al pie.">Liquidez de mercado y Fed</div>
     ${body}
   </div>`;
 }
