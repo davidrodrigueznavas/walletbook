@@ -105,6 +105,7 @@
     .home-wrap { height: auto !important; overflow-y: visible !important; padding: 12px 16px 28px !important; }
     .pf-wrap { padding: 0 14px !important; }
     .stockviewer-metrics-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+    .indicator-cards-row { grid-template-columns: 1fr !important; }
 
     .pf-header { flex-direction: column !important; align-items: stretch !important; gap: 16px !important; }
     .pf-kpis { flex-wrap: wrap !important; justify-content: center !important; row-gap: 12px !important; column-gap: 18px !important; padding: 14px 16px !important; }
@@ -301,7 +302,12 @@ function dataAsOfFooter(...dateStrs){
   const d = new Date(dates[0].length<=10 ? dates[0]+'T00:00:00' : dates[0]);
   if(isNaN(d.getTime())) return '';
   const label = d.toLocaleDateString('es-ES', {day:'numeric', month:'short', year:'numeric'}).replace('.','');
-  return `<div style="font-size:8px;color:var(--text-faint);margin-top:8px;text-align:right;">datos del ${label}</div>`;
+  // margin-top:auto solo empuja algo hacia abajo dentro de un contenedor
+  // flex en columna -- por eso todas las .indicator-card son flex column:
+  // así este pie queda siempre pegado al borde inferior, en la misma
+  // posición en las 5 cards aunque tengan distinta cantidad de contenido
+  // encima.
+  return `<div style="font-size:8px;color:var(--text-faint);font-style:italic;margin-top:auto;padding-top:8px;text-align:right;">datos del ${label}</div>`;
 }
 
 async function loadMarketIndicators(){
@@ -412,7 +418,7 @@ function renderCrashIndexCard(){
   } else {
     body = '';
   }
-  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;">
     <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Media simple de dos señales normalizadas a 0-100: distancia del S&amp;P 500 a su media de 40 semanas, y nivel del VIX. Score = 50 − (%S&amp;P vs media)×5, promediado con VIX reescalado linealmente de 10-40 a 0-100. Es una heurística orientativa, no un modelo predictivo validado — puntúa alto en fase de caída, no la anticipa.">Índice de riesgo de mercado</div>
     ${body}
   </div>`;
@@ -474,7 +480,7 @@ function renderLiquidityCard(){
   } else {
     body = '';
   }
-  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;">
     <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Liquidez neta = Total Assets − TGA − RRP, vía FRED (Reserva Federal de San Luis). No es un proxy de mercado, es el balance real de la Fed. Total Assets y TGA se publican semanalmente (jueves); RRP es diario.">Liquidez neta de la Fed</div>
     ${body}
   </div>`;
@@ -534,7 +540,7 @@ function renderYieldCurveCard(){
   } else {
     body = '';
   }
-  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;">
     <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Spread entre el bono del Tesoro a 10 años (^TNX) y la letra a 3 meses (^IRX), vía Yahoo Finance. Score = 50 − spread×25 (spread en puntos porcentuales), 0-100.">Curva de tipos (EEUU)</div>
     ${body}
   </div>`;
@@ -662,7 +668,7 @@ function renderConcentrationCard(){
   } else {
     body = '';
   }
-  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;">
     <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="S&amp;P 500 ponderado por capitalización (SPY) frente al mismo índice equiponderado (RSP), más el ratio Russell 2000 / S&amp;P 500 — dos formas de medir si la subida es amplia o solo unos pocos valores tiran del carro. Score = 50 + (%SPY/RSP vs media)×5 (aquí el signo va al revés que en los demás indicadores: que el ratio SUBA es la señal de riesgo, no de seguridad), 0-100.">Amplitud y concentración</div>
     ${body}
   </div>`;
@@ -753,9 +759,9 @@ function renderFedFundsCard(){
   } else if(marketLiquidityIndicator){
     const l = marketLiquidityIndicator;
     const liqBand = l.score>=65 ? {label:'Liquidez amplia', color:'#4ADE80'} : l.score>=35 ? {label:'Liquidez normal', color:'#FBBF24'} : {label:'Estrés de crédito', color:'#DC2626'};
-    liqBody = `${metricRing(l.score, liqBand.color, liqBand.label)}
+    liqBody = `<div>${metricRing(l.score, liqBand.color, liqBand.label)}
       ${metricLine('HYG/IEF vs media 50d', 'Ratio HYG (bonos high-yield) / IEF (Tesoro EEUU medio plazo) frente a su propia media de 50 días — proxy de mercado, no el balance real de la Fed. Por encima de su media, el mercado absorbe bien el riesgo; por debajo, estrés de crédito: los inversores exigen más prima para prestar a empresas de baja calidad frente a deuda pública, señal de que ven más riesgo de impago o de que hay menos dinero disponible dispuesto a asumir ese riesgo. El crédito suele moverse antes que la bolsa — a un bonista le preocupa que le devuelvan el dinero antes de que a un accionista le preocupe el crecimiento — por lo que episodios de estrés de crédito han anticipado caídas bursátiles en varias ocasiones (2018, 2020, 2022). Es contexto para ir con más cuidado, sobre todo en posiciones de más riesgo o beta alta, no una señal de venta por sí sola.', `<span style="color:${l.pctVsSma>=0?'var(--green)':'var(--red)'};">${l.pctVsSma>=0?'+':''}${l.pctVsSma.toFixed(1)}%</span>`)}
-      ${dataAsOfFooter(l.hygAsOf, l.iefAsOf)}`;
+      ${dataAsOfFooter(l.hygAsOf, l.iefAsOf)}</div>`;
   } else {
     liqBody = '';
   }
@@ -777,10 +783,10 @@ function renderFedFundsCard(){
   }
 
   const body = `${liqBody}
-    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-soft);">
+    <div style="margin-top:auto;padding-top:10px;border-top:1px solid var(--border-soft);">
       ${fedBody}
     </div>`;
-  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
+  return `<div class="indicator-card" style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;">
     <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;cursor:help;border-bottom:1px dotted var(--text-faint);display:inline-block;" title="Ratio HYG/IEF (liquidez de mercado, vía Yahoo Finance; score = 50 + %vs media×12, 0-100) + tipo oficial de la Fed y calendario del FOMC (vía FRED). Dos ritmos distintos en una card: HYG/IEF se mueve a diario, el Fed Funds Rate solo cambia en reuniones del FOMC — por eso cada bloque lleva su propia fecha de dato al pie.">Liquidez de mercado y Fed</div>
     ${body}
   </div>`;
@@ -789,9 +795,9 @@ function renderFedFundsCard(){
 function renderMarketIndicators(){
   return `<div class="indicator-cards-row" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:20px;">
     ${renderLiquidityCard()}
+    ${renderFedFundsCard()}
     ${renderCrashIndexCard()}
     ${renderYieldCurveCard()}
-    ${renderFedFundsCard()}
     ${renderConcentrationCard()}
   </div>`;
 }
