@@ -695,7 +695,11 @@ async function loadMarketLiquidityIndicator(){
     const lastSma = sma50Arr[sma50Arr.length-1];
     const lastRatio = ratio[ratio.length-1];
     const pctVsSma = lastSma ? ((lastRatio-lastSma)/lastSma)*100 : null;
-    const score = pctVsSma==null ? null : Math.max(0, Math.min(100, 50 - pctVsSma*12));
+    // Ratio por ENCIMA de su media (pctVsSma positivo) = el mercado absorbe
+    // bien el riesgo = score alto ("liquidez amplia"). Iba con el signo al
+    // revés: un ratio por encima de su media podía marcar "estrés de
+    // crédito" en rojo, contradiciendo el propio texto de la card.
+    const score = pctVsSma==null ? null : Math.max(0, Math.min(100, 50 + pctVsSma*12));
 
     marketLiquidityIndicator = { ratio:lastRatio, sma50:lastSma, pctVsSma, score };
   } catch(e){
