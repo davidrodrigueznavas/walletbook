@@ -1822,13 +1822,13 @@ let portfolioSummaries = {}; // portfolio_id -> {invested, value, gainPct}, para
 let reservaValorDrawdown = {}; // ticker -> % caída desde máximo 90d (screener_metrics), para la regla 'drawdown_90d_pct'
 async function loadPortfolios(){
   if(!session){ portfolios = []; return; }
-  const { data, error } = await supabase.from('portfolios').select('*').eq('owner_id', session.user.id).is('deleted_at', null).order('created_at');
+  const [{ data, error }, { data: posRows, error: posErr }] = await Promise.all([
+    supabase.from('portfolios').select('*').eq('owner_id', session.user.id).is('deleted_at', null).order('created_at'),
+    supabase.from('positions').select('id, portfolio_id, strategies, invested, price, current_price_eur, purchase_date, commission').is('deleted_at', null),
+  ]);
   if(error){ console.error(error); return; }
   portfolios = data || [];
 
-  const { data: posRows, error: posErr } = await supabase.from('positions')
-    .select('id, portfolio_id, strategies, invested, price, current_price_eur, purchase_date, commission')
-    .is('deleted_at', null);
   if(!posErr){
     const map = {};
     (posRows||[]).forEach(row => {
@@ -1852,18 +1852,26 @@ async function loadProfile(){
 }
 
 async function loadAll(){
+  // loadPortfolios() no depende del portfolioId activo (trae el resumen de
+  // TODAS las carteras para el home) -- se lanza en paralelo con la carga de
+  // la cartera actual en vez de esperar a que termine antes de empezar.
+  const portfoliosPromise = loadPortfolios();
   portfolioId = portfolioId || await loadPortfolioId();
-  await loadPortfolios();
-  if(!portfolioId){ portfolio = {positions:[]}; history = []; return; }
+  if(!portfolioId){ await portfoliosPromise; portfolio = {positions:[]}; history = []; return; }
   const [{ data: rows, error: posErr }, { data: histRows, error: histErr }] = await Promise.all([
     supabase.from('positions').select('*').eq('portfolio_id', portfolioId).is('deleted_at', null),
     supabase.from('history').select('date,invested,value').eq('portfolio_id', portfolioId).order('date'),
   ]);
   if(posErr) console.error(posErr);
   if(histErr) console.error(histErr);
-  const positions = await attachCalendarEvents(await attachRecompras((rows||[]).map(r => ({ ...r, date: r.purchase_date }))));
+  const positions = (rows||[]).map(r => ({ ...r, date: r.purchase_date }));
+  // attachRecompras/attachCalendarEvents rellenan campos distintos (recompras
+  // vs events) sobre los mismos objetos -- no dependen una de la otra, así
+  // que también van en paralelo en vez de encadenadas.
+  await Promise.all([attachRecompras(positions), attachCalendarEvents(positions)]);
   portfolio = { positions };
   history = histRows || [];
+  await portfoliosPromise;
 }
 
 async function updatePositionField(id, field, value){
