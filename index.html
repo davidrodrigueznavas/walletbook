@@ -116,8 +116,14 @@
     .pf-chart { height: 160px !important; flex: none !important; }
     .pf-donut { height: 190px !important; flex: none !important; }
 
-    .pf-cards { overflow-y: visible !important; grid-template-columns: 1fr 1fr !important; }
+    .pf-cards { overflow-y: visible !important; grid-template-columns: 1fr !important; }
     table.postable { font-size: 12.5px !important; }
+
+    /* ---- Card de short interest (renderShortInterestSection): a 3fr/2fr con
+       90px de alto fijo el texto no cabe y se corta -- en movil las dos
+       mini-cards pasan a apilarse, cada una con su propio alto fijo de 90px
+       (el mismo que ya funciona bien en escritorio) en vez de compartir uno. ---- */
+    .si-section { grid-template-columns: 1fr !important; grid-auto-rows: 90px !important; height: auto !important; }
 
     .modal-two-col { grid-template-columns: 1fr !important; gap: 16px !important; }
     .calendar-two-col { grid-template-columns: 1fr !important; gap: 20px !important; }
@@ -4285,7 +4291,7 @@ function wirePositionEventsScroll(){
 // Envuelve las dos fuentes juntas, con una línea que deja explícito que son
 // dos periodos de datos distintos (no dos formas de medir lo mismo).
 function renderShortInterestSection(officialSI, officialLoading, dailySV, dailyLoading){
-  return `<div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;height:90px;">
+  return `<div class="si-section" style="display:grid;grid-template-columns:3fr 2fr;gap:12px;height:90px;">
     <div style="background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;box-sizing:border-box;height:100%;">
       ${renderShortInterestBlock(officialSI, officialLoading)}
     </div>
