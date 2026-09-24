@@ -784,18 +784,110 @@ async function loadAaiiSentiment(){
 // Píldora compacta en la cabecera, junto al indicador de mercados abiertos:
 // ▲ verde alcistas · — gris neutrales · ▼ rojo bajistas, con el detalle en el
 // tooltip (mismo patrón que el resto de indicadores de la app).
+
+// El histórico semanal completo (desde 1987) está detrás del muro de pago de
+// AAII -- la página pública solo da las últimas ~4 semanas. La Edge Function
+// va guardando esas semanas en aaii_sentiment_history en cada visita, así que
+// el histórico se construye solo con el tiempo: al principio solo habrá "el
+// último mes", y los "meses anteriores" se irán rellenando semana a semana.
+let aaiiPanelOpen = false, aaiiPanelOutsideCloseHandler = null;
+let aaiiHistory = null, aaiiHistoryLoading = false, aaiiHistoryError = null;
+async function loadAaiiHistory(){
+  if(aaiiHistoryLoading || aaiiHistory) return;
+  aaiiHistoryLoading = true;
+  const { data, error } = await supabase.from('aaii_sentiment_history').select('*').order('week_ending', { ascending:false });
+  aaiiHistoryLoading = false;
+  if(error){ aaiiHistoryError = 'No se pudo cargar el histórico.'; render(currentScenario); return; }
+  aaiiHistory = data || [];
+  render(currentScenario);
+}
+function renderAaiiHistoryPanel(){
+  if(!aaiiPanelOpen) return '';
+  if(!aaiiHistory && !aaiiHistoryLoading && !aaiiHistoryError) loadAaiiHistory();
+  const fmtWeek = iso => new Date(iso+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'}).replace('.','');
+  const row = r => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:11px;">
+    <span style="color:var(--text-dim);">${fmtWeek(r.week_ending)}</span>
+    <span style="display:flex;gap:7px;font-weight:600;">
+      <span style="color:var(--green);">▲${Math.round(r.bullish)}%</span>
+      <span style="color:var(--text-faint);">—${Math.round(r.neutral)}%</span>
+      <span style="color:var(--red);">▼${Math.round(r.bearish)}%</span>
+    </span>
+  </div>`;
+
+  let body;
+  if(aaiiHistoryLoading && !aaiiHistory){
+    body = `<div style="font-size:11px;color:var(--text-faint);padding:6px 0;">Cargando histórico…</div>`;
+  } else if(aaiiHistoryError){
+    body = `<div style="font-size:11px;color:var(--text-faint);padding:6px 0;">${aaiiHistoryError}</div>`;
+  } else if(!aaiiHistory || !aaiiHistory.length){
+    body = `<div style="font-size:11px;color:var(--text-faint);padding:6px 0;">Aún no hay histórico guardado — se va acumulando semana a semana con cada visita.</div>`;
+  } else {
+    const cutoff = new Date(aaiiHistory[0].week_ending+'T00:00:00');
+    cutoff.setDate(cutoff.getDate()-31);
+    const cutoffStr = cutoff.toISOString().slice(0,10);
+    const recent = aaiiHistory.filter(r => r.week_ending >= cutoffStr);
+    const older = aaiiHistory.filter(r => r.week_ending < cutoffStr);
+    // De los meses más antiguos solo el dato más reciente de cada uno (older
+    // ya viene ordenado desc, así que el primero que aparece de cada mes es
+    // justo ese) -- hasta 3 meses, para no listar semana a semana lo viejo.
+    const seenMonths = {};
+    const monthRows = [];
+    for(const r of older){
+      const mk = r.week_ending.slice(0,7);
+      if(seenMonths[mk]) continue;
+      seenMonths[mk] = true;
+      monthRows.push(r);
+      if(monthRows.length>=3) break;
+    }
+    body = `
+      <div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin:4px 0 2px;">Último mes</div>
+      ${recent.map(row).join('')}
+      ${monthRows.length ? `<div style="font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin:10px 0 2px;border-top:1px solid var(--border-soft);padding-top:8px;">Meses anteriores</div>
+      ${monthRows.map(row).join('')}` : `<div style="font-size:10px;color:var(--text-faint);margin-top:8px;">Los meses anteriores se irán completando con cada visita.</div>`}
+    `;
+  }
+  return `<div id="aaii-panel-dropdown" style="position:absolute;top:38px;right:0;width:225px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.28);z-index:60;padding:10px 12px;box-sizing:border-box;">${body}</div>`;
+}
 function aaiiSentimentWidget(){
   if(!aaiiSentiment && !aaiiSentimentLoading && !aaiiSentimentError){
     loadAaiiSentiment();
   }
   if(!aaiiSentiment) return '';
   const a = aaiiSentiment;
-  const tip = `Sentimiento inversor particular (AAII), semana del ${a.weekEnding}: ${a.bullish.toFixed(1)}% alcistas (media ${a.bullishAvg.toFixed(1)}%), ${a.neutral.toFixed(1)}% neutrales (media ${a.neutralAvg.toFixed(1)}%), ${a.bearish.toFixed(1)}% bajistas (media ${a.bearishAvg.toFixed(1)}%). Encuesta semanal desde 1987, usada como indicador contrarian: extremos de pesimismo han precedido subidas, extremos de optimismo han precedido caídas.`;
-  return `<div class="pill-btn" title="${tip}" style="cursor:help;border:1px solid var(--border);background:var(--panel-2);display:flex;align-items:center;gap:9px;flex-shrink:0;">
-    <span style="display:flex;align-items:center;gap:3px;color:var(--green);font-size:11.5px;font-weight:700;white-space:nowrap;">▲ ${a.bullish.toFixed(0)}%</span>
-    <span style="display:flex;align-items:center;gap:3px;color:var(--text-dim);font-size:11.5px;font-weight:700;white-space:nowrap;">— ${a.neutral.toFixed(0)}%</span>
-    <span style="display:flex;align-items:center;gap:3px;color:var(--red);font-size:11.5px;font-weight:700;white-space:nowrap;">▼ ${a.bearish.toFixed(0)}%</span>
+  const tip = `Sentimiento inversor particular (AAII), semana del ${a.weekEnding}: ${a.bullish.toFixed(1)}% alcistas (media ${a.bullishAvg.toFixed(1)}%), ${a.neutral.toFixed(1)}% neutrales (media ${a.neutralAvg.toFixed(1)}%), ${a.bearish.toFixed(1)}% bajistas (media ${a.bearishAvg.toFixed(1)}%). Encuesta semanal desde 1987, usada como indicador contrarian: extremos de pesimismo han precedido subidas, extremos de optimismo han precedido caídas. Click para ver el histórico.`;
+  return `<div id="aaii-panel-wrap" style="position:relative;flex-shrink:0;display:flex;align-items:center;">
+    <button id="aaii-panel-toggle" class="pill-btn" title="${tip}" style="cursor:pointer;border:1px solid var(--border);background:var(--panel-2);display:flex;align-items:center;gap:9px;flex-shrink:0;">
+      <span style="display:flex;align-items:center;gap:3px;color:var(--green);font-size:11.5px;font-weight:700;white-space:nowrap;">▲ ${a.bullish.toFixed(0)}%</span>
+      <span style="display:flex;align-items:center;gap:3px;color:var(--text-dim);font-size:11.5px;font-weight:700;white-space:nowrap;">— ${a.neutral.toFixed(0)}%</span>
+      <span style="display:flex;align-items:center;gap:3px;color:var(--red);font-size:11.5px;font-weight:700;white-space:nowrap;">▼ ${a.bearish.toFixed(0)}%</span>
+    </button>
+    ${renderAaiiHistoryPanel()}
   </div>`;
+}
+function wireAaiiPanel(app){
+  const toggle = app.querySelector('#aaii-panel-toggle');
+  if(!toggle) return;
+  toggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    aaiiPanelOpen = !aaiiPanelOpen;
+    if(aaiiPanelOpen){
+      if(!aaiiPanelOutsideCloseHandler){
+        aaiiPanelOutsideCloseHandler = (ev) => {
+          const wrap = document.getElementById('aaii-panel-wrap');
+          if(wrap && wrap.contains(ev.target)) return;
+          document.removeEventListener('click', aaiiPanelOutsideCloseHandler);
+          aaiiPanelOutsideCloseHandler = null;
+          aaiiPanelOpen = false;
+          render(currentScenario);
+        };
+        document.addEventListener('click', aaiiPanelOutsideCloseHandler);
+      }
+    } else if(aaiiPanelOutsideCloseHandler){
+      document.removeEventListener('click', aaiiPanelOutsideCloseHandler);
+      aaiiPanelOutsideCloseHandler = null;
+    }
+    render(currentScenario);
+  });
 }
 
 let stockViewerQuery = '', stockViewerSearchToken = 0;
@@ -3182,6 +3274,7 @@ function renderMyPortfoliosScreen(){
   wireFrameworkModal(app);
   wireHelpModal(app);
   wireMarketPanel(app);
+  wireAaiiPanel(app);
   wirePortfolioCards(app);
 }
 
@@ -3279,6 +3372,7 @@ function renderHomeScreen(){
   wireFrameworkModal(app);
   wireHelpModal(app);
   wireMarketPanel(app);
+  wireAaiiPanel(app);
 }
 
 function renderExploreScreen(){
@@ -3360,6 +3454,7 @@ function renderExploreScreen(){
   wireFrameworkModal(app);
   wireHelpModal(app);
   wireMarketPanel(app);
+  wireAaiiPanel(app);
 
   app.querySelectorAll('.explore-filter-pill').forEach(btn=>btn.addEventListener('click', () => {
     exploreCategoryFilter = btn.getAttribute('data-cat') || null;
@@ -3468,6 +3563,7 @@ function renderAccountScreen(){
   wireFrameworkModal(app);
   wireHelpModal(app);
   wireMarketPanel(app);
+  wireAaiiPanel(app);
 
   const accountThemeBtn = document.getElementById('account-theme-toggle');
   if(accountThemeBtn) accountThemeBtn.addEventListener('click', () => {
@@ -3636,6 +3732,7 @@ function renderCalendarScreen(){
   wireFrameworkModal(app);
   wireHelpModal(app);
   wireMarketPanel(app);
+  wireAaiiPanel(app);
 
   app.querySelectorAll('.cal-day-cell').forEach(btn=>btn.addEventListener('click', () => {
     calendarSelectedDay = btn.getAttribute('data-date');
@@ -3879,6 +3976,7 @@ function renderScreenersScreen(){
   wireFrameworkModal(app);
   wireHelpModal(app);
   wireMarketPanel(app);
+  wireAaiiPanel(app);
   wireScreenerBuilder(app);
 
   const createBtn = document.getElementById('screener-create-btn');
@@ -4486,6 +4584,7 @@ function renderStockViewerScreen(){
   wireFrameworkModal(app);
   wireHelpModal(app);
   wireMarketPanel(app);
+  wireAaiiPanel(app);
 
   const input = document.getElementById('stockviewer-input');
   const suggestionsBox = document.getElementById('stockviewer-suggestions');
@@ -5086,6 +5185,7 @@ function render(scenario){
   wireFrameworkModal(app);
   wireHelpModal(app);
   wireMarketPanel(app);
+  wireAaiiPanel(app);
 }
 
 function renderLogin(){
