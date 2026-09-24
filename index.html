@@ -81,6 +81,10 @@
   table.postable tr.sector-head td { padding:clamp(2px,0.4vh,4px) 6px; font-size:clamp(12px,1.6vh,14px); letter-spacing:.05em; color:var(--accent-text); text-transform:uppercase; font-weight:600; border-bottom:1px solid var(--border-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .pf-card:hover { filter:brightness(1.08); }
   .modal-backdrop { position:fixed; inset:0; background:var(--backdrop); display:flex; align-items:center; justify-content:center; z-index:50; padding:24px; box-sizing:border-box; }
+  .busy-overlay { position:fixed; inset:0; background:var(--backdrop); display:none; align-items:center; justify-content:center; z-index:300; cursor:wait; }
+  .busy-overlay.visible { display:flex; }
+  .busy-spinner { width:34px; height:34px; border-radius:50%; border:3px solid var(--border); border-top-color:var(--accent); animation:busy-spin 0.7s linear infinite; }
+  @keyframes busy-spin { to { transform:rotate(360deg); } }
   .modal-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; width:100%; max-width:1280px; max-height:90vh; overflow-y:auto; padding:24px 28px; box-sizing:border-box; }
   .field label { font-size:9.5px; color:var(--text-faint); display:block; margin-bottom:3px; }
   .field input, .field textarea, .field select { width:100%; background:var(--panel-2); border:1px solid var(--border); border-radius:4px; color:var(--text); font-size:12px; padding:6px 8px; box-sizing:border-box; }
@@ -140,6 +144,7 @@
 </head>
 <body>
 <div id="app">Cargando…</div>
+<div id="busy-overlay" class="busy-overlay" aria-hidden="true"><div class="busy-spinner"></div></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
@@ -1313,6 +1318,24 @@ function renderDiscoverPreview(){
   </div>`;
 }
 
+// Bloquea la pantalla mientras hay una escritura en curso (crear/editar/borrar) --
+// evita que un doble click impaciente dispare la misma acción dos veces antes
+// de que la primera termine. Con contador porque a veces hay operaciones
+// anidadas (p.ej. guardar posición + eventos automáticos de calendario).
+let busyCount = 0;
+function showBusy(){
+  busyCount++;
+  const el = document.getElementById('busy-overlay');
+  if(el) el.classList.add('visible');
+}
+function hideBusy(){
+  busyCount = Math.max(0, busyCount - 1);
+  if(busyCount === 0){
+    const el = document.getElementById('busy-overlay');
+    if(el) el.classList.remove('visible');
+  }
+}
+
 let currentScreen = null; // null (cargando) | 'home' | 'portfolio'
 let openCardMenu = null; // id de la cartera cuyo menú de tres puntos está abierto
 let openScreenerId = null; // id del screener desplegado en Mis Screeners
@@ -2005,16 +2028,21 @@ function wireDialog(app){
   if(cancelBtn) cancelBtn.addEventListener('click', () => { dialogState = null; render(currentScenario); });
   const confirmBtn = document.getElementById('dialog-confirm');
   if(confirmBtn) confirmBtn.addEventListener('click', async () => {
+    if(confirmBtn.disabled) return;
     if(dialogState.type === 'prompt'){
       const value = document.getElementById('dialog-input').value.trim();
       if(!value && !dialogState.allowEmpty){ dialogState.error = 'Escribe un valor.'; render(currentScenario); return; }
       const cb = dialogState.onConfirm;
       dialogState = null;
-      await cb(value);
+      confirmBtn.disabled = true;
+      showBusy();
+      try { await cb(value); } finally { hideBusy(); }
     } else {
       const cb = dialogState.onConfirm;
       dialogState = null;
-      await cb();
+      confirmBtn.disabled = true;
+      showBusy();
+      try { await cb(); } finally { hideBusy(); }
     }
   });
   const backdrop = document.getElementById('dialog-backdrop');
@@ -2112,6 +2140,10 @@ function wireAddPositionModal(app){
       showAddPosError(`Ya tienes ${ticker} en esta cartera — no se puede añadir la misma acción dos veces.`);
       return;
     }
+    if(submitBtn.disabled) return;
+    submitBtn.disabled = true;
+    showBusy();
+    try {
 
     const row = {
       id: crypto.randomUUID(),
@@ -2189,6 +2221,7 @@ function wireAddPositionModal(app){
     await loadAll();
     showStatus(`Posición "${name}" añadida.`);
     render(currentScenario);
+    } finally { hideBusy(); submitBtn.disabled = false; }
   });
 }
 
@@ -3201,10 +3234,15 @@ function renderHomeScreen(){
     render(null);
   });
   app.querySelectorAll('.calendar-event-delete-btn').forEach(btn=>btn.addEventListener('click', async () => {
+    if(btn.disabled) return;
+    btn.disabled = true;
     const id = btn.getAttribute('data-id');
-    await supabase.from('calendar_events').delete().eq('id', id);
-    await loadCalendarEvents();
-    render(null);
+    showBusy();
+    try {
+      await supabase.from('calendar_events').delete().eq('id', id);
+      await loadCalendarEvents();
+      render(null);
+    } finally { hideBusy(); }
   }));
   const discoverSeeAllBtn = document.getElementById('discover-see-all-btn');
   if(discoverSeeAllBtn) discoverSeeAllBtn.addEventListener('click', async () => {
@@ -3439,10 +3477,15 @@ function renderAccountScreen(){
   });
 
   app.querySelectorAll('.global-rule-delete-btn').forEach(btn=>btn.addEventListener('click', async () => {
+    if(btn.disabled) return;
+    btn.disabled = true;
     const id = btn.getAttribute('data-id');
-    await supabase.from('rules').delete().eq('id', id);
-    await loadAllRulesData();
-    render(null);
+    showBusy();
+    try {
+      await supabase.from('rules').delete().eq('id', id);
+      await loadAllRulesData();
+      render(null);
+    } finally { hideBusy(); }
   }));
 }
 
@@ -3652,6 +3695,10 @@ function renderCalendarScreen(){
       ticker = pos ? pos.ticker : null;
       portfolioIdForEvent = pos ? pos.portfolio_id : null;
     }
+    if(saveBtn.disabled) return;
+    saveBtn.disabled = true;
+    showBusy();
+    try {
     const row = {
       position_id: positionId,
       position_name: positionName,
@@ -3673,13 +3720,19 @@ function renderCalendarScreen(){
     calendarSelectedDay = date;
     await loadCalendarEvents();
     render(null);
+    } finally { hideBusy(); saveBtn.disabled = false; }
   });
 
   app.querySelectorAll('.calendar-event-delete-btn').forEach(btn=>btn.addEventListener('click', async () => {
+    if(btn.disabled) return;
+    btn.disabled = true;
     const id = btn.getAttribute('data-id');
-    await supabase.from('calendar_events').delete().eq('id', id);
-    await loadCalendarEvents();
-    render(null);
+    showBusy();
+    try {
+      await supabase.from('calendar_events').delete().eq('id', id);
+      await loadCalendarEvents();
+      render(null);
+    } finally { hideBusy(); }
   }));
 }
 
@@ -3829,10 +3882,15 @@ function renderScreenersScreen(){
 
   app.querySelectorAll('.screener-delete-btn').forEach(btn => btn.addEventListener('click', async (e) => {
     e.stopPropagation();
+    if(btn.disabled) return;
+    btn.disabled = true;
     const id = btn.getAttribute('data-id');
-    await supabase.from('screeners').delete().eq('id', id);
-    await loadScreeners();
-    render(null);
+    showBusy();
+    try {
+      await supabase.from('screeners').delete().eq('id', id);
+      await loadScreeners();
+      render(null);
+    } finally { hideBusy(); }
   }));
 
   app.querySelectorAll('.screener-switch').forEach(btn => btn.addEventListener('click', async (e) => {
@@ -3900,14 +3958,19 @@ function wireScreenerBuilder(app){
     for(const c of screenerBuilderConditions){
       if(c.value===''||c.value===null||isNaN(num(c.value))){ showErr('Todas las condiciones necesitan un valor numérico.'); return; }
     }
-    const { data: screener, error } = await supabase.from('screeners').insert({ name, universe: screenerBuilderUniverse }).select().single();
-    if(error){ showErr('Error al guardar — revisa la conexión.'); return; }
-    const rows = screenerBuilderConditions.map(c => ({ screener_id: screener.id, metric: c.metric, operator: c.operator, value: num(c.value) }));
-    const { error: condErr } = await supabase.from('screener_conditions').insert(rows);
-    if(condErr){ showErr('Error al guardar las condiciones.'); return; }
-    screenerBuilderOpen = false;
-    await loadScreeners();
-    render(null);
+    if(saveBtn.disabled) return;
+    saveBtn.disabled = true;
+    showBusy();
+    try {
+      const { data: screener, error } = await supabase.from('screeners').insert({ name, universe: screenerBuilderUniverse }).select().single();
+      if(error){ showErr('Error al guardar — revisa la conexión.'); return; }
+      const rows = screenerBuilderConditions.map(c => ({ screener_id: screener.id, metric: c.metric, operator: c.operator, value: num(c.value) }));
+      const { error: condErr } = await supabase.from('screener_conditions').insert(rows);
+      if(condErr){ showErr('Error al guardar las condiciones.'); return; }
+      screenerBuilderOpen = false;
+      await loadScreeners();
+      render(null);
+    } finally { hideBusy(); saveBtn.disabled = false; }
   });
 }
 
@@ -4788,22 +4851,32 @@ function render(scenario){
       if(sharesToSell > heldShares + 1e-6){ recompraFormError = 'No puedes programar vender más de lo que tienes en esta posición.'; render(currentScenario); return; }
     }
     const payload = { invested, price, purchase_date: date || null, commission, type: recompraFormType, status: isPending ? 'pendiente' : 'ejecutada' };
-    const { error } = recompraEditingId
-      ? await supabase.from('position_recompras').update(payload).eq('id', recompraEditingId)
-      : await supabase.from('position_recompras').insert({ ...payload, position_id: pos.id, owner_id: session.user.id });
-    if(error){ recompraFormError = isVenta ? 'No se pudo guardar la venta.' : 'No se pudo guardar la recompra.'; render(currentScenario); return; }
-    recompraFormOpen = false; recompraFormError = null; recompraFormPending = false; recompraEditingId = null;
-    markDirty();
-    await loadAll();
-    render(currentScenario);
+    if(recompraSaveBtn.disabled) return;
+    recompraSaveBtn.disabled = true;
+    showBusy();
+    try {
+      const { error } = recompraEditingId
+        ? await supabase.from('position_recompras').update(payload).eq('id', recompraEditingId)
+        : await supabase.from('position_recompras').insert({ ...payload, position_id: pos.id, owner_id: session.user.id });
+      if(error){ recompraFormError = isVenta ? 'No se pudo guardar la venta.' : 'No se pudo guardar la recompra.'; render(currentScenario); return; }
+      recompraFormOpen = false; recompraFormError = null; recompraFormPending = false; recompraEditingId = null;
+      markDirty();
+      await loadAll();
+      render(currentScenario);
+    } finally { hideBusy(); recompraSaveBtn.disabled = false; }
   });
   app.querySelectorAll('.recompra-delete-btn').forEach(btn=>btn.addEventListener('click', async () => {
+    if(btn.disabled) return;
+    btn.disabled = true;
     const id = btn.getAttribute('data-id');
     if(recompraEditingId === id){ recompraEditingId = null; recompraFormOpen = false; }
-    await supabase.from('position_recompras').delete().eq('id', id);
-    markDirty();
-    await loadAll();
-    render(currentScenario);
+    showBusy();
+    try {
+      await supabase.from('position_recompras').delete().eq('id', id);
+      markDirty();
+      await loadAll();
+      render(currentScenario);
+    } finally { hideBusy(); }
   }));
 
   app.querySelectorAll('.validation-switch').forEach(btn=>btn.addEventListener('click', async () => {
@@ -4866,22 +4939,32 @@ function render(scenario){
       notify_email: true,
       notes: notes || null,
     };
-    const { error } = positionEventEditingId
-      ? await supabase.from('calendar_events').update(row).eq('id', positionEventEditingId)
-      : await supabase.from('calendar_events').insert({ ...row, owner_id: session.user.id });
-    if(error){ positionEventFormError = 'No se pudo guardar el evento.'; render(currentScenario); return; }
-    positionEventFormOpen = false; positionEventFormError = null; positionEventEditingId = null;
-    await loadPositionEvents(pos.id);
-    calendarEvents = null; // se refresca de nuevo en el home/calendario cuando se visiten
-    render(currentScenario);
+    if(posEventSaveBtn.disabled) return;
+    posEventSaveBtn.disabled = true;
+    showBusy();
+    try {
+      const { error } = positionEventEditingId
+        ? await supabase.from('calendar_events').update(row).eq('id', positionEventEditingId)
+        : await supabase.from('calendar_events').insert({ ...row, owner_id: session.user.id });
+      if(error){ positionEventFormError = 'No se pudo guardar el evento.'; render(currentScenario); return; }
+      positionEventFormOpen = false; positionEventFormError = null; positionEventEditingId = null;
+      await loadPositionEvents(pos.id);
+      calendarEvents = null; // se refresca de nuevo en el home/calendario cuando se visiten
+      render(currentScenario);
+    } finally { hideBusy(); posEventSaveBtn.disabled = false; }
   });
   app.querySelectorAll('.posevent-delete-btn').forEach(btn=>btn.addEventListener('click', async () => {
+    if(btn.disabled) return;
+    btn.disabled = true;
     const id = btn.getAttribute('data-id');
     const pos = portfolio.positions.find(p=>p.id===selectedId);
-    await supabase.from('calendar_events').delete().eq('id', id);
-    if(pos) await loadPositionEvents(pos.id);
-    calendarEvents = null;
-    render(currentScenario);
+    showBusy();
+    try {
+      await supabase.from('calendar_events').delete().eq('id', id);
+      if(pos) await loadPositionEvents(pos.id);
+      calendarEvents = null;
+      render(currentScenario);
+    } finally { hideBusy(); }
   }));
 
   const ruleAddToggle = document.getElementById('rule-add-toggle');
@@ -4905,20 +4988,30 @@ function render(scenario){
     const note = document.getElementById('rule-note').value.trim();
     if(threshold===null){ ruleFormError = 'Introduce un umbral numérico.'; render(currentScenario); return; }
     const payload = { metric, operator, threshold, action, note: note || null };
-    const { error } = ruleEditingId
-      ? await supabase.from('rules').update(payload).eq('id', ruleEditingId)
-      : await supabase.from('rules').insert({ portfolio_id: portfolioId, position_id: pos.id, ticker: pos.ticker || null, position_name: pos.name, ...payload });
-    if(error){ ruleFormError = 'No se pudo guardar la regla.'; render(currentScenario); return; }
-    ruleFormOpen = false; ruleFormError = null; ruleEditingId = null;
-    await loadPositionRules(selectedId);
-    render(currentScenario);
+    if(ruleSaveBtn.disabled) return;
+    ruleSaveBtn.disabled = true;
+    showBusy();
+    try {
+      const { error } = ruleEditingId
+        ? await supabase.from('rules').update(payload).eq('id', ruleEditingId)
+        : await supabase.from('rules').insert({ portfolio_id: portfolioId, position_id: pos.id, ticker: pos.ticker || null, position_name: pos.name, ...payload });
+      if(error){ ruleFormError = 'No se pudo guardar la regla.'; render(currentScenario); return; }
+      ruleFormOpen = false; ruleFormError = null; ruleEditingId = null;
+      await loadPositionRules(selectedId);
+      render(currentScenario);
+    } finally { hideBusy(); ruleSaveBtn.disabled = false; }
   });
   app.querySelectorAll('.rule-delete-btn').forEach(btn=>btn.addEventListener('click', async () => {
+    if(btn.disabled) return;
+    btn.disabled = true;
     const id = btn.getAttribute('data-id');
     if(ruleEditingId === id){ ruleEditingId = null; ruleFormOpen = false; }
-    await supabase.from('rules').delete().eq('id', id);
-    await loadPositionRules(selectedId);
-    render(currentScenario);
+    showBusy();
+    try {
+      await supabase.from('rules').delete().eq('id', id);
+      await loadPositionRules(selectedId);
+      render(currentScenario);
+    } finally { hideBusy(); }
   }));
 
   const deleteBtn = document.getElementById('modal-delete');
