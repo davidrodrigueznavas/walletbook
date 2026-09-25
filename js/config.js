@@ -342,7 +342,7 @@ export const DATA_SOURCES = [
       { label: 'Buscador de tickers', freq: 'En vivo, al escribir' },
       { label: 'Noticias de la cartera', freq: 'En vivo, al pulsar "Noticias de mi cartera"' },
       { label: 'Calendario de eventos de la acción (resultados, dividendos...)', freq: 'En vivo, al consultar' },
-      { label: 'Descripción de la empresa (si no hay una propia guardada)', freq: 'En vivo, la primera vez que abres esa posición' },
+      { label: 'Fundamentales completos del visualizador de acciones (PER, PEG, márgenes, ROE, dividendos, estimaciones de analistas...)', freq: 'En vivo al consultar — requiere cookie+crumb de Yahoo. Buena cobertura internacional (mismos sufijos .MC/.DE/.PA... que usa el resto de la app), sin límite diario propio.' },
       { label: 'Métricas técnicas de los screeners (RSI, medias, volumen)', freq: 'Cron cada hora, L-V en horario de mercado' },
       { label: 'Fundamentales de los screeners (PER, capitalización, crecimiento...)', freq: 'Cron cada hora, L-V en horario de mercado — requiere cookie+crumb de Yahoo, en lotes de 100 tickers' },
       { label: 'Máximo de 90 días y % de caída (BTC, oro, plata)', freq: 'Cron cada hora, L-V en horario de mercado' },
@@ -353,7 +353,7 @@ export const DATA_SOURCES = [
   {
     provider: 'Alpha Vantage', auth: 'Con API key propia',
     items: [
-      { label: 'Fundamentales completos del visualizador de acciones (PER, PEG, márgenes, ROE, dividendos, estimaciones de analistas...)', freq: 'En vivo al consultar, pero el propio proveedor solo actualiza sus datos ~1 vez al día — no es intradía. Límite de peticiones diarias en el plan gratuito.' },
+      { label: 'Descripción de la empresa (si no hay una propia guardada)', freq: 'En vivo, la primera vez que abres esa posición. El propio proveedor solo actualiza sus datos ~1 vez al día — no es intradía. Límite de peticiones diarias en el plan gratuito, y cobertura pobre fuera de EEUU.' },
     ],
   },
   {
