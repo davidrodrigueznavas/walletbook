@@ -224,6 +224,7 @@ function ruleMatches(rule, value){
 }
 
 let portfolio = {positions:[]}, history = [], currentScenario = null, selectedId = null;
+let movePortfolioOpen = false, movePortfolioOutsideCloseHandler = null;
 let session = null, portfolioId = null, loginError = null, loginBusy = false;
 let authMode = 'login', authInfo = null; // authMode: 'login' | 'signup' | 'reset' | 'recovery'
 let activePortfolioName = 'Mi cartera', portfolios = [], menuOpen = false, activeView = null;
@@ -2544,6 +2545,12 @@ function renderModal(){
           ${(p.strategies||[]).length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${(p.strategies||[]).map(k=>`<span style="font-size:9.5px;font-weight:600;padding:2px 8px;border-radius:9px;background:var(--accent-soft);color:var(--accent-text);">${STRATEGY[k]?.label||k}</span>`).join('')}</div>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:14px;flex-shrink:0;">
+          ${portfolios.filter(pf=>pf.id!==portfolioId).length ? `<div id="move-portfolio-wrap" style="position:relative;">
+            <button id="move-portfolio-toggle" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:11px;padding:2px 0;white-space:nowrap;">Mover a otra cartera</button>
+            ${movePortfolioOpen ? `<div id="move-portfolio-dropdown" style="position:absolute;top:22px;right:0;min-width:180px;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 16px 40px rgba(0,0,0,0.28);z-index:70;padding:6px;box-sizing:border-box;">
+              ${portfolios.filter(pf=>pf.id!==portfolioId).map(pf=>`<button class="move-portfolio-option" data-portfolio-id="${pf.id}" style="cursor:pointer;width:100%;text-align:left;background:none;border:none;color:var(--text);font-size:12px;padding:7px 9px;border-radius:6px;">${esc(pf.name)}</button>`).join('')}
+            </div>` : ''}
+          </div>` : ''}
           <button id="modal-delete" style="cursor:pointer;background:none;border:none;color:var(--red);font-size:11px;padding:2px 0;white-space:nowrap;">Eliminar posición</button>
           <button id="modal-close" style="cursor:pointer;background:none;border:none;color:var(--text-faint);font-size:20px;line-height:1;padding:2px 6px;">×</button>
         </div>
@@ -2635,10 +2642,13 @@ function renderModal(){
           ${resp ? `<div style="margin-bottom:14px;font-size:11.5px;flex-shrink:0;">Ante <b>${sc.label}</b>, este sector está: <span style="padding:2px 8px;border-radius:10px;background:${RESP[resp].color}22;color:${RESP[resp].color};">${RESP[resp].label}</span></div>` : `<div style="margin-bottom:14px;font-size:11px;color:var(--text-faint);flex-shrink:0;">Selecciona un escenario macro en la pantalla principal para ver cómo afecta a este sector.</div>`}
 
           ${p.ticker ? `<div style="margin-bottom:16px;flex:1;display:flex;flex-direction:column;min-height:0;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-shrink:0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-shrink:0;gap:8px;flex-wrap:wrap;">
               <div style="font-size:11px;color:var(--text-dim);">Evolución del precio (${p.ticker})</div>
-              <div style="display:flex;gap:4px;">
-                ${Object.entries(RANGE_LABELS).map(([key,label])=>`<button class="range-btn" data-range="${key}" style="cursor:pointer;font-size:10.5px;padding:3px 9px;border-radius:12px;border:1px solid ${modalRange===key?'var(--accent)':'var(--border)'};background:${modalRange===key?'var(--accent-soft-strong)':'transparent'};color:${modalRange===key?'var(--accent-text)':'var(--text-dim)'};">${label}</button>`).join('')}
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div style="display:flex;gap:4px;">
+                  ${Object.entries(RANGE_LABELS).map(([key,label])=>`<button class="range-btn" data-range="${key}" style="cursor:pointer;font-size:10.5px;padding:3px 9px;border-radius:12px;border:1px solid ${modalRange===key?'var(--accent)':'var(--border)'};background:${modalRange===key?'var(--accent-soft-strong)':'transparent'};color:${modalRange===key?'var(--accent-text)':'var(--text-dim)'};">${label}</button>`).join('')}
+                </div>
+                <button id="modal-full-chart-btn" style="cursor:pointer;background:none;border:none;color:var(--accent-text);font-size:10.5px;font-weight:600;padding:0;white-space:nowrap;">Gráfico completo →</button>
               </div>
             </div>
             <div style="background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;flex:1;min-height:180px;padding:6px 10px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
@@ -5164,6 +5174,55 @@ function render(scenario){
       render(currentScenario);
     } finally { hideBusy(); }
   }));
+
+  const moveToggle = document.getElementById('move-portfolio-toggle');
+  if(moveToggle) moveToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    movePortfolioOpen = !movePortfolioOpen;
+    if(movePortfolioOpen){
+      if(!movePortfolioOutsideCloseHandler){
+        movePortfolioOutsideCloseHandler = (ev) => {
+          const wrap = document.getElementById('move-portfolio-wrap');
+          if(wrap && wrap.contains(ev.target)) return;
+          document.removeEventListener('click', movePortfolioOutsideCloseHandler);
+          movePortfolioOutsideCloseHandler = null;
+          movePortfolioOpen = false;
+          render(currentScenario);
+        };
+        document.addEventListener('click', movePortfolioOutsideCloseHandler);
+      }
+    } else if(movePortfolioOutsideCloseHandler){
+      document.removeEventListener('click', movePortfolioOutsideCloseHandler);
+      movePortfolioOutsideCloseHandler = null;
+    }
+    render(currentScenario);
+  });
+  app.querySelectorAll('.move-portfolio-option').forEach(btn=>btn.addEventListener('click', async () => {
+    const pos = portfolio.positions.find(p=>p.id===selectedId);
+    const targetId = btn.getAttribute('data-portfolio-id');
+    const target = portfolios.find(pf=>pf.id===targetId);
+    if(!pos || !target) return;
+    movePortfolioOpen = false;
+    if(movePortfolioOutsideCloseHandler){ document.removeEventListener('click', movePortfolioOutsideCloseHandler); movePortfolioOutsideCloseHandler = null; }
+    showBusy();
+    try {
+      await supabase.from('positions').update({ portfolio_id: targetId }).eq('id', pos.id);
+      selectedId = null; modalChartToken++; modalCompanyToken++;
+      markDirty();
+      await loadAll();
+      showStatus(`"${pos.name}" movida a "${target.name}".`);
+      render(currentScenario);
+    } finally { hideBusy(); }
+  }));
+
+  const fullChartBtn = document.getElementById('modal-full-chart-btn');
+  if(fullChartBtn) fullChartBtn.addEventListener('click', () => {
+    const pos = portfolio.positions.find(p=>p.id===selectedId);
+    if(!pos || !pos.ticker) return;
+    selectedId = null;
+    currentScreen = 'visor';
+    selectStockViewerTicker(pos.ticker, pos.name);
+  });
 
   const deleteBtn = document.getElementById('modal-delete');
   if(deleteBtn) deleteBtn.addEventListener('click', () => {
